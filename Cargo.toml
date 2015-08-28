@@ -3,6 +3,13 @@ name = "ws"
 version = "0.1.0"
 authors = ["Jason Housley <HousleyJK@gmail.com>"]
 
+description = "Lightweight, event-driven WebSockets for Rust."
+repository = "https://github.com/housleyjk/ws-rs"
+readme = "README.md"
+keywords = ["websocket", "mio", "event-driven", "io", "web"]
+license = "MIT"
+license-file = "LICENSE"
+
 [dependencies]
 mio = "0.4.2"
 log = "0.3.1"
