@@ -1,3 +1,4 @@
+use std::default::Default;
 
 use super::handler::Handler;
 use communication::Sender;
@@ -9,13 +10,12 @@ pub trait Factory {
     fn connection_made(&mut self, Sender) -> Self::Handler;
 
     #[inline]
-    fn settings(&mut self) {
-        // TODO: setup websocket settings
+    fn settings(&mut self) -> Settings {
+        Settings::default()
     }
 
     #[inline]
     fn on_shutdown(&mut self) {
-        // TODO: add panic on shutdown factory setting
         debug!("Factory received WebSocket shutdown request.");
     }
 
@@ -30,6 +30,23 @@ impl<F, H> Factory for F
         self(out)
     }
 
+}
+
+pub struct Settings {
+    pub max_connections: usize,
+    pub panic_on_new_connection: bool,
+    pub panic_on_shutdown: bool,
+}
+
+impl Default for Settings {
+
+    fn default() -> Settings {
+        Settings {
+            max_connections: 10_000,
+            panic_on_new_connection: false,
+            panic_on_shutdown: false,
+        }
+    }
 }
 
 

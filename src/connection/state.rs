@@ -11,7 +11,7 @@ pub enum State {
 }
 
 /// a little more semantic than a boolean
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum Endpoint {
     /// will mask outgoing frames
     Client,

@@ -8,7 +8,6 @@ repository = "https://github.com/housleyjk/ws-rs"
 readme = "README.md"
 keywords = ["websocket", "mio", "event-driven", "io", "web"]
 license = "MIT"
-license-file = "LICENSE"
 
 [dependencies]
 mio = "0.4.2"

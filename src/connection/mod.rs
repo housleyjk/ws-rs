@@ -2,13 +2,6 @@ pub mod factory;
 pub mod handler;
 pub mod state;
 
-// #[doc(no_inline)]
-// pub use self::factory::Factory;
-// #[doc(no_inline)]
-// pub use self::handler::Handler;
-
-// pub use self::state::{State, Endpoint};
-
 use std::mem::replace;
 use std::mem::transmute;
 use std::io::{Write, Read, Cursor, Seek, SeekFrom};
@@ -18,7 +11,7 @@ use std::str::from_utf8;
 use mio::{Token, TryRead, TryWrite, EventSet};
 
 use message::Message;
-use handshake::Handshake;
+use handshake::{Handshake, Request, Response};
 use frame::Frame;
 use protocol::{CloseCode, OpCode};
 use result::{Result, Error, Kind};
@@ -27,6 +20,59 @@ use self::state::{State, Endpoint};
 use self::state::State::*;
 use self::state::Endpoint::*;
 
+pub struct Builder<S, H>
+    where H: Handler, S: TryRead + TryWrite
+{
+    token: Token,
+    socket: S,
+    handler: H,
+    endpoint: Option<Endpoint>,
+    handshake: Option<Handshake>,
+}
+
+impl<S, H> Builder<S, H>
+    where H: Handler, S: TryRead + TryWrite
+{
+    pub fn new(tok: Token, sock: S, handler: H) -> Builder<S, H> {
+        Builder {
+            token: tok,
+            socket: sock,
+            handler: handler,
+            endpoint: None,
+            handshake: None,
+        }
+    }
+
+    pub fn build(mut self) -> Connection<S, H> {
+        let settings = self.handler.settings();
+        let end = self.endpoint.unwrap_or(Server);  // default to server
+        Connection {
+            token: self.token,
+            socket: self.socket,
+            state: Connecting(self.handshake.unwrap_or(Handshake::default())),
+            endpoint: end,
+            events: if let Server = end {
+                EventSet::readable() | EventSet::hup()
+            } else {
+                EventSet::writable() | EventSet::hup()
+            },
+            fragments: VecDeque::with_capacity(settings.fragments_capacity),
+            in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
+            out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
+            handler: self.handler,
+        }
+    }
+
+    pub fn client(mut self) -> Builder<S, H> {
+        self.endpoint = Some(Client);
+        self
+    }
+
+    pub fn request(mut self, req: Request) -> Builder<S, H> {
+        self.handshake = Some(Handshake::new(req, Response::default()));
+        self
+    }
+}
 
 pub struct Connection<S, H>
     where H: Handler, S: TryRead + TryWrite
@@ -48,20 +94,8 @@ pub struct Connection<S, H>
 impl<S, H> Connection<S, H>
     where H: Handler, S: TryRead + TryWrite
 {
-
-    pub fn new(tok: Token, sock: S, events: EventSet, end: Endpoint, handshake: Handshake, handler: H) -> Connection<S, H> {
-        Connection {
-            token: tok,
-            socket: sock,
-            state: Connecting(handshake),
-            endpoint: end,
-            events: events,
-            // TODO: configure via settings
-            fragments: VecDeque::with_capacity(10),
-            in_buffer: Cursor::new(Vec::with_capacity(4096)),
-            out_buffer: Cursor::new(Vec::with_capacity(4096)),
-            handler: handler,
-        }
+    pub fn builder(tok: Token, sock: S, handler: H) -> Builder<S, H> {
+        Builder::new(tok, sock, handler)
     }
 
     pub fn token(&self) -> Token {
@@ -103,7 +137,6 @@ impl<S, H> Connection<S, H>
     }
 
     pub fn error(&mut self, err: Error) {
-        // TODO: use settings to configure whether we should panic on some errors
         trace!("Connection {:?} encountered an error -- {}", self.token(), err);
         match self.state {
             Connecting(ref mut shake) => {
@@ -147,9 +180,12 @@ impl<S, H> Connection<S, H>
 
             }
             _ => {
+                let settings = self.handler.settings();
                 match err.kind {
                     Kind::Internal => {
-                        // panic!("{}", err);
+                        if settings.panic_on_internal {
+                            panic!("Panicking on internal error -- {}", err);
+                        }
 
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Error) {
@@ -158,7 +194,9 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Capacity => {
-                        // panic!("{}", err);
+                        if settings.panic_on_capacity {
+                            panic!("Panicking on capacity error -- {}", err);
+                        }
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Size) {
                             self.handler.on_error(err);
@@ -166,7 +204,9 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Protocol => {
-                        // panic!("{}", err);
+                        if settings.panic_on_protocol {
+                            panic!("Panicking on protocol error -- {}", err);
+                        }
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Protocol) {
                             self.handler.on_error(err);
@@ -174,7 +214,9 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Encoding(_) => {
-                        // panic!("{}", err);
+                        if settings.panic_on_encoding {
+                            panic!("Panicking on encoding error -- {}", err);
+                        }
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Invalid) {
                             self.handler.on_error(err);
@@ -192,7 +234,9 @@ impl<S, H> Connection<S, H>
                         self.handler.on_error(err);
                     }
                     _ => {
-                        // panic!("{}", err);
+                        if settings.panic_on_io {
+                            panic!("Panicking on io error -- {}", err);
+                        }
                         self.handler.on_error(err);
                         self.events = EventSet::none();
                     }
@@ -312,17 +356,19 @@ impl<S, H> Connection<S, H>
     }
 
     fn read_frames(&mut self) -> Result<()> {
+        let settings = self.handler.settings();
         let mut size = self.in_buffer.get_ref().len() - self.in_buffer.position() as usize;
         while let Some(frame) = try!(Frame::parse(&mut self.in_buffer, &mut size)) {
 
-            // TODO: allow unmasked based on settings
-            if frame.is_masked() {
-                if self.is_client() {
-                    return Err(Error::new(Kind::Protocol, "Received masked frame from a server endpoint."))
-                }
-            } else {
-                if self.is_server() {
-                    return Err(Error::new(Kind::Protocol, "Received unmasked frame from a client endpoint."))
+            if settings.masking_strict {
+                if frame.is_masked() {
+                    if self.is_client() {
+                        return Err(Error::new(Kind::Protocol, "Received masked frame from a server endpoint."))
+                    }
+                } else {
+                    if self.is_server() {
+                        return Err(Error::new(Kind::Protocol, "Received unmasked frame from a client endpoint."))
+                    }
                 }
             }
 
@@ -477,7 +523,6 @@ impl<S, H> Connection<S, H>
                                     }
                                 }
                             } else {
-                                // TODO: add setting to panic on internal errors
                                 return Err(Error::new(Kind::Protocol, "Unable to reconstruct fragmented message. No first frame."))
                             }
                         }
@@ -518,21 +563,14 @@ impl<S, H> Connection<S, H>
     }
 
     pub fn send_message(&mut self, msg: Message) -> Result<()> {
-        // if self.state.is_closing() {
-            // error!("Unable to send message because connection {:?} is closing.", self.token);
-            // trace!("Message was {:?}", msg);
-            // return Ok(())
-        // }
-
-        // TODO: configure via settings
-        let max = u16::max_value() as usize;
+        let settings = self.handler.settings();
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
-        if data.len() > max {
-            trace!("Chunking at {:?}.", max);
+        if data.len() > settings.fragment_size {
+            trace!("Chunking at {:?}.", settings.fragment_size);
             // note this copies the data, so it's actually somewhat expensive to fragment
-            let mut chunks = data.chunks(max).peekable();
+            let mut chunks = data.chunks(settings.fragment_size).peekable();
             let chunk = chunks.next().expect("Unable to get initial chunk!");
 
             try!(self.buffer_frame(
@@ -596,7 +634,7 @@ impl<S, H> Connection<S, H>
     }
 
     fn buffer_frame(&mut self, mut frame: Frame) -> Result<()> {
-        self.buffer_out(&frame);
+        try!(self.buffer_out(&frame));
 
         if self.is_client() {
             frame.mask();
@@ -609,18 +647,21 @@ impl<S, H> Connection<S, H>
         Ok(())
     }
 
-    fn buffer_out(&mut self, frame: &Frame) {
-        if self.out_buffer.get_ref().len() <= self.out_buffer.get_ref().capacity() + frame.len() {
+    fn buffer_out(&mut self, frame: &Frame) -> Result<()> {
+        if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
             let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
             new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize ..]);
             if new.len() == new.capacity() {
-                // if we have maxed out the buffer, double it
-                // TODO: allow for a max buffer length setting
-                let cap = new.capacity();
-                new.reserve(cap)
+                let settings = self.handler.settings();
+                if settings.out_buffer_grow {
+                    new.reserve(settings.out_buffer_capacity)
+                } else {
+                    return Err(Error::new(Kind::Capacity, "Maxed out output buffer for connection."))
+                }
             }
             self.out_buffer = Cursor::new(new);
         }
+        Ok(())
     }
 
     fn buffer_in(&mut self) -> Result<Option<usize>> {
@@ -635,10 +676,13 @@ impl<S, H> Connection<S, H>
                     let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
                     new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
                     if new.len() == new.capacity() {
-                        // if we have maxed out the buffer, double it
-                        // TODO: allow for a max buffer length setting
-                        let cap = new.capacity();
-                        new.reserve(cap);
+                        let settings = self.handler.settings();
+                        if settings.in_buffer_grow {
+                            new.reserve(settings.in_buffer_capacity);
+                        } else {
+                            return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
+                        }
+
                         self.in_buffer = Cursor::new(new);
                         // return now so that hopefully we will consume some of the buffer so this
                         // won't happen next time
@@ -673,4 +717,3 @@ impl<S, H> Connection<S, H>
         }
     }
 }
-

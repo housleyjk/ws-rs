@@ -16,7 +16,7 @@ use result::{Result, Error, Kind};
 use connection::Connection;
 use connection::factory::Factory;
 use connection::state::Endpoint;
-use handshake::Handshake;
+use handshake::{Handshake, Request};
 use protocol::CloseCode;
 
 pub const ALL: Token = Token(0);
@@ -39,6 +39,21 @@ fn connect_to_url(url: &Url) -> Result<TcpStream> {
     result
 }
 
+enum State {
+    Active,
+    Inactive,
+}
+
+impl State {
+
+    fn is_active(&self) -> bool {
+        match *self {
+            State::Active => true,
+            State::Inactive => false,
+        }
+    }
+}
+
 
 pub struct Handler<F>
     where F: Factory
@@ -46,20 +61,22 @@ pub struct Handler<F>
     listener: Option<TcpListener>,
     connections: Slab<Conn<F>>,
     factory: F,
+    state: State,
 }
 
 impl<F> Handler<F>
     where F: Factory
 {
-    pub fn with_capacity(factory: F, conns: usize) -> Handler <F> {
+    pub fn new(mut factory: F) -> Handler<F> {
         Handler {
             listener: None,
-            connections: Slab::new_starting_at(CONN_START, conns),
+            connections: Slab::new_starting_at(CONN_START, factory.settings().max_connections),
             factory: factory,
+            state: State::Active,
         }
     }
 
-    pub fn listen(&mut self, eloop: &mut Loop<F>, addr: &SocketAddr) -> Result<&mut Handler <F>> {
+    pub fn listen(&mut self, eloop: &mut Loop<F>, addr: &SocketAddr) -> Result<&mut Handler<F>> {
 
         debug_assert!(
             self.listener.is_none(),
@@ -82,8 +99,16 @@ impl<F> Handler<F>
             }
 
             let sock = try!(connect_to_url(url));
-            let handshake = try!(Handshake::from_url(url));
-            let conn = try!(self.build_connection(sock, eloop.channel(), EventSet::writable(), Endpoint::Client, handshake));
+            let factory = &mut self.factory;
+            // TODO: use factory settings for things like extensions
+            let req = try!(Request::from_url(url));
+
+            let tok = try!(self.connections.insert_with(|tok| {
+                let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
+                Connection::builder(tok, sock, handler).client().request(req).build()
+            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+
+            let conn = &mut self.connections[tok];
             try!(eloop.register_opt(
                 conn.socket(),
                 conn.token(),
@@ -92,24 +117,31 @@ impl<F> Handler<F>
             ));
         }
         Ok(self)
-
     }
 
-    fn build_connection(&mut self, sock: TcpStream, channel: Chan, start: EventSet, end: Endpoint, handshake: Handshake) -> Result<&mut Conn<F>> {
+    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
+        let settings = factory.settings();
         let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.connection_made(Sender::new(tok, channel));
-            Connection::new(
-                tok,
-                sock,
-                start | EventSet::hup(),
-                end,
-                handshake,
-                handler,
-            )
+            let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
+            Connection::builder(tok, sock, handler).build()
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
-        Ok(&mut self.connections[tok])
+        let conn = &mut self.connections[tok];
+
+        eloop.register_opt(
+            conn.socket(),
+            conn.token(),
+            conn.events(),
+            PollOpt::edge() | PollOpt::oneshot(),
+        ).map_err(Error::from).or_else(|err| {
+            error!("Encountered error while trying to build WebSocket connection: {}", err);
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
     }
 
     #[inline]
@@ -133,6 +165,7 @@ impl<F> mio::Handler for Handler <F>
     type Message = Command;
 
     fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: EventSet) {
+        let settings = self.factory.settings();
 
         match token {
             ALL => {
@@ -147,19 +180,13 @@ impl<F> mio::Handler for Handler <F>
                             }
                         }
                     {
-                        self.build_connection(sock, eloop.channel(), EventSet::readable(), Endpoint::Server, Handshake::default()).and_then(|conn| {
-                            info!("Accepted a new tcp connection {:?}.", conn.token());
-                            eloop.register_opt(
-                                conn.socket(),
-                                conn.token(),
-                                conn.events(),
-                                PollOpt::edge() | PollOpt::oneshot(),
-                            ).map_err(Error::from).or_else(|err| {
-                                error!("Encountered error while trying to build websocket connection: {}", err);
-                                conn.error(err);
-                                Ok(())
-                            })
-                        }).unwrap(); // TODO: use settings to determine whether we should panic here
+                        info!("Accepted a new tcp connection {:?}.", sock);
+                        if let Err(err) = self.accept(eloop, sock) {
+                            error!("Unable to build WebSocket connection {:?}", err);
+                            if settings.panic_on_new_connection {
+                                panic!("Unable to build WebSocket connection {:?}", err);
+                            }
+                        }
 
                     } else {
                         trace!("Blocked while accepting new tcp connection.")
@@ -252,11 +279,8 @@ impl<F> mio::Handler for Handler <F>
                 }
 
                 trace!("Active connections {:?}", self.connections.count());
-                // TODO: use "close on no connections" setting, it can be set when the server is
-                // shutting down
-                if self.connections.count() == 0 && self.listener.is_none() {
-                // if self.connections.count() == 0 {
-                    info!("No listener or active connections. Shutting websocket event loop.");
+                if self.connections.count() == 0 && (!self.state.is_active() || self.listener.is_none()) {
+                    debug!("Shutting websocket event loop.");
                     self.factory.on_shutdown();
                     eloop.shutdown();
                 }
@@ -265,7 +289,7 @@ impl<F> mio::Handler for Handler <F>
     }
 
     fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
-        // trace!("Received command {:?}", cmd);
+        let settings = self.factory.settings();
         let token = cmd.token();
         match cmd.into_signal() {
             Signal::Message(msg) => {
@@ -332,8 +356,9 @@ impl<F> mio::Handler for Handler <F>
                 match token {
                     ALL =>  {
                         if let Err(err) = self.connect(eloop, url) {
-                            // TODO: avoid panic here based on settings
-                            panic!("Unable to establish connection to {}: {:?}", url, err);
+                            if settings.panic_on_new_connection {
+                                panic!("Unable to establish connection to {}: {:?}", url, err);
+                            }
                         }
                     }
                     _ => {
@@ -352,8 +377,10 @@ impl<F> mio::Handler for Handler <F>
                     conn.shutdown();
                 }
                 self.factory.on_shutdown();
-                // TODO: panic on shutdown setting
-                panic!("Panicking on shutdown for now.")
+                self.state = State::Inactive;
+                if settings.panic_on_shutdown {
+                    panic!("Panicking on shutdown as per setting.")
+                }
             }
         }
 

@@ -61,18 +61,21 @@ pub struct WebSocket<F>
 impl<F> WebSocket<F>
     where F: Factory
 {
-    pub fn new(factory: F) -> Result<WebSocket<F>> {
-        Ok(try!(WebSocket::with_capacity(factory, 15_000)))
+    pub fn new(mut factory: F) -> Result<WebSocket<F>> {
+        let max = factory.settings().max_connections;
+        WebSocket::with_config(
+            factory,
+            EventLoopConfig {
+                notify_capacity: max + 1000,
+                .. EventLoopConfig::default()
+            },
+        )
     }
 
-    pub fn with_capacity(factory: F, conns: usize) -> Result<WebSocket<F>> {
+    pub fn with_config(factory: F, config: EventLoopConfig) -> Result<WebSocket<F>> {
         Ok(WebSocket {
-            event_loop: try!(io::Loop::configured(
-                EventLoopConfig {
-                    notify_capacity: 15_000,
-                    .. EventLoopConfig::default()
-                })),
-            handler: io::Handler::with_capacity(factory, conns),
+            event_loop: try!(io::Loop::configured(config)),
+            handler: io::Handler::new(factory),
         })
     }
 

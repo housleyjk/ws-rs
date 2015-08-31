@@ -1,3 +1,5 @@
+use std::default::Default;
+
 use log::LogLevel::Error as ErrorLevel;
 
 use message::Message;
@@ -14,8 +16,8 @@ pub trait Handler {
     // general
 
     #[inline]
-    fn settings(&mut self) {
-        // TODO: setup connection settings
+    fn settings(&mut self) -> Settings {
+        Settings::default()
     }
 
     #[inline]
@@ -139,6 +141,42 @@ impl<F> Handler for F
     }
 }
 
+pub struct Settings {
+    pub fragments_capacity: usize,
+    pub fragments_grow: bool,
+    pub fragment_size: usize,
+    pub in_buffer_capacity: usize,
+    pub in_buffer_grow: bool,
+    pub out_buffer_capacity: usize,
+    pub out_buffer_grow: bool,
+    pub masking_strict: bool,
+    pub panic_on_internal: bool,
+    pub panic_on_capacity: bool,
+    pub panic_on_protocol: bool,
+    pub panic_on_encoding: bool,
+    pub panic_on_io: bool,
+}
+
+impl Default for Settings {
+
+    fn default() -> Settings {
+        Settings {
+            fragments_capacity: 10,
+            fragments_grow: true,
+            fragment_size: u16::max_value() as usize,
+            in_buffer_capacity: 2048,
+            in_buffer_grow: true,
+            out_buffer_capacity: 2048,
+            out_buffer_grow: true,
+            masking_strict: true,
+            panic_on_internal: true,
+            panic_on_capacity: false,
+            panic_on_protocol: false,
+            panic_on_encoding: false,
+            panic_on_io: false,
+        }
+    }
+}
 
 mod test {
     use super::*;

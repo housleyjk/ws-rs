@@ -85,25 +85,6 @@ impl Handshake {
         }
     }
 
-    pub fn from_url(url: &url::Url) -> Result<Handshake> {
-        debug!("Building handshake request from url {:?}", url.serialize());
-        let mut shake = Handshake::default();
-        try!(write!(
-            shake.request.buffer(),
-            "GET {url} HTTP/1.1\r\n\
-             Connection: Upgrade\r\n\
-             Host: {host}:{port}\r\n\
-             Sec-WebSocket-Version: 13\r\n\
-             Sec-WebSocket-Key: {key}\r\n\
-             Upgrade: websocket\r\n\r\n",
-            url=url.serialize(),
-            host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-            port=url.port_or_default().unwrap_or(80),
-            key=generate_key()
-        ));
-        Ok(shake)
-    }
-
 }
 
 impl Default for Handshake {
@@ -160,6 +141,25 @@ impl Request {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn from_url(url: &url::Url) -> Result<Request> {
+        debug!("Building handshake request from url {:?}", url.serialize());
+        let mut req = Request::default();
+        try!(write!(
+            req.buffer(),
+            "GET {url} HTTP/1.1\r\n\
+             Connection: Upgrade\r\n\
+             Host: {host}:{port}\r\n\
+             Sec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Key: {key}\r\n\
+             Upgrade: websocket\r\n\r\n",
+            url=url.serialize(),
+            host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+            port=url.port_or_default().unwrap_or(80),
+            key=generate_key()
+        ));
+        Ok(req)
     }
 
 }
