@@ -36,6 +36,8 @@ pub struct Settings {
     pub max_connections: usize,
     pub panic_on_new_connection: bool,
     pub panic_on_shutdown: bool,
+    pub protocols: Option<&'static str>,
+    pub extensions: Option<&'static str>,
 }
 
 impl Default for Settings {
@@ -45,6 +47,8 @@ impl Default for Settings {
             max_connections: 10_000,
             panic_on_new_connection: false,
             panic_on_shutdown: false,
+            protocols: None,
+            extensions: None,
         }
     }
 }

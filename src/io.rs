@@ -100,8 +100,8 @@ impl<F> Handler<F>
 
             let sock = try!(connect_to_url(url));
             let factory = &mut self.factory;
-            // TODO: use factory settings for things like extensions
-            let req = try!(Request::from_url(url));
+            let settings = factory.settings();
+            let req = try!(Request::from_url(url, settings.protocols, settings.extensions));
 
             let tok = try!(self.connections.insert_with(|tok| {
                 let handler = factory.connection_made(Sender::new(tok, eloop.channel()));

@@ -11,7 +11,7 @@ use std::str::from_utf8;
 use mio::{Token, TryRead, TryWrite, EventSet};
 
 use message::Message;
-use handshake::{Handshake, Request, Response};
+use handshake::{Handshake, Request, Response, hash_key};
 use frame::Frame;
 use protocol::{CloseCode, OpCode};
 use result::{Result, Error, Kind};
@@ -277,8 +277,9 @@ impl<S, H> Connection<S, H>
             trace!("Finished writing handshake response for {:?}", self.token);
             trace!("Connection {:?} is now open.", self.token);
 
-            // TODO: move this logic into the handshake module
-            // TODO: check response code to see if it was a 500, 400, or 200
+            if try!(shake.response.status()) != 101 {
+                return Err(Error::new(Kind::Protocol, "Handshake failed."));
+            }
             try!(self.handler.on_open(shake));
             return Ok(self.check_events())
         }
@@ -293,15 +294,48 @@ impl<S, H> Connection<S, H>
                 Server => {
                     if let Some(_) = try!(self.socket.try_read_buf(shake.request.buffer())) {
                         if let Some(key) = try!(shake.request.parse()) {
-                            // TODO move this logic out of the connection module
-                            try!(self.handler.on_request(&shake.request));
-                            try!(write!(
-                                shake.response.buffer(),
-                                "HTTP/1.1 101 Switching Protocols\r\n\
-                                 Connection: Upgrade\r\n\
-                                 Sec-WebSocket-Accept: {}\r\n\
-                                 Upgrade: websocket\r\n\r\n",
-                                 key));
+                            match try!(self.handler.on_request(&shake.request)) {
+                                (Some(proto), Some(ext)) => {
+                                    try!(write!(
+                                        shake.response.buffer(),
+                                        "HTTP/1.1 101 Switching Protocols\r\n\
+                                         Connection: Upgrade\r\n\
+                                         Sec-WebSocket-Accept: {}\r\n\
+                                         Sec-WebSocket-Protocol: {}\r\n\
+                                         Sec-WebSocket-Extensions: {}\r\n\
+                                         Upgrade: websocket\r\n\r\n",
+                                         key, proto, ext));
+                                }
+                                (None, Some(ext)) => {
+                                    try!(write!(
+                                        shake.response.buffer(),
+                                        "HTTP/1.1 101 Switching Protocols\r\n\
+                                         Connection: Upgrade\r\n\
+                                         Sec-WebSocket-Accept: {}\r\n\
+                                         Sec-WebSocket-Extensions: {}\r\n\
+                                         Upgrade: websocket\r\n\r\n",
+                                         key, ext));
+                                }
+                                (Some(proto), None) => {
+                                    try!(write!(
+                                        shake.response.buffer(),
+                                        "HTTP/1.1 101 Switching Protocols\r\n\
+                                         Connection: Upgrade\r\n\
+                                         Sec-WebSocket-Accept: {}\r\n\
+                                         Sec-WebSocket-Protocol: {}\r\n\
+                                         Upgrade: websocket\r\n\r\n",
+                                         key, proto));
+                                }
+                                (None, None) => {
+                                    try!(write!(
+                                        shake.response.buffer(),
+                                        "HTTP/1.1 101 Switching Protocols\r\n\
+                                         Connection: Upgrade\r\n\
+                                         Sec-WebSocket-Accept: {}\r\n\
+                                         Upgrade: websocket\r\n\r\n",
+                                         key));
+                                }
+                            }
 
                            self.events.remove(EventSet::readable());
                            self.events.insert(EventSet::writable());
@@ -331,8 +365,17 @@ impl<S, H> Connection<S, H>
         if let Connecting(shake) = replace(&mut self.state, Open) {
             trace!("Finished reading handshake response for {:?}", self.token);
             trace!("Connection {:?} is now open.", self.token);
-            // TODO move this logic out of the connection module
-            // TODO: check response code to see if it was a 500, 400, or 200
+            if try!(shake.response.status()) != 101 {
+                return Err(Error::new(Kind::Protocol, "Handshake failed."));
+            }
+
+            if self.handler.settings().key_strict {
+                let res_key = try!(from_utf8(try!(shake.response.key())));
+                let req_key = hash_key(try!(shake.request.key()));
+                if req_key != res_key {
+                    return Err(Error::new(Kind::Protocol, format!("Received incorrect WebSocket Accept key: {} vs {}", req_key, res_key)));
+                }
+            }
 
             try!(self.handler.on_response(&shake.response));
             try!(self.handler.on_open(shake));

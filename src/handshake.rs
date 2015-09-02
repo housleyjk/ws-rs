@@ -1,6 +1,11 @@
 use std::default::Default;
 use std::io::{Cursor, Write};
+use std::borrow::Cow;
 use std::mem::transmute;
+use std::str::from_utf8;
+
+#[cfg(feature="cookies")]
+use cookie;
 
 use sha1;
 use rand;
@@ -11,6 +16,7 @@ use result::{Result, Error, Kind};
 
 static WS_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const MAX_HEADERS: usize = 124;
 
 fn generate_key() -> String {
     let key: [u8; 16] = unsafe {
@@ -19,7 +25,7 @@ fn generate_key() -> String {
     encode_base64(&key)
 }
 
-fn hash_key(key: &[u8]) -> String {
+pub fn hash_key(key: &[u8]) -> String {
     let mut hasher = sha1::Sha1::new();
     let mut buf = [0u8; 20];
 
@@ -105,6 +111,76 @@ pub struct Request {
 
 impl Request {
 
+    fn get_header(&self, header: &str) -> Result<Option<&[u8]>> {
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+        let mut req = httparse::Request::new(&mut headers);
+        try!(req.parse(self.raw.get_ref()));
+
+        Ok(req.headers.iter()
+                      .find(|h| h.name.to_lowercase() == header)
+                      .map(|h| h.value))
+    }
+
+    // note this assumes that the request is complete
+    pub fn origin(&self) -> Result<Option<&str>> {
+        if let Some(origin) = try!(self.get_header("origin")) {
+            Ok(Some(try!(from_utf8(origin))))
+        } else {
+            Ok(None)
+        }
+    }
+
+    // note this assumes that the request is complete
+    pub fn key(&self) -> Result<&[u8]> {
+        try!(self.get_header("sec-websocket-key")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    }
+
+    // note this assumes that the request is complete
+    pub fn version(&self) -> Result<&str> {
+        if let Some(version) = try!(self.get_header("sec-websocket-version")) {
+            from_utf8(version).map_err(Error::from)
+        } else {
+            Err(Error::new(Kind::Protocol, "The Sec-WebSocket-Version header is missing."))
+        }
+    }
+
+    // note this assumes that the request is complete
+    pub fn resource(&self) -> Result<&str> {
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+        let mut req = httparse::Request::new(&mut headers);
+        try!(req.parse(self.raw.get_ref()));
+        req.path.ok_or(Error::new(Kind::Protocol, "The resource is missing. This is likely because the request is incomplete"))
+    }
+
+    pub fn protocols(&self) -> Result<Vec<&str>> {
+        if let Some(protos) = try!(self.get_header("sec-websocket-protocol")) {
+            Ok(try!(from_utf8(protos)).split(',').map(|proto| proto.trim()).collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn extensions(&self) -> Result<Vec<&str>> {
+        if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
+            Ok(try!(from_utf8(exts)).split(',').map(|ext| ext.trim()).collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn headers(&self) -> Result<Vec<(&str, &str)>> {
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+        let mut req = httparse::Request::new(&mut headers);
+        try!(req.parse(self.raw.get_ref()));
+
+        let mut headers = Vec::with_capacity(MAX_HEADERS);
+        for header in req.headers.iter() {
+            headers.push((header.name, try!(from_utf8(header.value))))
+        }
+        Ok(headers)
+    }
+
+    #[doc(hidden)]
     #[inline]
     pub fn new(data: Vec<u8>) -> Request {
         Request {
@@ -112,53 +188,112 @@ impl Request {
         }
     }
 
+    #[doc(hidden)]
     #[inline]
     pub fn buffer(&mut self) -> &mut Vec<u8> {
         self.raw.get_mut()
     }
 
+    #[doc(hidden)]
     #[inline]
     pub fn cursor(&mut self) -> &mut Cursor<Vec<u8>> {
         &mut self.raw
     }
 
+    #[doc(hidden)]
     pub fn parse(&self) -> Result<Option<String>> {
-        let mut headers = [httparse::EMPTY_HEADER; 124];
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut req = httparse::Request::new(&mut headers);
         let parsed = try!(req.parse(self.raw.get_ref()));
         if !parsed.is_partial() {
-            // TODO: parse all data out
             debug!(
                 "Handshake request received: \n{}",
                 String::from_utf8_lossy(self.raw.get_ref()));
 
-            // for now just get key
-            let header = try!(req.headers.iter()
-                                         .find(|h| h.name == "Sec-WebSocket-Key")
-                                         .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key.")));
-            let key = header.value;
+            let key = try!(req.headers.iter()
+                                      .find(|h| h.name.to_lowercase() == "sec-websocket-key")
+                                      .map(|h| h.value)
+                                      .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key.")));
             Ok(Some(hash_key(key)))
         } else {
             Ok(None)
         }
     }
 
-    pub fn from_url(url: &url::Url) -> Result<Request> {
+    #[doc(hidden)]
+    pub fn from_url(url: &url::Url, protocols: Option<&str>, extensions: Option<&str>) -> Result<Request> {
         debug!("Building handshake request from url {:?}", url.serialize());
         let mut req = Request::default();
-        try!(write!(
-            req.buffer(),
-            "GET {url} HTTP/1.1\r\n\
-             Connection: Upgrade\r\n\
-             Host: {host}:{port}\r\n\
-             Sec-WebSocket-Version: 13\r\n\
-             Sec-WebSocket-Key: {key}\r\n\
-             Upgrade: websocket\r\n\r\n",
-            url=url.serialize(),
-            host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-            port=url.port_or_default().unwrap_or(80),
-            key=generate_key()
-        ));
+        if let Some(proto) = protocols {
+            if let Some(ext) = extensions {
+                try!(write!(
+                    req.buffer(),
+                    "GET {url} HTTP/1.1\r\n\
+                     Connection: Upgrade\r\n\
+                     Host: {host}:{port}\r\n\
+                     Sec-WebSocket-Version: 13\r\n\
+                     Sec-WebSocket-Key: {key}\r\n\
+                     Sec-WebSocket-Protocol: {proto}\r\n\
+                     Sec-WebSocket-Extensions: {ext}\r\n\
+                     Upgrade: websocket\r\n\r\n",
+                    url=url.serialize(),
+                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                    port=url.port_or_default().unwrap_or(80),
+                    key=generate_key(),
+                    proto=proto,
+                    ext=ext,
+                ));
+            } else {
+                try!(write!(
+                    req.buffer(),
+                    "GET {url} HTTP/1.1\r\n\
+                     Connection: Upgrade\r\n\
+                     Host: {host}:{port}\r\n\
+                     Sec-WebSocket-Version: 13\r\n\
+                     Sec-WebSocket-Key: {key}\r\n\
+                     Sec-WebSocket-Protocol: {proto}\r\n\
+                     Upgrade: websocket\r\n\r\n",
+                    url=url.serialize(),
+                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                    port=url.port_or_default().unwrap_or(80),
+                    key=generate_key(),
+                    proto=proto,
+                ));
+            }
+
+        } else {
+            if let Some(ext) = extensions {
+                try!(write!(
+                    req.buffer(),
+                    "GET {url} HTTP/1.1\r\n\
+                     Connection: Upgrade\r\n\
+                     Host: {host}:{port}\r\n\
+                     Sec-WebSocket-Version: 13\r\n\
+                     Sec-WebSocket-Key: {key}\r\n\
+                     Sec-WebSocket-Extensions: {ext}\r\n\
+                     Upgrade: websocket\r\n\r\n",
+                    url=url.serialize(),
+                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                    port=url.port_or_default().unwrap_or(80),
+                    key=generate_key(),
+                    ext=ext,
+                ));
+            } else {
+                try!(write!(
+                    req.buffer(),
+                    "GET {url} HTTP/1.1\r\n\
+                     Connection: Upgrade\r\n\
+                     Host: {host}:{port}\r\n\
+                     Sec-WebSocket-Version: 13\r\n\
+                     Sec-WebSocket-Key: {key}\r\n\
+                     Upgrade: websocket\r\n\r\n",
+                    url=url.serialize(),
+                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                    port=url.port_or_default().unwrap_or(80),
+                    key=generate_key(),
+                ));
+            }
+        }
         Ok(req)
     }
 
@@ -178,20 +313,64 @@ pub struct Response {
 
 impl Response {
 
+    fn get_header(&self, header: &str) -> Result<Option<&[u8]>> {
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+        let mut res = httparse::Response::new(&mut headers);
+        try!(res.parse(self.raw.get_ref()));
+
+        Ok(res.headers.iter()
+                      .find(|h| h.name.to_lowercase() == header)
+                      .map(|h| h.value))
+    }
+
+    pub fn status(&self) -> Result<u16> {
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+        let mut res = httparse::Response::new(&mut headers);
+        try!(res.parse(self.raw.get_ref()));
+        res.code.ok_or(Error::new(Kind::Protocol, "Unable to parse HTTP status."))
+    }
+
+    pub fn key(&self) -> Result<&[u8]> {
+        try!(self.get_header("sec-websocket-accept")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    }
+
+    pub fn protocol(&self) -> Result<Option<&str>> {
+        if let Some(proto) = try!(self.get_header("sec-websocket-protocol")) {
+            Ok(Some(try!(from_utf8(proto))))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn extensions(&self) -> Result<Vec<&str>> {
+        if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
+            Ok(try!(from_utf8(exts)).split(',').map(|proto| proto.trim()).collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    #[doc(hidden)]
+    #[inline]
     pub fn new(data: Vec<u8>) -> Response {
         Response {
             raw: Cursor::new(data),
         }
     }
 
+    #[doc(hidden)]
+    #[inline]
     pub fn buffer(&mut self) -> &mut Vec<u8> {
         self.raw.get_mut()
     }
 
+    #[doc(hidden)]
+    #[inline]
     pub fn cursor(&mut self) -> &mut Cursor<Vec<u8>> {
         &mut self.raw
     }
 
+    #[doc(hidden)]
     pub fn parse(&self) -> Result<Option<&[u8]>> {
         let data = self.raw.get_ref();
         let end = data.iter()
@@ -204,21 +383,14 @@ impl Response {
 
         let res_data = &data[..end];
 
-        let mut headers = [httparse::EMPTY_HEADER; 124];
+        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut res = httparse::Response::new(&mut headers);
 
         let parsed = try!(res.parse(res_data));
         if !parsed.is_partial() {
-            // TODO: parse all data out
             debug!(
                 "Handshake response received: \n{}",
                 String::from_utf8_lossy(res_data));
-
-            // TODO: verify key
-            let header = try!(res.headers.iter()
-                                         .find(|h| h.name == "Sec-WebSocket-Accept")
-                                         .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket accept.")));
-            let key = header.value;
 
             // parse was successful, the rest of the data is incoming frames
             Ok(Some(&data[end..]))

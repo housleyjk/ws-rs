@@ -59,10 +59,11 @@ pub trait Handler {
     // handshake events
 
     /// return an Error to reject the request
+    /// return optionally (protocol, extensions)
     #[inline]
-    fn on_request(&mut self, req: &Request) -> Result<()> {
+    fn on_request(&mut self, req: &Request) -> Result<(Option<&str>, Option<&str>)> {
         trace!("Handler received request: {:?}", req);
-        Ok(())
+        Ok((None, None))
     }
 
     /// return an Error to reject the handshake response
@@ -149,12 +150,13 @@ pub struct Settings {
     pub in_buffer_grow: bool,
     pub out_buffer_capacity: usize,
     pub out_buffer_grow: bool,
-    pub masking_strict: bool,
     pub panic_on_internal: bool,
     pub panic_on_capacity: bool,
     pub panic_on_protocol: bool,
     pub panic_on_encoding: bool,
     pub panic_on_io: bool,
+    pub masking_strict: bool,
+    pub key_strict: bool,
 }
 
 impl Default for Settings {
@@ -168,12 +170,13 @@ impl Default for Settings {
             in_buffer_grow: true,
             out_buffer_capacity: 2048,
             out_buffer_grow: true,
-            masking_strict: true,
             panic_on_internal: true,
             panic_on_capacity: false,
             panic_on_protocol: false,
             panic_on_encoding: false,
             panic_on_io: false,
+            masking_strict: false,
+            key_strict: false,
         }
     }
 }
