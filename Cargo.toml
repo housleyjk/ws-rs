@@ -11,13 +11,13 @@ keywords = ["websocket", "mio", "event-driven", "io", "web"]
 license = "MIT"
 
 [dependencies]
-mio = "*"
-log = "*"
-httparse = "*"
-sha1 = "*"
-rand = "*"
-url = "*"
+mio = "0.4.3"
+log = "0.3.2"
+httparse = "0.1.6"
+sha1 = "0.1.1"
+rand = "0.3.11"
+url = "0.2.37"
 
 [dev-dependencies]
-env_logger = "*"
-clock_ticks = "*"
+env_logger = "0.3.1"
+clock_ticks = "0.0.6"
