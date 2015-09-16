@@ -1,6 +1,5 @@
 use std::default::Default;
 use std::io::{Cursor, Write};
-use std::borrow::Cow;
 use std::mem::transmute;
 use std::str::from_utf8;
 
@@ -36,7 +35,7 @@ pub fn hash_key(key: &[u8]) -> String {
     return encode_base64(&buf)
 }
 
-/// This code is based on rustc_serialize base64 STANDARD
+// This code is based on rustc_serialize base64 STANDARD
 fn encode_base64(data: &[u8]) -> String {
     let len = data.len();
     let mod_len = len % 3;
@@ -76,6 +75,7 @@ fn encode_base64(data: &[u8]) -> String {
     String::from_utf8(encoded).unwrap()
 }
 
+/// A struct representing the two halves of the WebSocket handshake.
 #[derive(Debug)]
 pub struct Handshake {
     pub request: Request,
@@ -104,6 +104,7 @@ impl Default for Handshake {
 }
 
 
+/// The handshake request.
 #[derive(Debug)]
 pub struct Request {
     raw: Cursor<Vec<u8>>,
@@ -121,6 +122,8 @@ impl Request {
                       .map(|h| h.value))
     }
 
+    /// Get the origin of the request if it comes from a browser.
+    #[allow(dead_code)]
     // note this assumes that the request is complete
     pub fn origin(&self) -> Result<Option<&str>> {
         if let Some(origin) = try!(self.get_header("origin")) {
@@ -130,11 +133,14 @@ impl Request {
         }
     }
 
+    /// Get the WebSocket key sent in the request.
     // note this assumes that the request is complete
     pub fn key(&self) -> Result<&[u8]> {
         try!(self.get_header("sec-websocket-key")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
+    /// Get the WebSocket protocol version from the request (should be 13).
+    #[allow(dead_code)]
     // note this assumes that the request is complete
     pub fn version(&self) -> Result<&str> {
         if let Some(version) = try!(self.get_header("sec-websocket-version")) {
@@ -144,6 +150,8 @@ impl Request {
         }
     }
 
+    /// Get the path of the request.
+    #[allow(dead_code)]
     // note this assumes that the request is complete
     pub fn resource(&self) -> Result<&str> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
@@ -152,6 +160,8 @@ impl Request {
         req.path.ok_or(Error::new(Kind::Protocol, "The resource is missing. This is likely because the request is incomplete"))
     }
 
+    /// Get the possible protocols the other endpoint supports.
+    #[allow(dead_code)]
     pub fn protocols(&self) -> Result<Vec<&str>> {
         if let Some(protos) = try!(self.get_header("sec-websocket-protocol")) {
             Ok(try!(from_utf8(protos)).split(',').map(|proto| proto.trim()).collect())
@@ -160,6 +170,8 @@ impl Request {
         }
     }
 
+    /// Get the extensions that the other endpoint is trying to negotiate.
+    #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
         if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
             Ok(try!(from_utf8(exts)).split(',').map(|ext| ext.trim()).collect())
@@ -168,6 +180,8 @@ impl Request {
         }
     }
 
+    /// Access the request headers as a vector of tuples.
+    #[allow(dead_code)]
     pub fn headers(&self) -> Result<Vec<(&str, &str)>> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut req = httparse::Request::new(&mut headers);
@@ -306,6 +320,7 @@ impl Default for Request {
     }
 }
 
+/// The handshake response.
 #[derive(Debug)]
 pub struct Response {
     raw: Cursor<Vec<u8>>,
@@ -323,6 +338,8 @@ impl Response {
                       .map(|h| h.value))
     }
 
+    /// Get the status of the response
+    #[allow(dead_code)]
     pub fn status(&self) -> Result<u16> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut res = httparse::Response::new(&mut headers);
@@ -330,10 +347,13 @@ impl Response {
         res.code.ok_or(Error::new(Kind::Protocol, "Unable to parse HTTP status."))
     }
 
+    /// Get the hashed WebSocket key
     pub fn key(&self) -> Result<&[u8]> {
         try!(self.get_header("sec-websocket-accept")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
+    /// Get the protocol that the server has decided to use
+    #[allow(dead_code)]
     pub fn protocol(&self) -> Result<Option<&str>> {
         if let Some(proto) = try!(self.get_header("sec-websocket-protocol")) {
             Ok(Some(try!(from_utf8(proto))))
@@ -342,6 +362,9 @@ impl Response {
         }
     }
 
+    /// Get the extensions that the server has decided to use. If these are unacceptable, it is
+    /// appropriate to send an Extension close code
+    #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
         if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
             Ok(try!(from_utf8(exts)).split(',').map(|proto| proto.trim()).collect())

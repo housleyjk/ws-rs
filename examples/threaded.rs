@@ -2,7 +2,6 @@
 /// handler to implement more handler methods than a closure handler allows.
 
 extern crate ws;
-extern crate url;
 extern crate env_logger;
 
 use std::thread;
@@ -29,7 +28,7 @@ fn main () {
 
         fn on_close(&mut self, code: CloseCode, reason: &str) {
             println!("WebSocket closing for ({:?}) {}", code, reason);
-            println!("Shutting down server after first connection.");
+            println!("Shutting down server after first connection closes.");
             self.out.shutdown().unwrap();
         }
     }
@@ -49,9 +48,7 @@ fn main () {
     // Client thread
     let client = thread::spawn(move || {
 
-        let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
-
-        connect(url, |out| {
+        connect("ws://127.0.0.1:3012", |out| {
 
             out.send("Hello WebSocket").unwrap();
 

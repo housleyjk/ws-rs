@@ -8,26 +8,32 @@ use result::Result;
 
 use self::Message::*;
 
+/// An enum representing the various forms of a WebSocket message.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message {
+    /// A text WebSocket message
 	Text(String),
+    /// A binary WebSocket message
 	Binary(Vec<u8>),
 }
 
 impl Message {
 
+    /// Create a new text WebSocket message from a stringable.
     pub fn text<S>(string: S) -> Message
         where S: Into<String>
     {
         Message::Text(string.into())
     }
 
+    /// Create a new binary WebSocket message by converting to Vec<u8>.
     pub fn binary<B>(bin: B) -> Message
         where B: Into<Vec<u8>>
     {
         Message::Binary(bin.into())
     }
 
+    /// Get the length of the WebSocket message.
     pub fn len(&self) -> usize {
         match *self {
             Text(ref string) => string.len(),
@@ -35,6 +41,7 @@ impl Message {
         }
     }
 
+    #[doc(hidden)]
     pub fn opcode(&self) -> OpCode {
         match *self {
             Text(_) => OpCode::Text,
@@ -42,6 +49,7 @@ impl Message {
         }
     }
 
+    /// Consume the WebSocket and return it as binary data.
     pub fn into_data(self) -> Vec<u8> {
         match self {
             Text(string) => string.into_bytes(),
@@ -49,6 +57,7 @@ impl Message {
         }
     }
 
+    /// Attempt to consume the WebSocket message and convert it to a String.
     pub fn into_text(self) -> Result<String> {
         match self {
             Text(string) => Ok(string),
@@ -57,6 +66,8 @@ impl Message {
         }
     }
 
+    /// Attempt to get a &str from the WebSocket message,
+    /// this will try to convert binary data to utf8.
     pub fn as_text(&self) -> Result<&str> {
         match *self {
             Text(ref string) => Ok(string),

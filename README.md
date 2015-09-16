@@ -15,16 +15,14 @@ Introduction
 ------------
 
 This library provides an implementation of WebSockets, [RFC6455](https://tools.ietf.org/html/rfc6455) using [MIO](https://github.com/carllerche/mio).
-To use this library, create a WebSocket struct using one of the helper functions `listen` and `connect`.
+It allows for handling multiple connections on a single thread, and even spawning new client connections on the same thread. This makes for very fast
+and resource efficient WebSockets. The API design abstracts away the menial parts of the WebSocket protocol, such as sending and receiving Ping/Pong
+frames, which allows you to focus on application code and rely on WS-RS to handle protocol conformance. However, it is also possible to get low-level
+access to individual WebSocket frames if you need to write extensions or want to optimize around the WebSocket protocol.
 
-A WebSocket requires two basic components: a Factory and a Handler. Your Factory will be called each time the underlying TCP connection has
-been successfully established, and it will need to return a Handler that will handle the new WebSocket connection. Factories can be used to
-manage state that applies to multiple WebSocket connections, whereas Handlers manage the state of individual connections.
 
-Your Factory will be passed a Sender struct that represents the output of the WebSocket. The Sender allows the Handler to
-send messages, initiate a WebSocket closing handshake by sending a close code, and other useful actions. If you need to send messages from other parts
-of your application it is possible to clone and send the Sender across threads allowing other code to send messages on the WebSocket without blocking
-the event loop.
+**[API documentation](http://google.com)**
+
 
 Examples
 --------
@@ -43,12 +41,70 @@ A more complex example using channels to communicate with a WebSocket handler to
 Stability and Testing
 ---------------------
 
-WS-RS is currently a work in progress. However, it already passes both the client and server sides of the [Autobahn Testsuite](http://autobahn.ws/testsuite/).
-In the future I hope to make the same stability guarantees as the [Rust Standard Library](http://www.rust-lang.org) in so far as dependencies will allow.
+WS-RS passes both the client and server sides of the [Autobahn Testsuite](http://autobahn.ws/testsuite/).
+To run the tests yourself, install the [Autobahn Testsuite](http://autobahn.ws/testsuite/).
+For example:
+
+```
+mkvirtualenv wstest --python=/usr/bin/python2
+pip install autobahntestsuite
+```
+
+To run the client tests, start the test server in one window:
+```
+cd tests
+wstest -m fuzzingserver
+```
+And run the WS-RS client in the other:
+```
+cargo run --example autobahn-client
+```
+
+To run the server tests, start the WS-RS server in one window:
+```
+cargo run --example autobahn-server
+```
+And run the test client in the other:
+```
+cd tests
+wstest -m fuzzingclient
+```
+
+The library is currently unstable, but as it matures, I hope to make the same stability guarantees as the [Rust Standard Library](http://www.rust-lang.org) in so far as dependencies will allow.
 I am commited to avoiding excessive allocations and costly abstractions.
 
 Contributing
 ------------
 
 Please report bugs and make feature requests [here](https://github.com/housleyjk/ws-rs/issues). I welcome pull requests.
-More tests are appreciated.
+Unit tests for bugs are greatly appreciated.
+
+Comparison with other WebSocket libraries
+-----------------------------------------
+
+You don't need to use this library to the exclusion of other WebSocket libraries, in Rust or other languages,
+but if you find yourself considering which library to use, here is my opinion: choose the one that has the API
+you like the most. The API is generally more important than performance. The library API is what you will have to deal with as
+you build your WebSocket application. I've written WS-RS to have an API that fits my needs. If you don't like it,
+please make a [feature request](https://github.com/housleyjk/ws-rs/issues) to improve it or use another library
+that causes you less problems.
+
+However, if performance is what you value most and you want a WebSocket library in Rust, I would choose this one.
+Here is how it stacks up against some other common frameworks using the example [bencher](https://github.com/housleyjk/ws-rs/tree/stable/examples/bench.rs)
+to open 10,000 simultaneous connections and send 10 messages. These results are **not** reliable as a serious benchmark:
+
+Library | Time (ms)
+--------| ---------
+<a href="https://github.com/housleyjk/ws-rs">WS-RS</a> | 1,709
+<a href="https://libwebsockets.org/trac/libwebsockets">libwebsockets</a> | 2,067
+<a href="https://github.com/cyderize/rust-websocket">rust-websocket</a> | 8,950
+<a href="http://aaugustin.github.io/websockets/">\* websockets CPython 3.4.3</a> | 12,638
+<a href="http://autobahn.ws/python/">Autobahn CPython 2.7.10</a> | 48,902
+<a href="https://github.com/websockets/ws">\*\* NodeJS via ws</a> | 127,635
+
+\* websockets encountered a few (3) broken pipe errors<br>
+\*\* NodeJS encountered several (229) connection timeout errors
+
+Your results will vary. The system specs for this test were as follows:
+
+Intel(R) Core(TM) i3 CPU 560 @ 3.33GHz, 8GB RAM

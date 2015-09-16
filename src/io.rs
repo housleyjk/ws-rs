@@ -15,9 +15,7 @@ use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
 use connection::factory::Factory;
-use connection::state::Endpoint;
-use handshake::{Handshake, Request};
-use protocol::CloseCode;
+use handshake::Request;
 
 pub const ALL: Token = Token(0);
 const CONN_START: Token = Token(1);
@@ -279,10 +277,15 @@ impl<F> mio::Handler for Handler <F>
                 }
 
                 trace!("Active connections {:?}", self.connections.count());
-                if self.connections.count() == 0 && (!self.state.is_active() || self.listener.is_none()) {
-                    debug!("Shutting websocket event loop.");
-                    self.factory.on_shutdown();
-                    eloop.shutdown();
+                if self.connections.count() == 0 {
+                    if !self.state.is_active() {
+                        debug!("Shutting websocket server.");
+                        eloop.shutdown();
+                    } else if self.listener.is_none() {
+                        debug!("Shutting websocket client.");
+                        self.factory.on_shutdown();
+                        eloop.shutdown();
+                    }
                 }
             }
         }
@@ -325,9 +328,9 @@ impl<F> mio::Handler for Handler <F>
                     }
                 }
             }
-            Signal::Close(code) => {
+            Signal::Close(code, reason) => {
                 if let Some(conn) = self.connections.get_mut(token) {
-                    if let Err(err) = conn.send_close(code) {
+                    if let Err(err) = conn.send_close(code, reason) {
                         conn.error(err)
                     }
                 } else {
@@ -378,6 +381,11 @@ impl<F> mio::Handler for Handler <F>
                 }
                 self.factory.on_shutdown();
                 self.state = State::Inactive;
+                // If the shutdown command is received after connections have disconnected,
+                // we need to shutdown now because ready only fires on io events
+                if self.connections.count() == 0 {
+                    eloop.shutdown()
+                }
                 if settings.panic_on_shutdown {
                     panic!("Panicking on shutdown as per setting.")
                 }

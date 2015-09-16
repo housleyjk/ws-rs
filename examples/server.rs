@@ -25,8 +25,8 @@ fn main () {
         }
 
     }) {
-        // Inform the user of any error
-        println!("WebSocket failed with {:?}", error);
+        // Inform the user of failure
+        println!("Failed to create WebSocket due to {:?}", error);
     }
 
 }

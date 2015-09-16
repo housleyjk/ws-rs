@@ -1,6 +1,7 @@
 use std::mem::transmute;
 use std::io::{Cursor, Read, Write};
 use std::default::Default;
+use std::iter::FromIterator;
 
 use rand;
 use mio::TryRead;
@@ -136,7 +137,7 @@ impl Frame {
     }
 
     #[inline]
-    pub fn close(code: CloseCode) -> Frame {
+    pub fn close(code: CloseCode, reason: &str) -> Frame {
         let raw: [u8; 2] = unsafe {
             let u: u16 = code.into();
             transmute(u)
@@ -145,7 +146,10 @@ impl Frame {
         let payload = if let CloseCode::Empty = code {
             Vec::new()
         } else {
-            Vec::from(&raw[..])
+            Vec::from_iter(
+                raw[..].iter()
+                       .chain(reason.as_bytes().iter())
+                       .map(|&b| b))
         };
 
         Frame {

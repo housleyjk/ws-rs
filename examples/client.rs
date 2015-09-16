@@ -1,7 +1,6 @@
 /// Simple WebSocket client with error handling. It is not necessary to setup logging, but doing
 /// so will allow you to see more details about the connection by using the RUST_LOG env variable.
 
-extern crate url;
 extern crate ws;
 extern crate env_logger;
 
@@ -12,13 +11,10 @@ fn main () {
     // Setup logging
     env_logger::init().unwrap();
 
-    // Parse str into a url
-    let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
-
     // Connect to the url and call the closure
-    if let Err(error) = connect(url, |out| {
+    if let Err(error) = connect("ws://127.0.0.1:3012", |out| {
 
-        // Queue a message to be sent when the websocket is open
+        // Queue a message to be sent when the WebSocket is open
         if let Err(_) = out.send("Hello WebSocket") {
             println!("Websocket couldn't queue an initial message.")
         } else {
@@ -36,8 +32,8 @@ fn main () {
         }
 
     }) {
-        // Inform the user of any error
-        println!("WebSocket failed with {:?}", error);
+        // Inform the user of failure
+        println!("Failed to create WebSocket due to: {:?}", error);
     }
 
 }

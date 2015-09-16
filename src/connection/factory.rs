@@ -3,10 +3,11 @@ use std::default::Default;
 use super::handler::Handler;
 use communication::Sender;
 
+/// A trait for creating new WebSocket handlers.
 pub trait Factory {
     type Handler: Handler;
 
-    /// indicates a tcp connection made, so now we need to build the websocket connection handler
+    /// Called when a TCP connection is made
     fn connection_made(&mut self, Sender) -> Self::Handler;
 
     #[inline]
@@ -32,11 +33,24 @@ impl<F, H> Factory for F
 
 }
 
+/// Settings that apply to multiple connections.
 pub struct Settings {
+    /// The maximum number of connections that this WebSocket will support.
+    /// Default: 10,000
     pub max_connections: usize,
+    /// Whether to panic when unable to establish a new TCP connection.
+    /// Default: false
     pub panic_on_new_connection: bool,
+    /// Whether to panic when a shutdown of the WebSocket is requested.
+    /// Default: false
     pub panic_on_shutdown: bool,
+    /// A protocol string representing the subprotocols that this WebSocket can support. This will
+    /// be sent in Requests to server endpoints to help determine a subprotocol if any for the
+    /// connection.
+    /// Default: None
     pub protocols: Option<&'static str>,
+    /// A WebSocket extension string indicating the extensions that this WebSocket can support.
+    /// Default: None
     pub extensions: Option<&'static str>,
 }
 
@@ -55,6 +69,7 @@ impl Default for Settings {
 
 
 mod test {
+    #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
     use mio;
     use communication::{Command, Sender};

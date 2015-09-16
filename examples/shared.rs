@@ -5,7 +5,7 @@ extern crate ws;
 extern crate url;
 extern crate env_logger;
 
-use ws::{WebSocket, Sender, CloseCode};
+use ws::{WebSocket, Sender};
 
 fn main () {
 
@@ -15,7 +15,7 @@ fn main () {
     // A variable to distinguish the two halves
     let mut name = "Client";
 
-    // Create a websocket with a closure as the factory
+    // Create a WebSocket with a closure as the factory
     let mut ws = WebSocket::new(|output: Sender| {
 
         // The first connection is named Client
@@ -33,11 +33,10 @@ fn main () {
                 println!("{} sending 'How are you?' ", name);
 
                 // send the message back
-                Ok(try!(output.send("How are you?")))
+                output.send("How are you?")
             } else {
-                // otherwise, we are the client and will close the websocket
-                println!("{} requesting to close the connection.", name);
-                Ok(try!(output.close(CloseCode::Normal)))
+                // otherwise, we are the client and will shutdown the WebSocket
+                output.shutdown()
             }
         };
 
@@ -51,12 +50,12 @@ fn main () {
     // Url for the client
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
 
-    // Queue a websocket connection to the url
+    // Queue a WebSocket connection to the url
     ws.connect(url).unwrap();
 
     // Start listening for incoming conections
     ws.listen("127.0.0.1:3012").unwrap();
 
-    // The websocket has shutdown
+    // The WebSocket has shutdown
     println!("All done.")
 }

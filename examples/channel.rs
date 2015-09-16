@@ -9,7 +9,6 @@
 /// complex system from simple, composable parts.
 
 extern crate ws;
-extern crate url;
 extern crate env_logger;
 
 use std::thread;
@@ -45,7 +44,7 @@ fn main () {
             self.log.send(msg.to_string()).unwrap();
 
             // echo it back
-            self.ws.send(msg.clone())
+            self.ws.send(msg)
         }
 
         fn on_close(&mut self, _: CloseCode, _: &str) {
@@ -58,7 +57,9 @@ fn main () {
         listen("127.0.0.1:3012", |out| {
             Server {
                 ws: out,
-                log: log_in.clone(), // we need to clone the channel because, in theory, there could be many active connections
+                // we need to clone the channel because
+                // in theory, there could be many active connections
+                log: log_in.clone(),
             }
         }).unwrap()
     }).unwrap();
@@ -112,14 +113,14 @@ fn main () {
 
     // Client thread
     let client = thread::Builder::new().name("client".to_string()).spawn(move || {
-        let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
-
-        connect(url, |out| {
+        connect("ws://127.0.0.1:3012", |out| {
 
             Client {
                 out: out,
                 ind: 0,
-                data: client_data.clone(),  // we need to clone again because, in theory, there could be many client connections sending off the data
+                // we need to clone again because
+                // in theory, there could be many client connections sending off the data
+                data: client_data.clone(),
             }
 
         }).unwrap()

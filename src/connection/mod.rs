@@ -4,6 +4,7 @@ pub mod state;
 
 use std::mem::replace;
 use std::mem::transmute;
+use std::borrow::Borrow;
 use std::io::{Write, Read, Cursor, Seek, SeekFrom};
 use std::collections::VecDeque;
 use std::str::from_utf8;
@@ -130,7 +131,7 @@ impl<S, H> Connection<S, H>
 
     pub fn shutdown(&mut self) {
         self.handler.on_shutdown();
-        if let Err(err) = self.send_close(CloseCode::Away) {
+        if let Err(err) = self.send_close(CloseCode::Away, "Shutting down.") {
             self.handler.on_error(err);
             self.events = EventSet::none();
         }
@@ -186,9 +187,10 @@ impl<S, H> Connection<S, H>
                         if settings.panic_on_internal {
                             panic!("Panicking on internal error -- {}", err);
                         }
+                        let reason = format!("{}", err);
 
                         self.handler.on_error(err);
-                        if let Err(err) = self.send_close(CloseCode::Error) {
+                        if let Err(err) = self.send_close(CloseCode::Error, reason) {
                             self.handler.on_error(err);
                             self.events = EventSet::none();
                         }
@@ -197,8 +199,10 @@ impl<S, H> Connection<S, H>
                         if settings.panic_on_capacity {
                             panic!("Panicking on capacity error -- {}", err);
                         }
+                        let reason = format!("{}", err);
+
                         self.handler.on_error(err);
-                        if let Err(err) = self.send_close(CloseCode::Size) {
+                        if let Err(err) = self.send_close(CloseCode::Size, reason) {
                             self.handler.on_error(err);
                             self.events = EventSet::none();
                         }
@@ -207,8 +211,10 @@ impl<S, H> Connection<S, H>
                         if settings.panic_on_protocol {
                             panic!("Panicking on protocol error -- {}", err);
                         }
+                        let reason = format!("{}", err);
+
                         self.handler.on_error(err);
-                        if let Err(err) = self.send_close(CloseCode::Protocol) {
+                        if let Err(err) = self.send_close(CloseCode::Protocol, reason) {
                             self.handler.on_error(err);
                             self.events = EventSet::none();
                         }
@@ -217,8 +223,10 @@ impl<S, H> Connection<S, H>
                         if settings.panic_on_encoding {
                             panic!("Panicking on encoding error -- {}", err);
                         }
+                        let reason = format!("{}", err);
+
                         self.handler.on_error(err);
-                        if let Err(err) = self.send_close(CloseCode::Invalid) {
+                        if let Err(err) = self.send_close(CloseCode::Invalid, reason) {
                             self.handler.on_error(err);
                             self.events = EventSet::none();
                         }
@@ -496,16 +504,16 @@ impl<S, H> Connection<S, H>
                                         return Err(Error::new(Kind::Protocol, "Received TLS close code outside of TLS handshake."))
                                     } else {
                                         if has_reason {
-                                            try!(self.send_close(named)); // note this drops any extra close data
+                                            try!(self.send_close(named, "")); // note this drops any extra close data
                                         } else {
-                                            try!(self.send_close(CloseCode::Invalid));
+                                            try!(self.send_close(CloseCode::Invalid, ""));
                                         }
                                     }
                                 } else {
                                     // This is not an error. It is allowed behavior in the
                                     // protocol, so we don't trigger an error
                                     self.handler.on_close(CloseCode::Status, "Unable to read close code. Sending empty close frame.");
-                                    try!(self.send_close(CloseCode::Empty));
+                                    try!(self.send_close(CloseCode::Empty, ""));
                                 }
                             }
                         }
@@ -655,9 +663,11 @@ impl<S, H> Connection<S, H>
     }
 
     #[inline]
-    pub fn send_close(&mut self, code: CloseCode) -> Result<()> {
-        trace!("Sending close {:?} for {:?}", code, self.token);
-        try!(self.buffer_frame(Frame::close(code)));
+    pub fn send_close<R>(&mut self, code: CloseCode, reason: R) -> Result<()>
+        where R: Borrow<str>
+    {
+        trace!("Sending close {:?} -- {:?} for {:?}", code, reason.borrow(), self.token);
+        try!(self.buffer_frame(Frame::close(code, reason.borrow())));
         trace!("Connection {:?} is now closing.", self.token);
         self.state = Closing;
         Ok(self.check_events())
