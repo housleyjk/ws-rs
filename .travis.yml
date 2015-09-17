@@ -13,10 +13,8 @@ after_success: |
   [ $TRAVIS_RUST_VERSION = stable ] &&
   cargo doc --no-deps &&
   pip install --user ghp-import &&
+  mv target/doc/ws target/doc/doc
   /home/travis/.local/bin/ghp-import -n target/doc &&
-  ls &&
-  pwd &&
-  mv ws doc &&
   git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG} gh-pages
 notifications:
   email: true
