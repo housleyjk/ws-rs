@@ -8,6 +8,15 @@ matrix:
   - rust: beta
   - rust: nightly
 after_success: |
+  # pip install --user autobahntestsuite &&
+  # /home/travis/.local/bin/wstest -m fuzzingserver -s ./tests/fuzzingserver.json & SPID=$! &&
+  # sleep 10 &&
+  # cargo run --example autobahn-client --release &&
+  # kill -9 ${FPID} &&
+  # cargo run --example autobahn-server --release & SPID=$! &&
+  # sleep 10 &&
+  # /home/travis/.local/bin/wstest -m fuzzingclient -s ./tests/fuzzingclient.json &&
+  # kill -9 ${SPID} &&
   [ $TRAVIS_BRANCH = stable ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
   [ $TRAVIS_RUST_VERSION = stable ] &&

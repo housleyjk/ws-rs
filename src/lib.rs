@@ -1,10 +1,10 @@
 //! Usage
 //! -----
 //!
-//! For simple applications, use one of the helper functions `listen` and `connect`:
+//! For simple applications, use one of the utility functions `listen` and `connect`:
 //!
 //! `listen` accpets a string that represents a socket address and a Factory, see
-//! [Architecture](#Architecture).
+//! [Architecture](#architecture).
 //!
 //! ```no_run
 //! // A WebSocket echo server
@@ -14,7 +14,7 @@
 //! listen("127.0.0.1:3012", |out| {
 //!     move |msg| {
 //!        out.send(msg)
-//!    }
+//!     }
 //! }).unwrap()
 //! ```
 //!
@@ -46,7 +46,7 @@
 //!
 //! A WebSocket requires two basic components: a Factory and a Handler. A Factory is any struct
 //! that implements the `Factory` trait. WS-RS already provides an implementation of `Factory` for
-//! closures, so it is possible to pass a closure as a Factory to either of the helper functions.
+//! closures, so it is possible to pass a closure as a Factory to either of the utility functions.
 //! Your Factory will be called each time the underlying TCP connection has been successfully
 //! established, and it will need to return a Handler that will handle the new WebSocket connection.
 //!
