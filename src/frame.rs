@@ -11,7 +11,7 @@ use protocol::{OpCode, CloseCode};
 
 fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {
     let iter = buf.iter_mut().zip(mask.iter().cycle());
-    for (mut byte, &key) in iter {
+    for (byte, &key) in iter {
         *byte ^= key
     }
 }
