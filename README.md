@@ -13,6 +13,9 @@ listen("127.0.0.1:3012", |out| {
 
 Introduction
 ------------
+[![Build Status](https://travis-ci.org/housleyjk/ws-rs.svg?branch=stable)](https://travis-ci.org/housleyjk/ws-rs)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Crate](http://meritbadge.herokuapp.com/ws)](https://crates.io/crates/ws)
 
 This library provides an implementation of WebSockets, [RFC6455](https://tools.ietf.org/html/rfc6455) using [MIO](https://github.com/carllerche/mio).
 It allows for handling multiple connections on a single thread, and even spawning new client connections on the same thread. This makes for very fast
@@ -21,7 +24,7 @@ frames, which allows you to focus on application code and rely on WS-RS to handl
 access to individual WebSocket frames if you need to write extensions or want to optimize around the WebSocket protocol.
 
 
-**[API documentation](http://google.com)**
+**[API documentation](http://housleyjk.github.io/ws-rs/)**
 
 
 Examples

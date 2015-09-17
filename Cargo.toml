@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Jason Housley <HousleyJK@gmail.com>"]
 
 description = "Lightweight, event-driven WebSockets for Rust."
-documentation = "https://housleyjk.github.io/ws-rs/"
+documentation = "http://housleyjk.github.io/ws-rs/"
 repository = "https://github.com/housleyjk/ws-rs"
 readme = "README.md"
 keywords = ["websocket", "mio", "event-driven", "io", "web"]
