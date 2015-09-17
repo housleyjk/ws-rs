@@ -24,7 +24,7 @@ frames, which allows you to focus on application code and rely on WS-RS to handl
 access to individual WebSocket frames if you need to write extensions or want to optimize around the WebSocket protocol.
 
 
-**[API documentation](http://housleyjk.github.io/ws-rs/doc)**
+**[API documentation](http://housleyjk.github.io/ws-rs/ws)**
 
 
 Examples
