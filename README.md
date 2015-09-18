@@ -93,7 +93,7 @@ please make a [feature request](https://github.com/housleyjk/ws-rs/issues) to im
 that causes you less problems.
 
 However, if performance is what you value most and you want a WebSocket library in Rust, I would choose this one.
-Here is how it stacks up against some other common frameworks using the example [bencher](https://github.com/housleyjk/ws-rs/tree/stable/examples/bench.rs)
+Here is how it stacks up against some other common frameworks using the example [benchmark tool](https://github.com/housleyjk/ws-rs/tree/stable/examples/bench.rs)
 to open 10,000 simultaneous connections and send 10 messages. These results are **not** reliable as a serious benchmark:
 
 Library | Time (ms)

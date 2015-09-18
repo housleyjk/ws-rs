@@ -3,8 +3,7 @@ use std::io::{Cursor, Write};
 use std::mem::transmute;
 use std::str::from_utf8;
 
-#[cfg(feature="cookies")]
-use cookie;
+use log::LogLevel::Trace as TraceLevel;
 
 use sha1;
 use rand;
@@ -242,7 +241,7 @@ impl Request {
             if let Some(ext) = extensions {
                 try!(write!(
                     req.buffer(),
-                    "GET {url} HTTP/1.1\r\n\
+                    "GET {path}{query} HTTP/1.1\r\n\
                      Connection: Upgrade\r\n\
                      Host: {host}:{port}\r\n\
                      Sec-WebSocket-Version: 13\r\n\
@@ -250,7 +249,8 @@ impl Request {
                      Sec-WebSocket-Protocol: {proto}\r\n\
                      Sec-WebSocket-Extensions: {ext}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    url=url.serialize(),
+                    path=url.serialize_path().unwrap_or("/".to_string()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -260,14 +260,15 @@ impl Request {
             } else {
                 try!(write!(
                     req.buffer(),
-                    "GET {url} HTTP/1.1\r\n\
+                    "GET {path}{query} HTTP/1.1\r\n\
                      Connection: Upgrade\r\n\
                      Host: {host}:{port}\r\n\
                      Sec-WebSocket-Version: 13\r\n\
                      Sec-WebSocket-Key: {key}\r\n\
                      Sec-WebSocket-Protocol: {proto}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    url=url.serialize(),
+                    path=url.serialize_path().unwrap_or("/".to_string()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -279,14 +280,15 @@ impl Request {
             if let Some(ext) = extensions {
                 try!(write!(
                     req.buffer(),
-                    "GET {url} HTTP/1.1\r\n\
+                    "GET {path}{query} HTTP/1.1\r\n\
                      Connection: Upgrade\r\n\
                      Host: {host}:{port}\r\n\
                      Sec-WebSocket-Version: 13\r\n\
                      Sec-WebSocket-Key: {key}\r\n\
                      Sec-WebSocket-Extensions: {ext}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    url=url.serialize(),
+                    path=url.serialize_path().unwrap_or("/".to_string()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -295,18 +297,27 @@ impl Request {
             } else {
                 try!(write!(
                     req.buffer(),
-                    "GET {url} HTTP/1.1\r\n\
+                    "GET {path}{query} HTTP/1.1\r\n\
                      Connection: Upgrade\r\n\
                      Host: {host}:{port}\r\n\
                      Sec-WebSocket-Version: 13\r\n\
                      Sec-WebSocket-Key: {key}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    url=url.serialize(),
+                    path=url.serialize_path().unwrap_or("/".to_string()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
                 ));
             }
+        }
+
+        if log_enabled!(TraceLevel) {
+            use std::io::Read;
+            let mut req_string = String::with_capacity(req.buffer().len());
+            try!(req.cursor().read_to_string(&mut req_string));
+            trace!("{}", req_string);
+            req.cursor().set_position(0);
         }
         Ok(req)
     }
