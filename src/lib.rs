@@ -360,12 +360,11 @@ impl<F> WebSocket<F>
     /// Create a new WebSocket using the given Factory to create handlers.
     pub fn new(mut factory: F) -> Result<WebSocket<F>> {
         let max = factory.settings().max_connections;
+        let mut config = EventLoopConfig::new();
+        config.notify_capacity(max + 1000);
         WebSocket::with_config(
             factory,
-            EventLoopConfig {
-                notify_capacity: max + 1000,
-                .. EventLoopConfig::default()
-            },
+            config,
         )
     }
 
