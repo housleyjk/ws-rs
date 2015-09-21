@@ -7,7 +7,7 @@ use mio::{
     EventSet,
     PollOpt,
 };
-use mio::tcp::{TcpListener, TcpStream, TcpSocket};
+use mio::tcp::{TcpListener, TcpStream};//, TcpSocket};
 use mio::util::Slab;
 use url::Url;
 
@@ -80,12 +80,14 @@ impl<F> Handler<F>
             self.listener.is_none(),
             "Attempted to listen for connections from two addresses on the same websocket.");
 
-        // let tcp = try!(TcpListener::bind(addr));
+        let tcp = try!(TcpListener::bind(addr));
+        /*
         let socket = try!(TcpSocket::v4());
         try!(socket.set_reuseaddr(true));
         try!(socket.bind(addr));
         let tcp = try!(socket.listen(1024));
-        try!(eloop.register(&tcp, ALL));
+        */
+        try!(eloop.register(&tcp, ALL, EventSet::readable(), PollOpt::edge()));
         self.listener = Some(tcp);
         Ok(self)
     }
@@ -107,7 +109,7 @@ impl<F> Handler<F>
             }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
             let conn = &mut self.connections[tok];
-            try!(eloop.register_opt(
+            try!(eloop.register(
                 conn.socket(),
                 conn.token(),
                 conn.events(),
@@ -127,7 +129,7 @@ impl<F> Handler<F>
 
         let conn = &mut self.connections[tok];
 
-        eloop.register_opt(
+        eloop.register(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -168,7 +170,7 @@ impl<F> mio::Handler for Handler <F>
         match token {
             ALL => {
                 if events.is_readable() {
-                    if let Some(sock) = {
+                    if let Some((sock, _addr)) = {
                             match self.listener.as_ref().expect("No listener provided for server websocket connections").accept() {
                                 Ok(inner) => inner,
                                 Err(err) => {
@@ -194,10 +196,12 @@ impl<F> mio::Handler for Handler <F>
             _ => {
                 if events.is_error() {
                     trace!("Encountered error on tcp stream.");
+                    /* TODO: Fix it! TcpSocket hidden in mio and can't be used.
                     if let Err(err) = self.connections[token].socket().take_socket_error() {
                         trace!("Error was {}", err);
                         self.connections[token].error(Error::from(err));
                     }
+                    */
                     trace!("Dropping connection {:?}", token);
                     self.connections.remove(token);
                 } else if events.is_hup() {
