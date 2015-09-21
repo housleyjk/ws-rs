@@ -7,7 +7,7 @@ use mio::{
     EventSet,
     PollOpt,
 };
-use mio::tcp::{TcpListener, TcpStream, TcpSocket};
+use mio::tcp::{TcpListener, TcpStream};
 use mio::util::Slab;
 use url::Url;
 
@@ -80,12 +80,9 @@ impl<F> Handler<F>
             self.listener.is_none(),
             "Attempted to listen for connections from two addresses on the same websocket.");
 
-        // let tcp = try!(TcpListener::bind(addr));
-        let socket = try!(TcpSocket::v4());
-        try!(socket.set_reuseaddr(true));
-        try!(socket.bind(addr));
-        let tcp = try!(socket.listen(1024));
-        try!(eloop.register(&tcp, ALL));
+        let tcp = try!(TcpListener::bind(addr));
+        // TODO: consider net2 in order to set reuse_addr
+        try!(eloop.register(&tcp, ALL, EventSet::readable(), PollOpt::level()));
         self.listener = Some(tcp);
         Ok(self)
     }
@@ -168,7 +165,7 @@ impl<F> mio::Handler for Handler <F>
         match token {
             ALL => {
                 if events.is_readable() {
-                    if let Some(sock) = {
+                    if let Some((sock, addr)) = {
                             match self.listener.as_ref().expect("No listener provided for server websocket connections").accept() {
                                 Ok(inner) => inner,
                                 Err(err) => {
@@ -178,7 +175,7 @@ impl<F> mio::Handler for Handler <F>
                             }
                         }
                     {
-                        info!("Accepted a new tcp connection {:?}.", sock);
+                        info!("Accepted a new tcp connection {:?} on {:?}.", sock, addr);
                         if let Err(err) = self.accept(eloop, sock) {
                             error!("Unable to build WebSocket connection {:?}", err);
                             if settings.panic_on_new_connection {
@@ -193,11 +190,18 @@ impl<F> mio::Handler for Handler <F>
             }
             _ => {
                 if events.is_error() {
+                    use std::io::Error as IoError;
+                    use std::io::ErrorKind as IoErrorKind;
                     trace!("Encountered error on tcp stream.");
-                    if let Err(err) = self.connections[token].socket().take_socket_error() {
-                        trace!("Error was {}", err);
-                        self.connections[token].error(Error::from(err));
-                    }
+                    // if let Err(err) = self.connections[token].socket().take_socket_error() {
+                        // trace!("Error was {}", err);
+                        // self.connections[token].error(Error::from(err));
+                    // }
+                    self.connections[token].error(
+                        Error::new(
+                            Kind::Io(IoError::new(IoErrorKind::Other, "Unknown IO Error")),
+                            "TCP connection has entered an error state."));
+
                     trace!("Dropping connection {:?}", token);
                     self.connections.remove(token);
                 } else if events.is_hup() {
