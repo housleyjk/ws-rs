@@ -104,7 +104,7 @@ impl<F> Handler<F>
             }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
             let conn = &mut self.connections[tok];
-            try!(eloop.register_opt(
+            try!(eloop.register(
                 conn.socket(),
                 conn.token(),
                 conn.events(),
@@ -124,7 +124,7 @@ impl<F> Handler<F>
 
         let conn = &mut self.connections[tok];
 
-        eloop.register_opt(
+        eloop.register(
             conn.socket(),
             conn.token(),
             conn.events(),

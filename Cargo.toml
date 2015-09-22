@@ -11,7 +11,7 @@ keywords = ["websocket", "mio", "event-driven", "io", "web"]
 license = "MIT"
 
 [dependencies]
-mio = "*"
+mio = { git = "https://github.com/carllerche/mio" }
 log = "*"
 httparse = "*"
 sha1 = "*"
