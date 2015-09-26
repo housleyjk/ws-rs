@@ -467,7 +467,7 @@ impl<S, H> Connection<S, H>
                                 if let 2 = try!(data.read(&mut close_code)) {
                                     let code_be: u16 = unsafe {transmute(close_code) };
                                     trace!("Connection {:?} received raw close code: {:?}, {:b}", self.token, code_be, code_be);
-                                    let named = CloseCode::from(code_be);
+                                    let named = CloseCode::from(u16::from_be(code_be));
                                     if let CloseCode::Other(code) = named {
                                         if
                                                 code < 1000 ||

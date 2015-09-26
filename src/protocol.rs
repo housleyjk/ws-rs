@@ -112,7 +112,7 @@ pub enum CloseCode {
 impl Into<u16> for CloseCode {
 
     fn into(self) -> u16 {
-        let val: u16 = match self {
+        match self {
            Normal        =>   1000,
            Away          =>   1001,
            Protocol      =>   1002,
@@ -129,16 +129,14 @@ impl Into<u16> for CloseCode {
            Tls           =>   1015,
            Empty         =>   0,
            Other(code)   =>   code,
-        };
-        val.to_be()
+        }
     }
 }
 
 impl From<u16> for CloseCode {
 
-    fn from(mut be_u16: u16) -> CloseCode {
-        be_u16 = u16::from_be(be_u16);
-        match be_u16 {
+    fn from(code: u16) -> CloseCode {
+        match code {
             1000 => Normal,
             1001 => Away,
             1002 => Protocol,
@@ -154,7 +152,7 @@ impl From<u16> for CloseCode {
             1013 => Again,
             1015 => Tls,
             0    => Empty,
-            code => Other(code),
+            _ => Other(code),
         }
     }
 }
@@ -180,7 +178,6 @@ mod test {
     #[test]
     fn test_closecode_from_u16() {
         let mut byte = 1008u16;
-        byte = byte.to_be();
         assert_eq!(CloseCode::from(byte), CloseCode::Policy);
     }
 
@@ -188,6 +185,6 @@ mod test {
     fn test_closecode_into_u16() {
         let text = CloseCode::Away;
         let byte: u16 = text.into();
-        assert_eq!(byte, 1001u16.to_be());
+        assert_eq!(byte, 1001u16);
     }
 }
