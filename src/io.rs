@@ -190,17 +190,11 @@ impl<F> mio::Handler for Handler <F>
             }
             _ => {
                 if events.is_error() {
-                    use std::io::Error as IoError;
-                    use std::io::ErrorKind as IoErrorKind;
                     trace!("Encountered error on tcp stream.");
-                    // if let Err(err) = self.connections[token].socket().take_socket_error() {
-                        // trace!("Error was {}", err);
-                        // self.connections[token].error(Error::from(err));
-                    // }
-                    self.connections[token].error(
-                        Error::new(
-                            Kind::Io(IoError::new(IoErrorKind::Other, "Unknown IO Error")),
-                            "TCP connection has entered an error state."));
+                    if let Err(err) = self.connections[token].socket().take_socket_error() {
+                        trace!("Error was {}", err);
+                        self.connections[token].error(Error::from(err));
+                    }
 
                     trace!("Dropping connection {:?}", token);
                     self.connections.remove(token);
