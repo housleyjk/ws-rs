@@ -33,6 +33,22 @@ impl Message {
         Message::Binary(bin.into())
     }
 
+    /// Indicates whether a message is a text message.
+    pub fn is_text(&self) -> bool {
+        match *self {
+            Text(_) => true,
+            Binary(_) => false,
+        }
+    }
+
+    /// Indicates whether a message is a binary message.
+    pub fn is_binary(&self) -> bool {
+        match *self {
+            Text(_) => false,
+            Binary(_) => true,
+        }
+    }
+
     /// Get the length of the WebSocket message.
     pub fn len(&self) -> usize {
         match *self {
@@ -104,5 +120,35 @@ impl fmt::Display for Message {
         } else {
             write!(f, "Binary Data<length={}>", self.len())
         }
+    }
+}
+
+
+mod test {
+    #![allow(unused_imports, unused_variables, dead_code)]
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        let t = Message::text(format!("test"));
+        assert_eq!(t.to_string(), "test".to_string());
+
+        let bin = Message::binary(vec![0, 1, 3, 4, 241]);
+        assert_eq!(bin.to_string(), "Binary Data<length=5>".to_string());
+    }
+
+    #[test]
+    fn test_binary_convert() {
+        let bin = [6u8, 7, 8, 9, 10, 241];
+        let msg = Message::from(&bin[..]);
+        assert!(msg.is_binary());
+        assert!(msg.into_text().is_err());
+    }
+
+    #[test]
+    fn test_text_convert() {
+        let s = "kiwotsukete";
+        let msg = Message::from(s);
+        assert!(msg.is_text());
     }
 }

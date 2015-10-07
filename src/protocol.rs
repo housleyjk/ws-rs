@@ -177,7 +177,7 @@ mod test {
 
     #[test]
     fn test_closecode_from_u16() {
-        let mut byte = 1008u16;
+        let byte = 1008u16;
         assert_eq!(CloseCode::from(byte), CloseCode::Policy);
     }
 
