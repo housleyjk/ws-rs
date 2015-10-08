@@ -107,6 +107,22 @@ impl<S, H> Connection<S, H>
         &self.socket
     }
 
+    /// Resetting may be necessary in order to try all possible addresses for a server
+    pub fn reset(&mut self, sock: S) -> Result<()> {
+        if self.is_client() {
+            if let Connecting(ref mut shake) = self.state {
+                shake.request.cursor().set_position(0);
+                self.events.remove(EventSet::readable());
+                self.events.insert(EventSet::writable());
+                Ok(self.socket = sock)
+            } else {
+                Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
+            }
+        } else {
+            Err(Error::new(Kind::Internal, "Server connections cannot be reset."))
+        }
+    }
+
     pub fn state(&self) -> &State {
         &self.state
     }
@@ -270,7 +286,7 @@ impl<S, H> Connection<S, H>
                 }
                 Client =>  {
                     if let Some(len) = try!(self.socket.try_write_buf(shake.request.cursor())) {
-                        if shake.response.buffer().len() == len {
+                        if shake.request.buffer().len() == len {
                             trace!("Finished writing handshake request for {:?}", self.token);
                             self.events.insert(EventSet::readable());
                             self.events.remove(EventSet::writable());

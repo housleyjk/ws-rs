@@ -24,17 +24,18 @@ pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<TcpStream, <F as Factory>::Handler>;
 type Chan = mio::Sender<Command>;
 
-fn connect_to_url(url: &Url) -> Result<TcpStream> {
-    let mut result: Result<TcpStream> = Err(Error::new(Kind::Internal, "Can't connect to url"));
-    let host = try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection.")));
-    let port = url.port_or_default().unwrap_or(80);
-    for addr in try!((&host[..], port).to_socket_addrs()) {
-        result = TcpStream::connect(&addr).map_err(Error::from);
-        if result.is_ok() {
-            break
-        }
+fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
+
+    let host = url.serialize_host();
+    if host.is_none() || url.scheme != "ws" { // only support non-tls for now
+        return Err(Error::new(Kind::Internal, format!("Not a valid websocket url: {:?}", url)))
     }
-    result
+    let host = host.unwrap();
+
+    let port = url.port_or_default().unwrap_or(80);
+    let mut addrs = try!((&host[..], port).to_socket_addrs()).collect::<Vec<SocketAddr>>();
+    addrs.dedup();
+    Ok(addrs)
 }
 
 enum State {
@@ -57,6 +58,7 @@ pub struct Handler<F>
     where F: Factory
 {
     listener: Option<TcpListener>,
+    addresses: Vec<SocketAddr>,
     connections: Slab<Conn<F>>,
     factory: F,
     state: State,
@@ -68,6 +70,7 @@ impl<F> Handler<F>
     pub fn new(mut factory: F) -> Handler<F> {
         Handler {
             listener: None,
+            addresses: Vec::new(),
             connections: Slab::new_starting_at(CONN_START, factory.settings().max_connections),
             factory: factory,
             state: State::Active,
@@ -89,11 +92,14 @@ impl<F> Handler<F>
 
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<&mut Handler<F>> {
         {
-            if url.serialize_host().is_none() || url.scheme != "ws" { // only support non-tls for now
-                return Err(Error::new(Kind::Internal, format!("Not a valid websocket url: {:?}", url)))
-            }
+            self.addresses = try!(url_to_addrs(url));
+            // note popping from the vector will most likely give us a tcpip v4 address
+            let addr = try!(self.addresses.pop().ok_or(
+                Error::new(
+                    Kind::Internal,
+                    format!("Unable to obtain any socket address for {}", url))));
 
-            let sock = try!(connect_to_url(url));
+            let sock = try!(TcpStream::connect(&addr).map_err(Error::from));
             let factory = &mut self.factory;
             let settings = factory.settings();
             let req = try!(Request::from_url(url, settings.protocols, settings.extensions));
@@ -175,7 +181,7 @@ impl<F> mio::Handler for Handler <F>
                             }
                         }
                     {
-                        info!("Accepted a new tcp connection {:?} on {:?}.", sock, addr);
+                        info!("Accepted a new tcp connection from {}.", addr);
                         if let Err(err) = self.accept(eloop, sock) {
                             error!("Unable to build WebSocket connection {:?}", err);
                             if settings.panic_on_new_connection {
@@ -193,9 +199,31 @@ impl<F> mio::Handler for Handler <F>
                     trace!("Encountered error on tcp stream.");
                     if let Err(err) = self.connections[token].socket().take_socket_error() {
                         trace!("Error was {}", err);
+                        if let Some(errno) = err.raw_os_error() {
+                            if errno == 111 {
+                                if let Some(addr) = self.addresses.pop() {
+                                    if let Ok(sock) = TcpStream::connect(&addr) {
+                                        if let Err(err) = self.connections[token].reset(sock) {
+                                            trace!("Unable to reset client connection: {:?}", err);
+                                        } else {
+                                            eloop.register(
+                                                self.connections[token].socket(),
+                                                self.connections[token].token(),
+                                                self.connections[token].events(),
+                                                PollOpt::edge() | PollOpt::oneshot(),
+                                            ).or_else(|err| {
+                                                self.connections[token].error(Error::from(err));
+                                                self.connections.remove(token);
+                                                Ok::<(), Error>(())
+                                            }).unwrap();
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         self.connections[token].error(Error::from(err));
                     }
-
                     trace!("Dropping connection {:?}", token);
                     self.connections.remove(token);
                 } else if events.is_hup() {

@@ -186,25 +186,25 @@
 //! ```no_run
 //!
 //! use std::rc::Rc;
-//! use std::cell::RefCell;
+//! use std::cell::Cell;
 //!
 //! use ws::{listen, Handler, Sender, Result, Message, Handshake, CloseCode, Error};
 //!
 //! struct Server {
 //!     out: Sender,
-//!     count: Rc<RefCell<usize>>,
+//!     count: Rc<Cell<usize>>,
 //! }
 //!
 //! impl Handler for Server {
 //!
 //!     fn on_open(&mut self, _: Handshake) -> Result<()> {
 //!         // We have a new connection, so we increment the connection counter
-//!         Ok(*self.count.borrow_mut() += 1)
+//!         Ok(self.count.set(self.count.get() + 1))
 //!     }
 //!
 //!     fn on_message(&mut self, msg: Message) -> Result<()> {
 //!         // Tell the user the current count
-//!         println!("The number of live connections is {}", *self.count.borrow());
+//!         println!("The number of live connections is {}", self.count.get());
 //!
 //!         // Echo the message back
 //!         self.out.send(msg)
@@ -218,23 +218,22 @@
 //!         }
 //!
 //!         // The connection is going down, so we need to decrement the count
-//!         *self.count.borrow_mut() -= 1
+//!         self.count.set(self.count.get() - 1)
 //!     }
 //!
 //!     fn on_error(&mut self, err: Error) {
 //!         println!("The server encountered an error: {:?}", err);
 //!
 //!         // The connection is going down, so we need to decrement the count
-//!         *self.count.borrow_mut() -= 1
+//!         self.count.set(self.count.get() - 1)
 //!     }
 //!
 //! }
-//! // RefCell enforces Rust borrowing rules at runtime.
-//! // Calling borrow_mut will panic if the count being borrowed,
-//! // but we know already that only one handler at a time will ever try to change the count.
+//! // Cell gives us interior mutability so we can increment
+//! // or decrement the count between handlers.
 //! // Rc is a reference-counted box for sharing the count between handlers
 //! // since each handler needs to own its contents.
-//! let count = Rc::new(RefCell::new(0));
+//! let count = Rc::new(Cell::new(0));
 //! listen("127.0.0.1:3012", |out| { Server { out: out, count: count.clone() } }).unwrap()
 //! ```
 //!
@@ -361,7 +360,8 @@ impl<F> WebSocket<F>
     pub fn new(mut factory: F) -> Result<WebSocket<F>> {
         let max = factory.settings().max_connections;
         let mut config = EventLoopConfig::new();
-        config.notify_capacity(max + 1000);
+        config.notify_capacity(max * 5);  // every handler can do 5 things at once
+        error!("Setting queue capacity to {}", max * 5);
         WebSocket::with_config(factory, config)
     }
 

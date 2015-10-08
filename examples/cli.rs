@@ -1,6 +1,7 @@
 extern crate ws;
 extern crate clap;
 extern crate term;
+extern crate env_logger;
 
 use std::io;
 use std::io::prelude::*;
@@ -23,6 +24,10 @@ use ws::{
 
 
 fn main() {
+
+    // Setup logging
+    env_logger::init().unwrap();
+
     // setup command line arguments
     let matches = App::new("WS Command Line Client")
         .version("1.0")
@@ -34,6 +39,7 @@ fn main() {
              .index(1)).get_matches();
 
     let url = matches.value_of("URL").unwrap().to_string();
+
     let (tx, rx) = channel();
 
     // Run client thread with channel to give it's WebSocket message sender back to us
@@ -95,14 +101,12 @@ fn main() {
                     }
 
                 }
-
                 break
 
             } else {
                 // Send the message
                 display(format!(">>> {}", input.trim()));
                 sender.send(input.trim()).unwrap();
-
             }
         }
     }
