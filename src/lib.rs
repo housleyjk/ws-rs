@@ -361,7 +361,6 @@ impl<F> WebSocket<F>
         let max = factory.settings().max_connections;
         let mut config = EventLoopConfig::new();
         config.notify_capacity(max * 5);  // every handler can do 5 things at once
-        error!("Setting queue capacity to {}", max * 5);
         WebSocket::with_config(factory, config)
     }
 
