@@ -150,8 +150,10 @@ impl From<Utf8Error> for Error {
     }
 }
 
-impl From<Box<StdError>> for Error {
-    fn from(err: Box<StdError>) -> Error {
+impl<B> From<Box<B>> for Error 
+    where B: StdError + Send + Sync + 'static
+{
+    fn from(err: Box<B>) -> Error {
         Error::new(Kind::Custom(err), "")
     }
 }
