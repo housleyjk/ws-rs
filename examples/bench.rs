@@ -43,7 +43,6 @@ fn main () {
             assert_eq!(msg.as_text().unwrap(), MESSAGE);
             if self.count > MESSAGES {
                 try!(self.out.close(CloseCode::Normal));
-                // println!("Total {}", self.total);
             } else {
                 try!(self.out.send(MESSAGE));
                 let time = clock_ticks::precise_time_ms();

@@ -98,7 +98,6 @@ impl<F> Handler<F>
                 Error::new(
                     Kind::Internal,
                     format!("Unable to obtain any socket address for {}", url))));
-
             let sock = try!(TcpStream::connect(&addr).map_err(Error::from));
             let factory = &mut self.factory;
             let settings = factory.settings();
@@ -196,9 +195,9 @@ impl<F> mio::Handler for Handler <F>
             }
             _ => {
                 if events.is_error() {
-                    trace!("Encountered error on tcp stream.");
+                    debug!("Encountered error on tcp stream.");
                     if let Err(err) = self.connections[token].socket().take_socket_error() {
-                        trace!("Error was {}", err);
+                        debug!("Error was {}", err);
                         if let Some(errno) = err.raw_os_error() {
                             if errno == 111 {
                                 if let Some(addr) = self.addresses.pop() {
@@ -388,17 +387,20 @@ impl<F> mio::Handler for Handler <F>
                             if settings.panic_on_new_connection {
                                 panic!("Unable to establish connection to {}: {:?}", url, err);
                             }
+                            error!("Unable to establish connection to {}: {:?}", url, err);
                         }
                     }
                     _ => {
                         if let Err(err) = self.connect(eloop, url) {
                             if let Some(conn) = self.connections.get_mut(token) {
                                 conn.error(err)
+                            } else {
+                                error!("Unable to establish connection to {}: {:?}", url, err);
                             }
                         }
                     }
                 }
-                return;
+                return
             }
             Signal::Shutdown => {
                 debug!("Received shutdown signal. WebSocket is attempting to shut down.");

@@ -703,7 +703,7 @@ impl<S, H> Connection<S, H>
     }
 
     fn buffer_frame(&mut self, mut frame: Frame) -> Result<()> {
-        try!(self.buffer_out(&frame));
+        try!(self.check_buffer_out(&frame));
 
         if self.is_client() {
             frame.mask();
@@ -716,8 +716,10 @@ impl<S, H> Connection<S, H>
         Ok(())
     }
 
-    fn buffer_out(&mut self, frame: &Frame) -> Result<()> {
+    fn check_buffer_out(&mut self, frame: &Frame) -> Result<()> {
+
         if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
+            // extend
             let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
             new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize ..]);
             if new.len() == new.capacity() {
@@ -734,6 +736,7 @@ impl<S, H> Connection<S, H>
     }
 
     fn buffer_in(&mut self) -> Result<Option<usize>> {
+
         trace!("Reading buffer on {:?}", self.token);
         if let Some(mut len) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
             if len == 0 {
@@ -742,6 +745,7 @@ impl<S, H> Connection<S, H>
             }
             loop {
                 if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
+                    // extend
                     let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
                     new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
                     if new.len() == new.capacity() {
