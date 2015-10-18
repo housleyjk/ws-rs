@@ -258,9 +258,7 @@ mod communication;
 mod io;
 
 pub use connection::factory::Factory;
-pub use connection::factory::Settings as WebSocketSettings;
 pub use connection::handler::Handler;
-pub use connection::handler::Settings as ConnectionSettings;
 
 pub use result::{Result, Error};
 pub use result::Kind as ErrorKind;
@@ -270,6 +268,7 @@ pub use protocol::CloseCode;
 pub use handshake::{Handshake, Request, Response};
 
 use std::fmt;
+use std::default::Default;
 use std::net::ToSocketAddrs;
 use mio::EventLoopConfig;
 use std::borrow::Borrow;
@@ -344,6 +343,113 @@ pub fn connect<U, F, H>(url: U, factory: F) -> Result<()>
     Ok(())
 }
 
+/// WebSocket settings
+#[derive(Debug, Clone, Copy)]
+pub struct Settings {
+    /// The maximum number of connections that this WebSocket will support.
+    /// The default setting is low and should be increased when expecting more
+    /// connections because this is a hard limit and no new connections beyond
+    /// this limit can be made until an old connection is dropped.
+    /// Default: 100
+    pub max_connections: usize,
+    /// Whether to panic when unable to establish a new TCP connection.
+    /// Default: false
+    pub panic_on_new_connection: bool,
+    /// Whether to panic when a shutdown of the WebSocket is requested.
+    /// Default: false
+    pub panic_on_shutdown: bool,
+    /// A protocol string representing the subprotocols that this WebSocket can support. This will
+    /// be sent in Requests to server endpoints to help determine a subprotocol if any for the
+    /// connection.
+    /// Default: None
+    pub protocols: Option<&'static str>,
+    /// A WebSocket extension string indicating the extensions that this WebSocket can support.
+    /// Default: None
+    pub extensions: Option<&'static str>,
+    /// The maximum number of fragments the connection can handle without reallocating.
+    /// Default: 10
+    pub fragments_capacity: usize,
+    /// Whether to reallocate when `fragments_capacity` is reached. If this is false,
+    /// a Capacity error will be triggered instead.
+    /// Default: true
+    pub fragments_grow: bool,
+    /// The maximum length of outgoing frames. Messages longer than this will be fragmented.
+    /// Default: 65,535
+    pub fragment_size: usize,
+    /// The size of the incoming buffer. A larger buffer uses more memory but will allow for fewer
+    /// reallocations.
+    /// Default: 2048
+    pub in_buffer_capacity: usize,
+    /// Whether to reallocate the incoming buffer when `in_buffer_capacity` is reached. If this is
+    /// false, a Capacity error will be triggered instead.
+    /// Default: true
+    pub in_buffer_grow: bool,
+    /// The size of the outgoing buffer. A larger buffer uses more memory but will allow for fewer
+    /// reallocations.
+    /// Default: 2048
+    pub out_buffer_capacity: usize,
+    /// Whether to reallocate the incoming buffer when `out_buffer_capacity` is reached. If this is
+    /// false, a Capacity error will be triggered instead.
+    /// Default: true
+    pub out_buffer_grow: bool,
+    /// Whether to panic when an Internal error is encountered. Internal errors should generally
+    /// not occur, so this setting defaults to true as a debug measure, whereas production
+    /// applications should consider setting it to false.
+    /// Default: true
+    pub panic_on_internal: bool,
+    /// Whether to panic when a Capacity error is encountered.
+    /// Default: false
+    pub panic_on_capacity: bool,
+    /// Whether to panic when a Protocol error is encountered.
+    /// Default: false
+    pub panic_on_protocol: bool,
+    /// Whether to panic when an Encoding error is encountered.
+    /// Default: false
+    pub panic_on_encoding: bool,
+    /// Whether to panic when an Io error is encountered.
+    /// Default: false
+    pub panic_on_io: bool,
+    /// The WebSocket protocol requires frames sent from client endpoints to be masked as a
+    /// security and sanity precaution. Enforcing this requirement, which may be removed at some
+    /// point may cause incompatibilities. If you need the extra security, set this to true.
+    /// Default: false
+    pub masking_strict: bool,
+    /// The WebSocket protocol requires clients to verify the key returned by a server to ensure
+    /// that the server and all intermediaries can perform the protocol. Verifying the key will
+    /// consume processing time and other resources with the benifit that we can fail the
+    /// connection early. The default in WS-RS is to accept any key from the server and instead
+    /// fail late if a protocol error occurs. Change this setting to enable key verification.
+    /// Default: false
+    pub key_strict: bool,
+}
+
+impl Default for Settings {
+
+    fn default() -> Settings {
+        Settings {
+            max_connections: 10_000,
+            panic_on_new_connection: false,
+            panic_on_shutdown: false,
+            protocols: None,
+            extensions: None,
+            fragments_capacity: 10,
+            fragments_grow: true,
+            fragment_size: u16::max_value() as usize,
+            in_buffer_capacity: 2048,
+            in_buffer_grow: true,
+            out_buffer_capacity: 2048,
+            out_buffer_grow: true,
+            panic_on_internal: true,
+            panic_on_capacity: false,
+            panic_on_protocol: false,
+            panic_on_encoding: false,
+            panic_on_io: false,
+            masking_strict: false,
+            key_strict: false,
+        }
+    }
+}
+
 
 /// The WebSocket struct. A WebSocket can support multiple incoming and outgoing connections.
 pub struct WebSocket<F>
@@ -357,19 +463,23 @@ impl<F> WebSocket<F>
     where F: Factory
 {
     /// Create a new WebSocket using the given Factory to create handlers.
-    pub fn new(mut factory: F) -> Result<WebSocket<F>> {
-        let max = factory.settings().max_connections;
+    pub fn new(factory: F) -> Result<WebSocket<F>> {
+        let settings = Settings::default();
         let mut config = EventLoopConfig::new();
-        config.notify_capacity(max * 5);  // every handler can do 5 things at once
-        WebSocket::with_config(factory, config)
-    }
-
-    /// Create a new WebSocket with a Factory and use the event loop config to provide settings for
-    /// the event loop.
-    pub fn with_config(factory: F, config: EventLoopConfig) -> Result<WebSocket<F>> {
+        config.notify_capacity(settings.max_connections * 5);  // every handler can do 5 things at once
         Ok(WebSocket {
             event_loop: try!(io::Loop::configured(config)),
-            handler: io::Handler::new(factory),
+            handler: io::Handler::new(factory, settings),
+        })
+    }
+
+    /// Create a new WebSocket with a Factory and use the event loop config to
+    /// configure the event loop.
+    pub fn with_config(factory: F, config: EventLoopConfig) -> Result<WebSocket<F>> {
+        warn!("The with_config method is deprecated and will be removed in a future version.");
+        Ok(WebSocket {
+            event_loop: try!(io::Loop::configured(config)),
+            handler: io::Handler::new(factory, Settings::default()),
         })
     }
 
@@ -409,3 +519,51 @@ impl<F> WebSocket<F>
     }
 }
 
+/// Utility for constructing a WebSocket from various settings.
+pub struct Builder {
+    event_config: Option<EventLoopConfig>,
+    settings: Settings,
+}
+
+// TODO: add convenience methods for each setting
+impl Builder {
+    /// Create a new Builder with default settings.
+    pub fn new() -> Builder {
+        Builder {
+            event_config: None,
+            settings: Settings::default(),
+        }
+    }
+
+    /// Build a WebSocket using this builder and a factory.
+    /// It is possible to use the same builder to create multiple WebSockets.
+    pub fn build<F>(&self, factory: F) -> Result<WebSocket<F>>
+        where F: Factory
+    {
+        let mut event_config: EventLoopConfig;
+
+        if let Some(ref config) = self.event_config {
+            event_config = config.clone();
+        } else {
+            event_config = EventLoopConfig::new();
+            event_config.notify_capacity(self.settings.max_connections * 5);
+        }
+        Ok(WebSocket {
+            event_loop: try!(io::Loop::configured(event_config)),
+            handler: io::Handler::new(factory, self.settings),
+        })
+    }
+
+    /// Set the EventLoopConfig to use with this WebSocket. If this is not set
+    /// the builder will use a default EventLoopConfig based on other settings.
+    pub fn with_config(&mut self, config: EventLoopConfig) -> &mut Builder {
+        self.event_config = Some(config);
+        self
+    }
+
+    /// Set the WebSocket settings to use.
+    pub fn with_settings(&mut self, settings: Settings) -> &mut Builder {
+        self.settings = settings;
+        self
+    }
+}

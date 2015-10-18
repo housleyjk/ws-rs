@@ -20,6 +20,7 @@ use self::handler::Handler;
 use self::state::{State, Endpoint};
 use self::state::State::*;
 use self::state::Endpoint::*;
+use super::Settings;
 
 pub struct Builder<S, H>
     where H: Handler, S: TryRead + TryWrite
@@ -44,8 +45,7 @@ impl<S, H> Builder<S, H>
         }
     }
 
-    pub fn build(mut self) -> Connection<S, H> {
-        let settings = self.handler.settings();
+    pub fn build(self, settings: Settings) -> Connection<S, H> {
         let end = self.endpoint.unwrap_or(Server);  // default to server
         Connection {
             token: self.token,
@@ -61,6 +61,7 @@ impl<S, H> Builder<S, H>
             in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
             out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
             handler: self.handler,
+            settings: settings,
         }
     }
 
@@ -90,6 +91,8 @@ pub struct Connection<S, H>
     out_buffer: Cursor<Vec<u8>>,
 
     handler: H,
+
+    settings: Settings,
 }
 
 impl<S, H> Connection<S, H>
@@ -197,10 +200,9 @@ impl<S, H> Connection<S, H>
 
             }
             _ => {
-                let settings = self.handler.settings();
                 match err.kind {
                     Kind::Internal => {
-                        if settings.panic_on_internal {
+                        if self.settings.panic_on_internal {
                             panic!("Panicking on internal error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -212,7 +214,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Capacity => {
-                        if settings.panic_on_capacity {
+                        if self.settings.panic_on_capacity {
                             panic!("Panicking on capacity error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -224,7 +226,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Protocol => {
-                        if settings.panic_on_protocol {
+                        if self.settings.panic_on_protocol {
                             panic!("Panicking on protocol error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -236,7 +238,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Encoding(_) => {
-                        if settings.panic_on_encoding {
+                        if self.settings.panic_on_encoding {
                             panic!("Panicking on encoding error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -258,7 +260,7 @@ impl<S, H> Connection<S, H>
                         self.handler.on_error(err);
                     }
                     _ => {
-                        if settings.panic_on_io {
+                        if self.settings.panic_on_io {
                             panic!("Panicking on io error -- {}", err);
                         }
                         self.handler.on_error(err);
@@ -393,7 +395,7 @@ impl<S, H> Connection<S, H>
                 return Err(Error::new(Kind::Protocol, "Handshake failed."));
             }
 
-            if self.handler.settings().key_strict {
+            if self.settings.key_strict {
                 let res_key = try!(from_utf8(try!(shake.response.key())));
                 let req_key = hash_key(try!(shake.request.key()));
                 if req_key != res_key {
@@ -423,11 +425,10 @@ impl<S, H> Connection<S, H>
     }
 
     fn read_frames(&mut self) -> Result<()> {
-        let settings = self.handler.settings();
         let mut size = self.in_buffer.get_ref().len() - self.in_buffer.position() as usize;
         while let Some(frame) = try!(Frame::parse(&mut self.in_buffer, &mut size)) {
 
-            if settings.masking_strict {
+            if self.settings.masking_strict {
                 if frame.is_masked() {
                     if self.is_client() {
                         return Err(Error::new(Kind::Protocol, "Received masked frame from a server endpoint."))
@@ -630,14 +631,13 @@ impl<S, H> Connection<S, H>
     }
 
     pub fn send_message(&mut self, msg: Message) -> Result<()> {
-        let settings = self.handler.settings();
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
-        if data.len() > settings.fragment_size {
-            trace!("Chunking at {:?}.", settings.fragment_size);
+        if data.len() > self.settings.fragment_size {
+            trace!("Chunking at {:?}.", self.settings.fragment_size);
             // note this copies the data, so it's actually somewhat expensive to fragment
-            let mut chunks = data.chunks(settings.fragment_size).peekable();
+            let mut chunks = data.chunks(self.settings.fragment_size).peekable();
             let chunk = chunks.next().expect("Unable to get initial chunk!");
 
             try!(self.buffer_frame(
@@ -723,9 +723,8 @@ impl<S, H> Connection<S, H>
             let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
             new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize ..]);
             if new.len() == new.capacity() {
-                let settings = self.handler.settings();
-                if settings.out_buffer_grow {
-                    new.reserve(settings.out_buffer_capacity)
+                if self.settings.out_buffer_grow {
+                    new.reserve(self.settings.out_buffer_capacity)
                 } else {
                     return Err(Error::new(Kind::Capacity, "Maxed out output buffer for connection."))
                 }
@@ -749,9 +748,8 @@ impl<S, H> Connection<S, H>
                     let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
                     new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
                     if new.len() == new.capacity() {
-                        let settings = self.handler.settings();
-                        if settings.in_buffer_grow {
-                            new.reserve(settings.in_buffer_capacity);
+                        if self.settings.in_buffer_grow {
+                            new.reserve(self.settings.in_buffer_capacity);
                         } else {
                             return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
                         }

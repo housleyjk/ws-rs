@@ -16,6 +16,7 @@ use result::{Result, Error, Kind};
 use connection::Connection;
 use connection::factory::Factory;
 use handshake::Request;
+use super::Settings;
 
 pub const ALL: Token = Token(0);
 const CONN_START: Token = Token(1);
@@ -61,18 +62,20 @@ pub struct Handler<F>
     addresses: Vec<SocketAddr>,
     connections: Slab<Conn<F>>,
     factory: F,
+    settings: Settings,
     state: State,
 }
 
 impl<F> Handler<F>
     where F: Factory
 {
-    pub fn new(mut factory: F) -> Handler<F> {
+    pub fn new(factory: F, settings: Settings) -> Handler<F> {
         Handler {
             listener: None,
             addresses: Vec::new(),
-            connections: Slab::new_starting_at(CONN_START, factory.settings().max_connections),
+            connections: Slab::new_starting_at(CONN_START, settings.max_connections),
             factory: factory,
+            settings: settings,
             state: State::Active,
         }
     }
@@ -100,12 +103,12 @@ impl<F> Handler<F>
                     format!("Unable to obtain any socket address for {}", url))));
             let sock = try!(TcpStream::connect(&addr).map_err(Error::from));
             let factory = &mut self.factory;
-            let settings = factory.settings();
+            let settings = self.settings;
             let req = try!(Request::from_url(url, settings.protocols, settings.extensions));
 
             let tok = try!(self.connections.insert_with(|tok| {
                 let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-                Connection::builder(tok, sock, handler).client().request(req).build()
+                Connection::builder(tok, sock, handler).client().request(req).build(settings)
             }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
             let conn = &mut self.connections[tok];
@@ -121,10 +124,10 @@ impl<F> Handler<F>
 
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
-        let settings = factory.settings();
+        let settings = self.settings;
         let tok = try!(self.connections.insert_with(|tok| {
             let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-            Connection::builder(tok, sock, handler).build()
+            Connection::builder(tok, sock, handler).build(settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
         let conn = &mut self.connections[tok];
@@ -165,7 +168,6 @@ impl<F> mio::Handler for Handler <F>
     type Message = Command;
 
     fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: EventSet) {
-        let settings = self.factory.settings();
 
         match token {
             ALL => {
@@ -183,7 +185,7 @@ impl<F> mio::Handler for Handler <F>
                         info!("Accepted a new tcp connection from {}.", addr);
                         if let Err(err) = self.accept(eloop, sock) {
                             error!("Unable to build WebSocket connection {:?}", err);
-                            if settings.panic_on_new_connection {
+                            if self.settings.panic_on_new_connection {
                                 panic!("Unable to build WebSocket connection {:?}", err);
                             }
                         }
@@ -317,7 +319,6 @@ impl<F> mio::Handler for Handler <F>
     }
 
     fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
-        let settings = self.factory.settings();
         let token = cmd.token();
         match cmd.into_signal() {
             Signal::Message(msg) => {
@@ -384,7 +385,7 @@ impl<F> mio::Handler for Handler <F>
                 match token {
                     ALL =>  {
                         if let Err(err) = self.connect(eloop, url) {
-                            if settings.panic_on_new_connection {
+                            if self.settings.panic_on_new_connection {
                                 panic!("Unable to establish connection to {}: {:?}", url, err);
                             }
                             error!("Unable to establish connection to {}: {:?}", url, err);
@@ -414,7 +415,7 @@ impl<F> mio::Handler for Handler <F>
                 if self.connections.count() == 0 {
                     eloop.shutdown()
                 }
-                if settings.panic_on_shutdown {
+                if self.settings.panic_on_shutdown {
                     panic!("Panicking on shutdown as per setting.")
                 }
             }

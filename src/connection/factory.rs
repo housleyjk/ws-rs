@@ -1,5 +1,3 @@
-use std::default::Default;
-
 use super::handler::Handler;
 use communication::Sender;
 
@@ -9,11 +7,6 @@ pub trait Factory {
 
     /// Called when a TCP connection is made
     fn connection_made(&mut self, Sender) -> Self::Handler;
-
-    #[inline]
-    fn settings(&mut self) -> Settings {
-        Settings::default()
-    }
 
     #[inline]
     fn on_shutdown(&mut self) {
@@ -32,41 +25,6 @@ impl<F, H> Factory for F
     }
 
 }
-
-/// Settings that apply to multiple connections.
-pub struct Settings {
-    /// The maximum number of connections that this WebSocket will support.
-    /// Default: 10,000
-    pub max_connections: usize,
-    /// Whether to panic when unable to establish a new TCP connection.
-    /// Default: false
-    pub panic_on_new_connection: bool,
-    /// Whether to panic when a shutdown of the WebSocket is requested.
-    /// Default: false
-    pub panic_on_shutdown: bool,
-    /// A protocol string representing the subprotocols that this WebSocket can support. This will
-    /// be sent in Requests to server endpoints to help determine a subprotocol if any for the
-    /// connection.
-    /// Default: None
-    pub protocols: Option<&'static str>,
-    /// A WebSocket extension string indicating the extensions that this WebSocket can support.
-    /// Default: None
-    pub extensions: Option<&'static str>,
-}
-
-impl Default for Settings {
-
-    fn default() -> Settings {
-        Settings {
-            max_connections: 10_000,
-            panic_on_new_connection: false,
-            panic_on_shutdown: false,
-            protocols: None,
-            extensions: None,
-        }
-    }
-}
-
 
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]

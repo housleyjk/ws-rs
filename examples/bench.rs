@@ -13,7 +13,7 @@ extern crate env_logger;
 // TODO: num threads, num connections per thread, num concurrent connections per thread, num
 // messages per connection, length of message, text or binary
 
-use ws::{WebSocket, Sender, CloseCode, Handler, Message, Handshake, Result};
+use ws::{Builder, Settings, Sender, CloseCode, Handler, Message, Handshake, Result};
 
 const CONNECTIONS: usize = 10_000; // simultaneous
 const MESSAGES: usize = 10;
@@ -55,7 +55,10 @@ fn main () {
         }
     }
 
-    let mut ws = WebSocket::new(|out| {
+    let mut ws = Builder::new().with_settings(Settings {
+        max_connections: CONNECTIONS,
+        ..Settings::default()
+    }).build(|out| {
         Connection {
             out: out,
             count: 0,
