@@ -150,7 +150,7 @@ impl From<Utf8Error> for Error {
     }
 }
 
-impl<B> From<Box<B>> for Error 
+impl<B> From<Box<B>> for Error
     where B: StdError + Send + Sync + 'static
 {
     fn from(err: Box<B>) -> Error {
