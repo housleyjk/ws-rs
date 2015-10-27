@@ -1,4 +1,5 @@
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::borrow::Borrow;
 
 use mio;
 use mio::{
@@ -158,6 +159,23 @@ impl<F> Handler<F>
         )))
     }
 
+    fn shutdown(&mut self, eloop: &mut Loop<F>) {
+        debug!("Received shutdown signal. WebSocket is attempting to shut down.");
+        for conn in self.connections.iter_mut() {
+            conn.shutdown();
+        }
+        self.factory.on_shutdown();
+        self.state = State::Inactive;
+        // If the shutdown command is received after connections have disconnected,
+        // we need to shutdown now because ready only fires on io events
+        if self.connections.count() == 0 {
+            eloop.shutdown()
+        }
+        if self.settings.panic_on_shutdown {
+            panic!("Panicking on shutdown as per setting.")
+        }
+    }
+
 }
 
 
@@ -306,10 +324,10 @@ impl<F> mio::Handler for Handler <F>
                 trace!("Active connections {:?}", self.connections.count());
                 if self.connections.count() == 0 {
                     if !self.state.is_active() {
-                        debug!("Shutting websocket server.");
+                        debug!("Shutting down websocket server.");
                         eloop.shutdown();
                     } else if self.listener.is_none() {
-                        debug!("Shutting websocket client.");
+                        debug!("Shutting down websocket client.");
                         self.factory.on_shutdown();
                         eloop.shutdown();
                     }
@@ -319,31 +337,68 @@ impl<F> mio::Handler for Handler <F>
     }
 
     fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
-        let token = cmd.token();
-        match cmd.into_signal() {
-            Signal::Message(msg) => {
-                match token {
-                    ALL => {
+        match cmd.token() {
+            ALL => {
+                let mut dead = Vec::with_capacity(self.connections.count());
+
+                match cmd.into_signal() {
+                    Signal::Message(msg) => {
                         trace!("Broadcasting message: {:?}", msg);
-                        let mut dead = Vec::with_capacity(self.connections.count());
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_message(msg.clone()) {
                                 dead.push((conn.token(), err))
                             }
                         }
-
-                        for conn in self.connections.iter() {
-                            if let Err(err) = self.schedule(eloop, conn) {
+                    }
+                    Signal::Close(code, reason) => {
+                        trace!("Broadcasting close: {:?} - {}", code, reason);
+                        for conn in self.connections.iter_mut() {
+                            if let Err(err) = conn.send_close(code, reason.borrow()) {
                                 dead.push((conn.token(), err))
                             }
                         }
-                        for (token, err) in dead {
-                            // note the same connection may be called twice
-                            self.connections[token].error(err)
+                    }
+                    Signal::Ping(data) => {
+                        trace!("Broadcasting ping");
+                        for conn in self.connections.iter_mut() {
+                            if let Err(err) = conn.send_ping(data.clone()) {
+                                dead.push((conn.token(), err))
+                            }
+                        }
+                    }
+                    Signal::Pong(data) => {
+                        trace!("Broadcasting pong");
+                        for conn in self.connections.iter_mut() {
+                            if let Err(err) = conn.send_pong(data.clone()) {
+                                dead.push((conn.token(), err))
+                            }
+                        }
+                    }
+                    Signal::Connect(ref url) => {
+                        if let Err(err) = self.connect(eloop, url) {
+                            if self.settings.panic_on_new_connection {
+                                panic!("Unable to establish connection to {}: {:?}", url, err);
+                            }
+                            error!("Unable to establish connection to {}: {:?}", url, err);
                         }
                         return
                     }
-                    _ => {
+                    Signal::Shutdown => self.shutdown(eloop),
+                }
+
+                for conn in self.connections.iter() {
+                    if let Err(err) = self.schedule(eloop, conn) {
+                        dead.push((conn.token(), err))
+                    }
+                }
+                for (token, err) in dead {
+                    // note the same connection may be called twice
+                    self.connections[token].error(err)
+                }
+            }
+            token => {
+                match cmd.into_signal() {
+                    Signal::Message(msg) => {
                         if let Some(conn) = self.connections.get_mut(token) {
                             if let Err(err) = conn.send_message(msg) {
                                 conn.error(err)
@@ -352,46 +407,34 @@ impl<F> mio::Handler for Handler <F>
                             trace!("Connection disconnected while a message was waiting in the queue.")
                         }
                     }
-                }
-            }
-            Signal::Close(code, reason) => {
-                if let Some(conn) = self.connections.get_mut(token) {
-                    if let Err(err) = conn.send_close(code, reason) {
-                        conn.error(err)
-                    }
-                } else {
-                    trace!("Connection disconnected while close signal was waiting in the queue.")
-                }
-            }
-            Signal::Ping(data) => {
-                    if let Some(conn) = self.connections.get_mut(token) {
-                        if let Err(err) = conn.send_ping(data) {
-                            conn.error(err)
-                        }
-                    } else {
-                        trace!("Connection disconnected while ping signal was waiting in the queue.")
-                    }
-            }
-            Signal::Pong(data) => {
-                if let Some(conn) = self.connections.get_mut(token) {
-                    if let Err(err) = conn.send_pong(data) {
-                        conn.error(err)
-                    }
-                } else {
-                    trace!("Connection disconnected while pong signal was waiting in the queue.")
-                }
-            }
-            Signal::Connect(ref url) => {
-                match token {
-                    ALL =>  {
-                        if let Err(err) = self.connect(eloop, url) {
-                            if self.settings.panic_on_new_connection {
-                                panic!("Unable to establish connection to {}: {:?}", url, err);
+                    Signal::Close(code, reason) => {
+                        if let Some(conn) = self.connections.get_mut(token) {
+                            if let Err(err) = conn.send_close(code, reason) {
+                                conn.error(err)
                             }
-                            error!("Unable to establish connection to {}: {:?}", url, err);
+                        } else {
+                            trace!("Connection disconnected while close signal was waiting in the queue.")
                         }
                     }
-                    _ => {
+                    Signal::Ping(data) => {
+                        if let Some(conn) = self.connections.get_mut(token) {
+                            if let Err(err) = conn.send_ping(data) {
+                                conn.error(err)
+                            }
+                        } else {
+                            trace!("Connection disconnected while ping signal was waiting in the queue.")
+                        }
+                    }
+                    Signal::Pong(data) => {
+                        if let Some(conn) = self.connections.get_mut(token) {
+                            if let Err(err) = conn.send_pong(data) {
+                                conn.error(err)
+                            }
+                        } else {
+                            trace!("Connection disconnected while pong signal was waiting in the queue.")
+                        }
+                    }
+                    Signal::Connect(ref url) => {
                         if let Err(err) = self.connect(eloop, url) {
                             if let Some(conn) = self.connections.get_mut(token) {
                                 conn.error(err)
@@ -399,31 +442,16 @@ impl<F> mio::Handler for Handler <F>
                                 error!("Unable to establish connection to {}: {:?}", url, err);
                             }
                         }
+                        return
+                    }
+                    Signal::Shutdown => self.shutdown(eloop),
+                }
+
+                if let Some(_) = self.connections.get(token) {
+                    if let Err(err) = self.schedule(eloop, &self.connections[token]) {
+                        self.connections[token].error(err)
                     }
                 }
-                return
-            }
-            Signal::Shutdown => {
-                debug!("Received shutdown signal. WebSocket is attempting to shut down.");
-                for conn in self.connections.iter_mut() {
-                    conn.shutdown();
-                }
-                self.factory.on_shutdown();
-                self.state = State::Inactive;
-                // If the shutdown command is received after connections have disconnected,
-                // we need to shutdown now because ready only fires on io events
-                if self.connections.count() == 0 {
-                    eloop.shutdown()
-                }
-                if self.settings.panic_on_shutdown {
-                    panic!("Panicking on shutdown as per setting.")
-                }
-            }
-        }
-
-        if let Some(_) = self.connections.get(token) {
-            if let Err(err) = self.schedule(eloop, &self.connections[token]) {
-                self.connections[token].error(err)
             }
         }
     }
