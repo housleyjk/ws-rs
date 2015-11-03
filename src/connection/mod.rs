@@ -407,7 +407,7 @@ impl<S, H> Connection<S, H>
             try!(self.handler.on_open(shake));
 
             // check to see if there is anything to read already
-            if self.in_buffer.get_ref().len() > 0 {
+            if !self.in_buffer.get_ref().is_empty() {
                 try!(self.read_frames());
             }
 
@@ -449,7 +449,7 @@ impl<S, H> Connection<S, H>
                             try!(self.verify_reserve(&frame));
                             // since we are going to handle this, there can't be an ongoing
                             // message
-                            if self.fragments.len() > 0 {
+                            if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented text frame while processing fragmented message."))
                             }
                             debug_assert!(frame.opcode() == OpCode::Text, "Handler passed back corrupted frame.");
@@ -463,7 +463,7 @@ impl<S, H> Connection<S, H>
                             try!(self.verify_reserve(&frame));
                             // since we are going to handle this, there can't be an ongoing
                             // message
-                            if self.fragments.len() > 0 {
+                            if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented binary frame while processing fragmented message."))
                             }
                             debug_assert!(frame.opcode() == OpCode::Binary, "Handler passed back corrupted frame.");
@@ -782,7 +782,7 @@ impl<S, H> Connection<S, H>
     fn verify_reserve(&mut self, frame: &Frame) -> Result<()> {
         // The default implementation doesn't support having reserved bits set
         if frame.has_rsv1() || frame.has_rsv2() || frame.has_rsv3() {
-            return Err(Error::new(Kind::Protocol, "Encountered frame with reserved bits set."))
+            Err(Error::new(Kind::Protocol, "Encountered frame with reserved bits set."))
         } else {
             Ok(())
         }

@@ -192,7 +192,7 @@ mod test {
 
         let mut h = H;
         h.on_open(Handshake::default()).unwrap();
-        h.on_message(message::Message::Text("testme".to_string())).unwrap();
+        h.on_message(message::Message::Text("testme".to_owned())).unwrap();
         h.on_close(CloseCode::Normal, "");
     }
 

@@ -240,6 +240,12 @@
 //! There are other Handler methods that allow even more fine-grained access, but most applications
 //! will usually only need these four methods.
 //!
+//!
+#![deny(
+    missing_copy_implementations,
+    trivial_casts, trivial_numeric_casts,
+    unstable_features,
+    unused_import_braces)]
 
 extern crate httparse;
 extern crate mio;
@@ -529,6 +535,7 @@ impl<F> WebSocket<F>
 }
 
 /// Utility for constructing a WebSocket from various settings.
+#[derive(Debug)]
 pub struct Builder {
     event_config: Option<EventLoopConfig>,
     settings: Settings,

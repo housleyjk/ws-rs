@@ -264,13 +264,12 @@ impl Frame {
             mask: mask,
             payload: data,
             header_length: header_length as u8,
-            .. Frame::default()
         };
         *size -= frame.len();
         Ok(Some(frame))
     }
 
-    pub fn format<'w, W>(&mut self, w: &'w mut W) -> Result<()>
+    pub fn format<W>(&mut self, w: &mut W) -> Result<()>
         where W: Write
     {
         let mut one = 0u8;

@@ -57,6 +57,15 @@ impl Message {
         }
     }
 
+    /// Returns true if the WebSocket message has no content.
+    /// For example, if the other side of the connection sent an empty string.
+    pub fn is_empty(&self) -> bool {
+        match *self {
+            Text(ref string) => string.is_empty(),
+            Binary(ref data) => data.is_empty(),
+        }
+    }
+
     #[doc(hidden)]
     pub fn opcode(&self) -> OpCode {
         match *self {
@@ -131,10 +140,10 @@ mod test {
     #[test]
     fn test_display() {
         let t = Message::text(format!("test"));
-        assert_eq!(t.to_string(), "test".to_string());
+        assert_eq!(t.to_string(), "test".to_owned());
 
         let bin = Message::binary(vec![0, 1, 3, 4, 241]);
-        assert_eq!(bin.to_string(), "Binary Data<length=5>".to_string());
+        assert_eq!(bin.to_string(), "Binary Data<length=5>".to_owned());
     }
 
     #[test]
