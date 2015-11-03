@@ -20,6 +20,7 @@ use self::handler::Handler;
 use self::state::{State, Endpoint};
 use self::state::State::*;
 use self::state::Endpoint::*;
+use super::Settings;
 
 pub struct Builder<S, H>
     where H: Handler, S: TryRead + TryWrite
@@ -44,8 +45,7 @@ impl<S, H> Builder<S, H>
         }
     }
 
-    pub fn build(mut self) -> Connection<S, H> {
-        let settings = self.handler.settings();
+    pub fn build(self, settings: Settings) -> Connection<S, H> {
         let end = self.endpoint.unwrap_or(Server);  // default to server
         Connection {
             token: self.token,
@@ -61,6 +61,7 @@ impl<S, H> Builder<S, H>
             in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
             out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
             handler: self.handler,
+            settings: settings,
         }
     }
 
@@ -90,6 +91,8 @@ pub struct Connection<S, H>
     out_buffer: Cursor<Vec<u8>>,
 
     handler: H,
+
+    settings: Settings,
 }
 
 impl<S, H> Connection<S, H>
@@ -105,6 +108,22 @@ impl<S, H> Connection<S, H>
 
     pub fn socket(&self) -> &S {
         &self.socket
+    }
+
+    /// Resetting may be necessary in order to try all possible addresses for a server
+    pub fn reset(&mut self, sock: S) -> Result<()> {
+        if self.is_client() {
+            if let Connecting(ref mut shake) = self.state {
+                shake.request.cursor().set_position(0);
+                self.events.remove(EventSet::readable());
+                self.events.insert(EventSet::writable());
+                Ok(self.socket = sock)
+            } else {
+                Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
+            }
+        } else {
+            Err(Error::new(Kind::Internal, "Server connections cannot be reset."))
+        }
     }
 
     pub fn state(&self) -> &State {
@@ -181,10 +200,9 @@ impl<S, H> Connection<S, H>
 
             }
             _ => {
-                let settings = self.handler.settings();
                 match err.kind {
                     Kind::Internal => {
-                        if settings.panic_on_internal {
+                        if self.settings.panic_on_internal {
                             panic!("Panicking on internal error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -196,7 +214,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Capacity => {
-                        if settings.panic_on_capacity {
+                        if self.settings.panic_on_capacity {
                             panic!("Panicking on capacity error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -208,7 +226,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Protocol => {
-                        if settings.panic_on_protocol {
+                        if self.settings.panic_on_protocol {
                             panic!("Panicking on protocol error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -220,7 +238,7 @@ impl<S, H> Connection<S, H>
                         }
                     }
                     Kind::Encoding(_) => {
-                        if settings.panic_on_encoding {
+                        if self.settings.panic_on_encoding {
                             panic!("Panicking on encoding error -- {}", err);
                         }
                         let reason = format!("{}", err);
@@ -242,7 +260,7 @@ impl<S, H> Connection<S, H>
                         self.handler.on_error(err);
                     }
                     _ => {
-                        if settings.panic_on_io {
+                        if self.settings.panic_on_io {
                             panic!("Panicking on io error -- {}", err);
                         }
                         self.handler.on_error(err);
@@ -270,7 +288,7 @@ impl<S, H> Connection<S, H>
                 }
                 Client =>  {
                     if let Some(len) = try!(self.socket.try_write_buf(shake.request.cursor())) {
-                        if shake.response.buffer().len() == len {
+                        if shake.request.buffer().len() == len {
                             trace!("Finished writing handshake request for {:?}", self.token);
                             self.events.insert(EventSet::readable());
                             self.events.remove(EventSet::writable());
@@ -377,7 +395,7 @@ impl<S, H> Connection<S, H>
                 return Err(Error::new(Kind::Protocol, "Handshake failed."));
             }
 
-            if self.handler.settings().key_strict {
+            if self.settings.key_strict {
                 let res_key = try!(from_utf8(try!(shake.response.key())));
                 let req_key = hash_key(try!(shake.request.key()));
                 if req_key != res_key {
@@ -389,7 +407,7 @@ impl<S, H> Connection<S, H>
             try!(self.handler.on_open(shake));
 
             // check to see if there is anything to read already
-            if self.in_buffer.get_ref().len() > 0 {
+            if !self.in_buffer.get_ref().is_empty() {
                 try!(self.read_frames());
             }
 
@@ -407,11 +425,10 @@ impl<S, H> Connection<S, H>
     }
 
     fn read_frames(&mut self) -> Result<()> {
-        let settings = self.handler.settings();
         let mut size = self.in_buffer.get_ref().len() - self.in_buffer.position() as usize;
         while let Some(frame) = try!(Frame::parse(&mut self.in_buffer, &mut size)) {
 
-            if settings.masking_strict {
+            if self.settings.masking_strict {
                 if frame.is_masked() {
                     if self.is_client() {
                         return Err(Error::new(Kind::Protocol, "Received masked frame from a server endpoint."))
@@ -432,7 +449,7 @@ impl<S, H> Connection<S, H>
                             try!(self.verify_reserve(&frame));
                             // since we are going to handle this, there can't be an ongoing
                             // message
-                            if self.fragments.len() > 0 {
+                            if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented text frame while processing fragmented message."))
                             }
                             debug_assert!(frame.opcode() == OpCode::Text, "Handler passed back corrupted frame.");
@@ -446,7 +463,7 @@ impl<S, H> Connection<S, H>
                             try!(self.verify_reserve(&frame));
                             // since we are going to handle this, there can't be an ongoing
                             // message
-                            if self.fragments.len() > 0 {
+                            if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented binary frame while processing fragmented message."))
                             }
                             debug_assert!(frame.opcode() == OpCode::Binary, "Handler passed back corrupted frame.");
@@ -467,7 +484,7 @@ impl<S, H> Connection<S, H>
                                 if let 2 = try!(data.read(&mut close_code)) {
                                     let code_be: u16 = unsafe {transmute(close_code) };
                                     trace!("Connection {:?} received raw close code: {:?}, {:b}", self.token, code_be, code_be);
-                                    let named = CloseCode::from(code_be);
+                                    let named = CloseCode::from(u16::from_be(code_be));
                                     if let CloseCode::Other(code) = named {
                                         if
                                                 code < 1000 ||
@@ -614,14 +631,13 @@ impl<S, H> Connection<S, H>
     }
 
     pub fn send_message(&mut self, msg: Message) -> Result<()> {
-        let settings = self.handler.settings();
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
-        if data.len() > settings.fragment_size {
-            trace!("Chunking at {:?}.", settings.fragment_size);
+        if data.len() > self.settings.fragment_size {
+            trace!("Chunking at {:?}.", self.settings.fragment_size);
             // note this copies the data, so it's actually somewhat expensive to fragment
-            let mut chunks = data.chunks(settings.fragment_size).peekable();
+            let mut chunks = data.chunks(self.settings.fragment_size).peekable();
             let chunk = chunks.next().expect("Unable to get initial chunk!");
 
             try!(self.buffer_frame(
@@ -687,7 +703,7 @@ impl<S, H> Connection<S, H>
     }
 
     fn buffer_frame(&mut self, mut frame: Frame) -> Result<()> {
-        try!(self.buffer_out(&frame));
+        try!(self.check_buffer_out(&frame));
 
         if self.is_client() {
             frame.mask();
@@ -700,14 +716,15 @@ impl<S, H> Connection<S, H>
         Ok(())
     }
 
-    fn buffer_out(&mut self, frame: &Frame) -> Result<()> {
+    fn check_buffer_out(&mut self, frame: &Frame) -> Result<()> {
+
         if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
+            // extend
             let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
             new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize ..]);
             if new.len() == new.capacity() {
-                let settings = self.handler.settings();
-                if settings.out_buffer_grow {
-                    new.reserve(settings.out_buffer_capacity)
+                if self.settings.out_buffer_grow {
+                    new.reserve(self.settings.out_buffer_capacity)
                 } else {
                     return Err(Error::new(Kind::Capacity, "Maxed out output buffer for connection."))
                 }
@@ -718,6 +735,7 @@ impl<S, H> Connection<S, H>
     }
 
     fn buffer_in(&mut self) -> Result<Option<usize>> {
+
         trace!("Reading buffer on {:?}", self.token);
         if let Some(mut len) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
             if len == 0 {
@@ -726,12 +744,12 @@ impl<S, H> Connection<S, H>
             }
             loop {
                 if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
+                    // extend
                     let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
                     new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
                     if new.len() == new.capacity() {
-                        let settings = self.handler.settings();
-                        if settings.in_buffer_grow {
-                            new.reserve(settings.in_buffer_capacity);
+                        if self.settings.in_buffer_grow {
+                            new.reserve(self.settings.in_buffer_capacity);
                         } else {
                             return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
                         }
@@ -764,7 +782,7 @@ impl<S, H> Connection<S, H>
     fn verify_reserve(&mut self, frame: &Frame) -> Result<()> {
         // The default implementation doesn't support having reserved bits set
         if frame.has_rsv1() || frame.has_rsv2() || frame.has_rsv3() {
-            return Err(Error::new(Kind::Protocol, "Encountered frame with reserved bits set."))
+            Err(Error::new(Kind::Protocol, "Encountered frame with reserved bits set."))
         } else {
             Ok(())
         }

@@ -53,7 +53,7 @@ fn main () {
     }
 
     // Server thread
-    let server = thread::Builder::new().name("server".to_string()).spawn(move || {
+    let server = thread::Builder::new().name("server".to_owned()).spawn(move || {
         listen("127.0.0.1:3012", |out| {
             Server {
                 ws: out,
@@ -112,7 +112,7 @@ fn main () {
     let client_data = data.clone();
 
     // Client thread
-    let client = thread::Builder::new().name("client".to_string()).spawn(move || {
+    let client = thread::Builder::new().name("client".to_owned()).spawn(move || {
         connect("ws://127.0.0.1:3012", |out| {
 
             Client {
@@ -127,7 +127,7 @@ fn main () {
     }).unwrap();
 
     // Logger thread
-    let logger = thread::Builder::new().name("logger".to_string()).spawn(move || {
+    let logger = thread::Builder::new().name("logger".to_owned()).spawn(move || {
         // Make a new vector to store the numbers
         let mut log: Vec<usize> = Vec::new();
 

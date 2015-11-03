@@ -6,7 +6,7 @@ use mio;
 use mio::Token;
 
 use message;
-use result::Result;
+use result::{Result, Error};
 use protocol::CloseCode;
 use io::ALL;
 
@@ -67,10 +67,10 @@ impl Sender {
     pub fn send<M>(&self, msg: M) -> Result<()>
         where M: Into<message::Message>
     {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Message(msg.into()),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Send a message to the endpoints of all connections.
@@ -86,19 +86,19 @@ impl Sender {
     pub fn broadcast<M>(&self, msg: M) -> Result<()>
         where M: Into<message::Message>
     {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: ALL,
             signal: Signal::Message(msg.into()),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Send a close code to the other endpoint.
     #[inline]
     pub fn close(&self, code: CloseCode) -> Result<()> {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Close(code, "".into()),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Send a close code and provide a descriptive reason for closing.
@@ -106,46 +106,46 @@ impl Sender {
     pub fn close_with_reason<S>(&self, code: CloseCode, reason: S) -> Result<()>
         where S: Into<Cow<'static, str>>
     {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Close(code, reason.into()),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Send a ping to the other endpoint with the given test data.
     #[inline]
     pub fn ping(&self, data: Vec<u8>) -> Result<()> {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Ping(data),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Send a pong to the other endpoint responding with the given test data.
     #[inline]
     pub fn pong(&self, data: Vec<u8>) -> Result<()> {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Pong(data),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Queue a new connection on this WebSocket to the specified URL.
     #[inline]
     pub fn connect(&self, url: url::Url) -> Result<()> {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Connect(url),
-        })))
+        }).map_err(Error::from)
     }
 
     /// Request that all connections terminate and that the WebSocket stop running.
     #[inline]
     pub fn shutdown(&self) -> Result<()> {
-        Ok(try!(self.channel.send(Command {
+        self.channel.send(Command {
             token: self.token,
             signal: Signal::Shutdown,
-        })))
+        }).map_err(Error::from)
     }
 
 }

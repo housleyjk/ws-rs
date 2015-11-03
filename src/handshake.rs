@@ -31,7 +31,7 @@ pub fn hash_key(key: &[u8]) -> String {
     hasher.update(WS_GUID.as_bytes());
     hasher.output(&mut buf);
 
-    return encode_base64(&buf)
+    encode_base64(&buf)
 }
 
 // This code is based on rustc_serialize base64 STANDARD
@@ -52,7 +52,7 @@ fn encode_base64(data: &[u8]) -> String {
             write(enc((g24 >> 18) & 63));
             write(enc((g24 >> 12) & 63));
             write(enc((g24 >> 6 ) & 63));
-            write(enc((g24 >> 0 ) & 63));
+            write(enc(g24 & 63));
         }
 
         match mod_len {
@@ -249,8 +249,8 @@ impl Request {
                      Sec-WebSocket-Protocol: {proto}\r\n\
                      Sec-WebSocket-Extensions: {ext}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_string()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
+                    path=url.serialize_path().unwrap_or("/".to_owned()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -267,8 +267,8 @@ impl Request {
                      Sec-WebSocket-Key: {key}\r\n\
                      Sec-WebSocket-Protocol: {proto}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_string()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
+                    path=url.serialize_path().unwrap_or("/".to_owned()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -287,8 +287,8 @@ impl Request {
                      Sec-WebSocket-Key: {key}\r\n\
                      Sec-WebSocket-Extensions: {ext}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_string()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
+                    path=url.serialize_path().unwrap_or("/".to_owned()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),
@@ -303,8 +303,8 @@ impl Request {
                      Sec-WebSocket-Version: 13\r\n\
                      Sec-WebSocket-Key: {key}\r\n\
                      Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_string()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_string()),
+                    path=url.serialize_path().unwrap_or("/".to_owned()),
+                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
                     host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
                     port=url.port_or_default().unwrap_or(80),
                     key=generate_key(),

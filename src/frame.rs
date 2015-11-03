@@ -140,7 +140,7 @@ impl Frame {
     pub fn close(code: CloseCode, reason: &str) -> Frame {
         let raw: [u8; 2] = unsafe {
             let u: u16 = code.into();
-            transmute(u)
+            transmute(u.to_be())
         };
 
         let payload = if let CloseCode::Empty = code {
@@ -215,10 +215,8 @@ impl Frame {
                 return Ok(None)
             }
 
-            unsafe {
-                length = transmute(length_bytes);
-                length = u64::from_be(length);
-            }
+            unsafe { length = transmute(length_bytes); }
+            length = u64::from_be(length);
             header_length += 8;
         }
         trace!("Payload length {}", length);
@@ -266,13 +264,12 @@ impl Frame {
             mask: mask,
             payload: data,
             header_length: header_length as u8,
-            .. Frame::default()
         };
         *size -= frame.len();
         Ok(Some(frame))
     }
 
-    pub fn format<'w, W>(&mut self, w: &'w mut W) -> Result<()>
+    pub fn format<W>(&mut self, w: &mut W) -> Result<()>
         where W: Write
     {
         let mut one = 0u8;

@@ -1,23 +1,24 @@
 [package]
-name = "ws"
-version = "0.2.1"
 authors = ["Jason Housley <HousleyJK@gmail.com>"]
-
 description = "Lightweight, event-driven WebSockets for Rust."
 documentation = "http://housleyjk.github.io/ws-rs/ws/"
-repository = "https://github.com/housleyjk/ws-rs"
-readme = "README.md"
 keywords = ["websocket", "mio", "event-driven", "io", "web"]
 license = "MIT"
+name = "ws"
+readme = "README.md"
+repository = "https://github.com/housleyjk/ws-rs"
+version = "0.3.0"
 
 [dependencies]
-mio = "0.4.3"
+httparse = "1.0.0"
 log = "0.3.2"
-httparse = "0.1.6"
-sha1 = "0.1.1"
+mio = "0.4.3"
 rand = "0.3.11"
+sha1 = "0.1.1"
 url = "0.2.37"
 
 [dev-dependencies]
-env_logger = "0.3.1"
+clap = "1.4.6"
 clock_ticks = "0.0.6"
+env_logger = "0.3.1"
+term = "0.2.12"
