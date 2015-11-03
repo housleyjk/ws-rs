@@ -113,7 +113,7 @@ impl StdError for Error {
         match self.kind {
             Kind::Encoding(ref err) => Some(err),
             Kind::Io(ref err)       => Some(err),
-            Kind::Custom(ref err)   => Some(err.as_ref()),
+            // Kind::Custom(ref err)   => Some(err.as_ref()),
             _ => None,
         }
     }
