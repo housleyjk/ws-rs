@@ -2,6 +2,7 @@ use std::default::Default;
 use std::io::{Cursor, Write};
 use std::mem::transmute;
 use std::str::from_utf8;
+use std::net::SocketAddr;
 
 use log::LogLevel::Trace as TraceLevel;
 
@@ -77,8 +78,15 @@ fn encode_base64(data: &[u8]) -> String {
 /// A struct representing the two halves of the WebSocket handshake.
 #[derive(Debug)]
 pub struct Handshake {
+    /// The HTTP request sent to begin the handshake.
     pub request: Request,
+    /// The HTTP response from the server confirming the handshake.
     pub response: Response,
+    /// The socket address of the other endpoint. This address may
+    /// be an intermediary such as a proxy server.
+    pub peer_addr: Option<SocketAddr>,
+    /// The socket address of this enpoint.
+    pub local_addr: Option<SocketAddr>,
 }
 
 impl Handshake {
@@ -87,7 +95,31 @@ impl Handshake {
         Handshake {
             request: req,
             response: res,
+            .. Default::default()
         }
+    }
+
+    /// Get the IP address of the remote connection.
+    ///
+    /// This is the preferred method of obtaining the client's IP address.
+    /// It will attempt to retrieve the most likely IP address based on request
+    /// headers, falling back to the address of the peer.
+    ///
+    /// # Note
+    /// This assumes that the peer is a client. If you are implementing a
+    /// WebSocket client and want to obtain the address of the server, use
+    /// `Handshake::peer_addr` instead.
+    ///
+    /// This method does not ensure that the address is a valid IP address.
+    #[allow(dead_code)]
+    pub fn remote_addr(&self) -> Result<Option<String>> {
+        Ok(try!(self.request.client_addr()).map(String::from).or_else(|| {
+            if let Some(addr) = self.peer_addr {
+                Some(addr.to_string())
+            } else {
+                None
+            }
+        }))
     }
 
 }
@@ -95,10 +127,12 @@ impl Handshake {
 impl Default for Handshake {
 
     fn default() -> Handshake {
-        Handshake::new(
-            Request::default(),
-            Response::default(),
-        )
+        Handshake {
+            request: Request::default(),
+            response: Response::default(),
+            peer_addr: None,
+            local_addr: None,
+        }
     }
 }
 
@@ -191,6 +225,42 @@ impl Request {
             headers.push((header.name, try!(from_utf8(header.value))))
         }
         Ok(headers)
+    }
+
+    /// Get the IP address of the client.
+    ///
+    /// This method will attempt to retrieve the most likely IP address of the requester
+    /// in the following manner:
+    ///
+    /// If the `X-Forwarded-For` header exists, this method will return the left most
+    /// address in the list.
+    ///
+    /// If the [Forwarded HTTP Header Field](https://tools.ietf.org/html/rfc7239) exits,
+    /// this method will return the left most address indicated by the `for` parameter,
+    /// if it exists.
+    ///
+    /// # Note
+    /// This method does not ensure that the address is a valid IP address.
+    #[allow(dead_code)]
+    pub fn client_addr(&self) -> Result<Option<&str>> {
+        if let Some(x_forward) = try!(self.get_header("x-forwarded-for")) {
+            return Ok(try!(from_utf8(x_forward)).split(',').next())
+        }
+
+        // We only care about the first forwarded header, so get_header is ok
+        if let Some(forward) = try!(self.get_header("forwarded")) {
+            if let Some(_for) = try!(from_utf8(forward))
+                .split(';')
+                .find(|f| f.trim().starts_with("for"))
+            {
+                if let Some(_for_eq) = _for.trim().split(',').next() {
+                    let mut it = _for_eq.split('=');
+                    it.next();
+                    return Ok(it.next())
+                }
+            }
+        }
+        Ok(None)
     }
 
     #[doc(hidden)]
@@ -442,3 +512,38 @@ impl Default for Response {
     }
 }
 
+mod test {
+    #![allow(unused_imports, unused_variables, dead_code)]
+    use std::io::Write;
+    use super::*;
+
+    #[test]
+    fn test_remote_addr_x_forwarded_for() {
+        let mut shake = Handshake::default();
+        shake.request = Request::default();
+        write!(
+            shake.request.buffer(),
+            "GET / HTTP/1.1\r\n\
+            Connection: Upgrade\r\n\
+            Upgrade: websocket\r\n\
+            X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
+            Sec-WebSocket-Version: 13\r\n\
+            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+        assert_eq!(shake.remote_addr().unwrap().unwrap(), "192.168.1.1");
+    }
+
+    #[test]
+    fn test_remote_addr_forwarded() {
+        let mut shake = Handshake::default();
+        shake.request = Request::default();
+        write!(
+            shake.request.buffer(),
+            "GET / HTTP/1.1\r\n\
+            Connection: Upgrade\r\n\
+            Upgrade: websocket\r\n\
+            Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown
+            Sec-WebSocket-Version: 13\r\n\
+            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+        assert_eq!(shake.remote_addr().unwrap().unwrap(), "192.0.2.43");
+    }
+}

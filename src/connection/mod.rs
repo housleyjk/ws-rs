@@ -12,7 +12,7 @@ use std::str::from_utf8;
 use mio::{Token, TryRead, TryWrite, EventSet};
 
 use message::Message;
-use handshake::{Handshake, Request, Response, hash_key};
+use handshake::{Handshake, hash_key};
 use frame::Frame;
 use protocol::{CloseCode, OpCode};
 use result::{Result, Error, Kind};
@@ -70,8 +70,8 @@ impl<S, H> Builder<S, H>
         self
     }
 
-    pub fn request(mut self, req: Request) -> Builder<S, H> {
-        self.handshake = Some(Handshake::new(req, Response::default()));
+    pub fn handshake(mut self, shake: Handshake) -> Builder<S, H> {
+        self.handshake = Some(shake);
         self
     }
 }
