@@ -7,6 +7,9 @@ matrix:
   allow_failures:
   - rust: beta
   - rust: nightly
+branches:
+  only:
+    - stable
 after_success: |
   # pip install --user autobahntestsuite &&
   # /home/travis/.local/bin/wstest -m fuzzingserver -s ./tests/fuzzingserver.json & SPID=$! &&
