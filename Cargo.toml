@@ -20,6 +20,6 @@ url = "*"
 
 [dev-dependencies]
 env_logger = "*"
-clock_ticks = "*"
+time = "*"
 clap = "*"
 term = "*"

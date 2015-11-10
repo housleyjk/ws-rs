@@ -4,7 +4,7 @@
 
 extern crate ws;
 extern crate url;
-extern crate clock_ticks;
+extern crate time;
 extern crate env_logger;
 
 // Try this against node for some fun
@@ -36,7 +36,7 @@ fn main () {
         fn on_open(&mut self, _: Handshake) -> Result<()> {
             try!(self.out.send(MESSAGE));
             self.count += 1;
-            Ok(self.time = clock_ticks::precise_time_ms())
+            Ok(self.time = time::precise_time_ns())
         }
 
         fn on_message(&mut self, msg: Message) -> Result<()> {
@@ -45,7 +45,7 @@ fn main () {
                 try!(self.out.close(CloseCode::Normal));
             } else {
                 try!(self.out.send(MESSAGE));
-                let time = clock_ticks::precise_time_ms();
+                let time = time::precise_time_ns();
                 // println!("time {}", time -self.time);
                 self.total += time - self.time;
                 self.count += 1;
@@ -71,7 +71,7 @@ fn main () {
     for _ in 0..CONNECTIONS {
         ws.connect(url.clone()).unwrap();
     }
-    let start = clock_ticks::precise_time_ms();
+    let start = time::precise_time_ns();
     ws.run().unwrap();
-    println!("Total time. {}", clock_ticks::precise_time_ms() - start)
+    println!("Total time. {}", (time::precise_time_ns() - start) / 1_000_000)
 }
