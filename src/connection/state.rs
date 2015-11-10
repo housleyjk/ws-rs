@@ -45,4 +45,12 @@ impl State {
             _ => false,
         }
     }
+
+    #[inline]
+    pub fn handshake(&mut self) -> Option<&mut Handshake> {
+        match *self {
+            State::Connecting(ref mut shake) => Some(shake),
+            _ => None,
+        }
+    }
 }

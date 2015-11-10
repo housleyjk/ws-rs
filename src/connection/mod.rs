@@ -126,8 +126,8 @@ impl<S, H> Connection<S, H>
         }
     }
 
-    pub fn state(&self) -> &State {
-        &self.state
+    pub fn state(&mut self) -> &mut State {
+        &mut self.state
     }
 
     pub fn events(&self) -> EventSet {
