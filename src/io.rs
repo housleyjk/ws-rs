@@ -16,7 +16,7 @@ use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
 use connection::factory::Factory;
-use handshake::Request;
+use handshake::{Request, Handshake};
 use super::Settings;
 
 pub const ALL: Token = Token(0);
@@ -105,11 +105,17 @@ impl<F> Handler<F>
             let sock = try!(TcpStream::connect(&addr).map_err(Error::from));
             let factory = &mut self.factory;
             let settings = self.settings;
+
             let req = try!(Request::from_url(url, settings.protocols, settings.extensions));
+
+            let mut shake = Handshake::default();
+            shake.request = req;
+            shake.peer_addr = Some(try!(sock.peer_addr()));
+            shake.local_addr = Some(try!(sock.local_addr()));
 
             let tok = try!(self.connections.insert_with(|tok| {
                 let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-                Connection::builder(tok, sock, handler).client().request(req).build(settings)
+                Connection::builder(tok, sock, handler).client().handshake(shake).build(settings)
             }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
             let conn = &mut self.connections[tok];
@@ -126,9 +132,15 @@ impl<F> Handler<F>
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
+
+        let mut shake = Handshake::default();
+        shake.peer_addr = Some(try!(sock.peer_addr()));
+        shake.local_addr = Some(try!(sock.local_addr()));
+
+
         let tok = try!(self.connections.insert_with(|tok| {
             let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-            Connection::builder(tok, sock, handler).build(settings)
+            Connection::builder(tok, sock, handler).handshake(shake).build(settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
         let conn = &mut self.connections[tok];

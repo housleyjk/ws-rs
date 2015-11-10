@@ -4,21 +4,22 @@ description = "Lightweight, event-driven WebSockets for Rust."
 documentation = "http://housleyjk.github.io/ws-rs/ws/"
 keywords = ["websocket", "mio", "event-driven", "io", "web"]
 license = "MIT"
+
 name = "ws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
-version = "0.3.0"
+version = "0.3.1"
 
 [dependencies]
 httparse = "1.0.0"
 log = "0.3.2"
-mio = "0.4.3"
-rand = "0.3.11"
+mio = "0.4.4"
+rand = "0.3.12"
 sha1 = "0.1.1"
 url = "0.2.37"
 
 [dev-dependencies]
-clap = "1.4.6"
-clock_ticks = "0.0.6"
-env_logger = "0.3.1"
-term = "0.2.12"
+clap = "1.4.7"
+env_logger = "0.3.2"
+term = "0.2.13"
+time = "0.1.33"
