@@ -30,7 +30,7 @@ fn main() {
 
     // setup command line arguments
     let matches = App::new("WS Command Line Client")
-        .version("1.0")
+        .version("1.1")
         .author("Jason Housley <housleyjk@gmail.com>")
         .about("Connect to a WebSocket and send messages from the command line.")
         .arg(Arg::with_name("URL")
@@ -53,7 +53,7 @@ fn main() {
         }).unwrap();
     });
 
-    if let Ok(sender) = rx.recv() {
+    if let Ok(Event::Connect(sender)) = rx.recv() {
         // If we were able to connect, print the instructions
         instructions();
 
@@ -62,6 +62,10 @@ fn main() {
             // Get user input
             let mut input = String::new();
             io::stdin().read_line(&mut input).unwrap();
+
+            if let Ok(Event::Disconnect) = rx.try_recv() {
+                break
+            }
 
             if input.starts_with("/h") {
                 // Show help
@@ -134,14 +138,14 @@ fn instructions() {
 
 struct Client {
     ws_out: Sender,
-    thread_out: TSender<Sender>,
+    thread_out: TSender<Event>,
 }
 
 impl Handler for Client {
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
         self.thread_out
-            .send(self.ws_out.clone())
+            .send(Event::Connect(self.ws_out.clone()))
             .map_err(|err| Error::new(
                 ErrorKind::Internal,
                 format!("Unable to communicate between threads: {:?}.", err)))
@@ -151,4 +155,25 @@ impl Handler for Client {
         Ok(display(format!("<<< {}", msg)))
     }
 
+    fn on_close(&mut self, code: CloseCode, reason: &str) {
+        if reason.is_empty() {
+            display(format!("<<< Closing<({:?})>\nHit any key to end session.", code));
+        } else {
+            display(format!("<<< Closing<({:?}) {}>\nHit any key to end session.", code, reason));
+        }
+
+        if let Err(err) = self.thread_out.send(Event::Disconnect) {
+            display(format!("{}", err))
+        }
+    }
+
+    fn on_error(&mut self, err: Error) {
+        display(format!("<<< Error<{}>", err))
+    }
+
+}
+
+enum Event {
+    Connect(Sender),
+    Disconnect,
 }

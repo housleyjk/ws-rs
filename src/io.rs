@@ -110,8 +110,6 @@ impl<F> Handler<F>
 
             let mut shake = Handshake::default();
             shake.request = req;
-            shake.peer_addr = Some(try!(sock.peer_addr()));
-            shake.local_addr = Some(try!(sock.local_addr()));
 
             let tok = try!(self.connections.insert_with(|tok| {
                 let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
@@ -133,14 +131,9 @@ impl<F> Handler<F>
         let factory = &mut self.factory;
         let settings = self.settings;
 
-        let mut shake = Handshake::default();
-        shake.peer_addr = Some(try!(sock.peer_addr()));
-        shake.local_addr = Some(try!(sock.local_addr()));
-
-
         let tok = try!(self.connections.insert_with(|tok| {
             let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-            Connection::builder(tok, sock, handler).handshake(shake).build(settings)
+            Connection::builder(tok, sock, handler).build(settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
         let conn = &mut self.connections[tok];
@@ -266,6 +259,15 @@ impl<F> mio::Handler for Handler <F>
                         let conn = &mut self.connections[token];
                         let conn_events = conn.events();
                         if conn.state().is_connecting() {
+                            // check if we need to add peer and local addrs
+                            let peer_addr = conn.socket().peer_addr().ok();
+                            let local_addr = conn.socket().local_addr().ok();
+
+                            if let Some(shake) = conn.state().handshake() {
+                                shake.peer_addr = peer_addr;
+                                shake.local_addr = local_addr;
+                            }
+
                             if (events & conn_events).is_readable() {
                                 trace!("Ready to read handshake on {:?}.", token);
                                 if let Err(err) = conn.read_handshake() {
