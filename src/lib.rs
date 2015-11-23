@@ -81,7 +81,7 @@
 //! Guide
 //! -----
 //!
-//! You may have noticed in the usage exmaples that the client example calls `unwrap` when sending the first
+//! You may have noticed in the usage examples that the client example calls `unwrap` when sending the first
 //! message, which will panic in the factory if the Message can't be sent for some reason. Also,
 //! sending messages before a handler is returned means that the message will be queued before
 //! the WebSocket handshake is complete. The handshake could fail for some reason, and then the
