@@ -15,22 +15,21 @@ use url::Url;
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
-use connection::factory::Factory;
-use handshake::{Request, Handshake};
+use factory::Factory;
 use super::Settings;
 
 pub const ALL: Token = Token(0);
 const CONN_START: Token = Token(1);
 
 pub type Loop<F> = EventLoop<Handler<F>>;
-type Conn<F> = Connection<TcpStream, <F as Factory>::Handler>;
+type Conn<F> = Connection<<F as Factory>::Handler>;
 type Chan = mio::Sender<Command>;
 
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
     let host = url.serialize_host();
-    if host.is_none() || url.scheme != "ws" { // only support non-tls for now
-        return Err(Error::new(Kind::Internal, format!("Not a valid websocket url: {:?}", url)))
+    if host.is_none() || ( url.scheme != "ws" && url.scheme != "wss" ) {
+        return Err(Error::new(Kind::Internal, format!("Not a valid websocket url: {}", url)))
     }
     let host = host.unwrap();
 
@@ -60,7 +59,6 @@ pub struct Handler<F>
     where F: Factory
 {
     listener: Option<TcpListener>,
-    addresses: Vec<SocketAddr>,
     connections: Slab<Conn<F>>,
     factory: F,
     settings: Settings,
@@ -73,7 +71,6 @@ impl<F> Handler<F>
     pub fn new(factory: F, settings: Settings) -> Handler<F> {
         Handler {
             listener: None,
-            addresses: Vec::new(),
             connections: Slab::new_starting_at(CONN_START, settings.max_connections),
             factory: factory,
             settings: settings,
@@ -94,37 +91,44 @@ impl<F> Handler<F>
         Ok(self)
     }
 
-    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<&mut Handler<F>> {
-        {
-            self.addresses = try!(url_to_addrs(url));
-            // note popping from the vector will most likely give us a tcpip v4 address
-            let addr = try!(self.addresses.pop().ok_or(
-                Error::new(
-                    Kind::Internal,
-                    format!("Unable to obtain any socket address for {}", url))));
-            let sock = try!(TcpStream::connect(&addr).map_err(Error::from));
-            let factory = &mut self.factory;
-            let settings = self.settings;
+    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+        let mut addresses = try!(url_to_addrs(url));
+        // note popping from the vector will most likely give us a tcpip v4 address
+        let addr = try!(addresses.pop().ok_or(
+            Error::new(
+                Kind::Internal,
+                format!("Unable to obtain any socket address for {}", url))));
 
-            let req = try!(Request::from_url(url, settings.protocols, settings.extensions));
+        let sock = try!(TcpStream::connect(&addr));
+        let factory = &mut self.factory;
+        let settings = self.settings;
 
-            let mut shake = Handshake::default();
-            shake.request = req;
+        let tok = try!(self.connections.insert_with(|tok| {
+            let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+            Connection::new(tok, sock, handler, settings)
+        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
-            let tok = try!(self.connections.insert_with(|tok| {
-                let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-                Connection::builder(tok, sock, handler).client().handshake(shake).build(settings)
-            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+        let conn = &mut self.connections[tok];
 
-            let conn = &mut self.connections[tok];
-            try!(eloop.register(
-                conn.socket(),
-                conn.token(),
-                conn.events(),
-                PollOpt::edge() | PollOpt::oneshot(),
-            ));
+        try!(conn.as_client(url, addresses));
+
+        if url.scheme == "wss" {
+            try!(conn.encrypt())
         }
-        Ok(self)
+
+        eloop.register(
+            conn.socket(),
+            conn.token(),
+            conn.events(),
+            PollOpt::edge() | PollOpt::oneshot(),
+        ).map_err(Error::from).or_else(|err| {
+            error!("Encountered error while trying to build WebSocket connection: {}", err);
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
     }
 
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
@@ -132,11 +136,16 @@ impl<F> Handler<F>
         let settings = self.settings;
 
         let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.connection_made(Sender::new(tok, eloop.channel()));
-            Connection::builder(tok, sock, handler).build(settings)
+            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+            Connection::new(tok, sock, handler, settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
         let conn = &mut self.connections[tok];
+
+        try!(conn.as_server());
+        if settings.encrypt_server {
+            try!(conn.encrypt())
+        }
 
         eloop.register(
             conn.socket(),
@@ -155,7 +164,7 @@ impl<F> Handler<F>
 
     #[inline]
     fn schedule(&self, eloop: &mut Loop<F>, conn: &Conn<F>) -> Result<()> {
-        trace!("Scheduling connection {:?} as {:?}", conn.token(), conn.events());
+        debug!("Scheduling connection to {} as {:?}", try!(conn.socket().peer_addr()), conn.events());
         Ok(try!(eloop.reregister(
             conn.socket(),
             conn.token(),
@@ -214,7 +223,7 @@ impl<F> mio::Handler for Handler <F>
                         }
 
                     } else {
-                        trace!("Blocked while accepting new tcp connection.")
+                        debug!("Blocked while accepting new tcp connection.")
                     }
                 }
             }
@@ -225,91 +234,47 @@ impl<F> mio::Handler for Handler <F>
                         debug!("Error was {}", err);
                         if let Some(errno) = err.raw_os_error() {
                             if errno == 111 {
-                                if let Some(addr) = self.addresses.pop() {
-                                    if let Ok(sock) = TcpStream::connect(&addr) {
-                                        if let Err(err) = self.connections[token].reset(sock) {
-                                            trace!("Unable to reset client connection: {:?}", err);
-                                        } else {
-                                            eloop.register(
-                                                self.connections[token].socket(),
-                                                self.connections[token].token(),
-                                                self.connections[token].events(),
-                                                PollOpt::edge() | PollOpt::oneshot(),
-                                            ).or_else(|err| {
-                                                self.connections[token].error(Error::from(err));
-                                                self.connections.remove(token);
-                                                Ok::<(), Error>(())
-                                            }).unwrap();
-                                            return
-                                        }
+                                match self.connections[token].reset() {
+                                    Ok(_) => {
+                                        eloop.register(
+                                            self.connections[token].socket(),
+                                            self.connections[token].token(),
+                                            self.connections[token].events(),
+                                            PollOpt::edge() | PollOpt::oneshot(),
+                                        ).or_else(|err| {
+                                            self.connections[token].error(Error::from(err));
+                                            self.connections.remove(token);
+                                            Ok::<(), Error>(())
+                                        }).unwrap();
+                                        return
+                                    },
+                                    Err(err) => {
+                                        debug!("Encountered error while trying to reset connection: {:?}", err);
                                     }
                                 }
                             }
                         }
                         self.connections[token].error(Error::from(err));
                     }
-                    trace!("Dropping connection {:?}", token);
+                    debug!("Dropping connection token={:?}.", token);
                     self.connections.remove(token);
                 } else if events.is_hup() {
-                    debug!("Tcp connection hung up on {:?}.", token);
                     self.connections.remove(token);
                 } else {
 
                     let active = {
                         let conn = &mut self.connections[token];
                         let conn_events = conn.events();
-                        if conn.state().is_connecting() {
-                            // check if we need to add peer and local addrs
-                            let peer_addr = conn.socket().peer_addr().ok();
-                            let local_addr = conn.socket().local_addr().ok();
 
-                            if let Some(shake) = conn.state().handshake() {
-                                shake.peer_addr = peer_addr;
-                                shake.local_addr = local_addr;
+                        if (events & conn_events).is_readable() {
+                            if let Err(err) = conn.read() {
+                                conn.error(err)
                             }
+                        }
 
-                            if (events & conn_events).is_readable() {
-                                trace!("Ready to read handshake on {:?}.", token);
-                                if let Err(err) = conn.read_handshake() {
-                                    trace!(
-                                        "Encountered error while trying to read handshake on {:?}: {}",
-                                        conn.token(),
-                                        err);
-                                    conn.error(err)
-                                }
-                            }
-
-                            if (events & conn_events).is_writable() {
-                                trace!("Ready to write handshake on {:?}.", token);
-                                if let Err(err) = conn.write_handshake() {
-                                    trace!(
-                                        "Encountered error while trying to write handshake on {:?}: {}",
-                                        conn.token(),
-                                        err);
-                                    conn.error(err)
-                                }
-                            }
-                        } else { // even if we are closing, the connection might need to finish up
-                            if (events & conn_events).is_readable() {
-                                trace!("Ready to read messages on {:?}.", token);
-                                if let Err(err) = conn.read() {
-                                    trace!(
-                                        "Encountered error while trying to read frames on {:?}: {}",
-                                        conn.token(),
-                                        err);
-                                    conn.error(err)
-                                }
-                            }
-
-                            if (events & conn_events).is_writable() {
-                                trace!("Ready to write messages on {:?}.", token);
-                                if let Err(err) = conn.write() {
-                                    trace!(
-                                        "Encountered error while trying to write frames on {:?}: {}",
-                                        conn.token(),
-                                        err);
-                                    conn.error(err)
-                                }
+                        if (events & conn_events).is_writable() {
+                            if let Err(err) = conn.write() {
+                                conn.error(err)
                             }
                         }
 
@@ -324,7 +289,11 @@ impl<F> mio::Handler for Handler <F>
                             "Connection neither readable nor writable in active state!"
                         );
                         self.connections.remove(token);
-                        debug!("WebSocket connection {:?} disconnected.", token);
+                        // if let Ok(addr) = self.connections[token].socket().peer_addr() {
+                            // debug!("WebSocket connection to {} disconnected.", addr);
+                        // } else {
+                            debug!("WebSocket connection to token={:?} disconnected.", token);
+                        // }
                     } else {
                         self.schedule(eloop, &self.connections[token]).or_else(|err| {
                             self.connections[token].error(Error::from(err));
@@ -335,7 +304,7 @@ impl<F> mio::Handler for Handler <F>
 
                 }
 
-                trace!("Active connections {:?}", self.connections.count());
+                debug!("Active connections {:?}", self.connections.count());
                 if self.connections.count() == 0 {
                     if !self.state.is_active() {
                         debug!("Shutting down websocket server.");
@@ -357,7 +326,7 @@ impl<F> mio::Handler for Handler <F>
 
                 match cmd.into_signal() {
                     Signal::Message(msg) => {
-                        trace!("Broadcasting message: {:?}", msg);
+                        debug!("Broadcasting message: {:?}", msg);
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_message(msg.clone()) {
                                 dead.push((conn.token(), err))
@@ -365,7 +334,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Close(code, reason) => {
-                        trace!("Broadcasting close: {:?} - {}", code, reason);
+                        debug!("Broadcasting close: {:?} - {}", code, reason);
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_close(code, reason.borrow()) {
                                 dead.push((conn.token(), err))
@@ -373,7 +342,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Ping(data) => {
-                        trace!("Broadcasting ping");
+                        debug!("Broadcasting ping");
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_ping(data.clone()) {
                                 dead.push((conn.token(), err))
@@ -381,7 +350,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Pong(data) => {
-                        trace!("Broadcasting pong");
+                        debug!("Broadcasting pong");
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_pong(data.clone()) {
                                 dead.push((conn.token(), err))
@@ -418,7 +387,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            trace!("Connection disconnected while a message was waiting in the queue.")
+                            debug!("Connection disconnected while a message was waiting in the queue.")
                         }
                     }
                     Signal::Close(code, reason) => {
@@ -427,7 +396,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            trace!("Connection disconnected while close signal was waiting in the queue.")
+                            debug!("Connection disconnected while close signal was waiting in the queue.")
                         }
                     }
                     Signal::Ping(data) => {
@@ -436,7 +405,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            trace!("Connection disconnected while ping signal was waiting in the queue.")
+                            debug!("Connection disconnected while ping signal was waiting in the queue.")
                         }
                     }
                     Signal::Pong(data) => {
@@ -445,7 +414,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            trace!("Connection disconnected while pong signal was waiting in the queue.")
+                            debug!("Connection disconnected while pong signal was waiting in the queue.")
                         }
                     }
                     Signal::Connect(ref url) => {

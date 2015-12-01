@@ -1,10 +1,8 @@
-use std::default::Default;
-use std::io::{Cursor, Write};
+use std::fmt;
+use std::io::Write;
 use std::mem::transmute;
 use std::str::from_utf8;
 use std::net::SocketAddr;
-
-use log::LogLevel::Trace as TraceLevel;
 
 use sha1;
 use rand;
@@ -91,14 +89,6 @@ pub struct Handshake {
 
 impl Handshake {
 
-    pub fn new(req: Request, res: Response) -> Handshake {
-        Handshake {
-            request: req,
-            response: res,
-            .. Default::default()
-        }
-    }
-
     /// Get the IP address of the remote connection.
     ///
     /// This is the preferred method of obtaining the client's IP address.
@@ -124,59 +114,70 @@ impl Handshake {
 
 }
 
-impl Default for Handshake {
-
-    fn default() -> Handshake {
-        Handshake {
-            request: Request::default(),
-            response: Response::default(),
-            peer_addr: None,
-            local_addr: None,
-        }
-    }
-}
-
 
 /// The handshake request.
 #[derive(Debug)]
 pub struct Request {
-    raw: Cursor<Vec<u8>>,
+    path: String,
+    method: String,
+    headers: Vec<(String, Vec<u8>)>,
 }
 
 impl Request {
 
-    fn get_header(&self, header: &str) -> Result<Option<&[u8]>> {
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut req = httparse::Request::new(&mut headers);
-        try!(req.parse(self.raw.get_ref()));
+    /// Get the value of the first instance of an HTTP header.
+    pub fn header(&self, header: &str) -> Option<&Vec<u8>> {
+        self.headers
+            .iter()
+            .find(|&&(ref key, _)| key.to_lowercase() == header.to_lowercase())
+            .map(|&(_, ref val)| val)
+    }
 
-        Ok(req.headers.iter()
-                      .find(|h| h.name.to_lowercase() == header)
-                      .map(|h| h.value))
+    /// Edit the value of the first instance of an HTTP header.
+    pub fn header_mut(&mut self, header: &str) -> Option<&mut Vec<u8>> {
+        self.headers
+            .iter_mut()
+            .find(|&&mut (ref key, _)| key.to_lowercase() == header.to_lowercase())
+            .map(|&mut (_, ref mut val)| val)
+    }
+
+    /// Access the request headers.
+    #[allow(dead_code)]
+    pub fn headers(&self) -> &Vec<(String, Vec<u8>)> {
+        &self.headers
+    }
+
+    /// Edit the request headers.
+    #[allow(dead_code)]
+    pub fn headers_mut(&mut self) -> &mut Vec<(String, Vec<u8>)> {
+        &mut self.headers
     }
 
     /// Get the origin of the request if it comes from a browser.
     #[allow(dead_code)]
-    // note this assumes that the request is complete
     pub fn origin(&self) -> Result<Option<&str>> {
-        if let Some(origin) = try!(self.get_header("origin")) {
+        if let Some(origin) = self.header("origin") {
             Ok(Some(try!(from_utf8(origin))))
         } else {
             Ok(None)
         }
     }
 
-    /// Get the WebSocket key sent in the request.
-    // note this assumes that the request is complete
-    pub fn key(&self) -> Result<&[u8]> {
-        try!(self.get_header("sec-websocket-key")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    /// Get the unhashed WebSocket key sent in the request.
+    pub fn key(&self) -> Result<&Vec<u8>> {
+        self.header("sec-websocket-key")
+            .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    }
+
+    /// Get the hashed WebSocket key from this request.
+    pub fn hashed_key(&self) -> Result<String> {
+        Ok(hash_key(try!(self.key())))
     }
 
     /// Get the WebSocket protocol version from the request (should be 13).
     #[allow(dead_code)]
-    // note this assumes that the request is complete
     pub fn version(&self) -> Result<&str> {
-        if let Some(version) = try!(self.get_header("sec-websocket-version")) {
+        if let Some(version) = self.header("sec-websocket-version") {
             from_utf8(version).map_err(Error::from)
         } else {
             Err(Error::new(Kind::Protocol, "The Sec-WebSocket-Version header is missing."))
@@ -185,46 +186,93 @@ impl Request {
 
     /// Get the path of the request.
     #[allow(dead_code)]
-    // note this assumes that the request is complete
-    pub fn resource(&self) -> Result<&str> {
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut req = httparse::Request::new(&mut headers);
-        try!(req.parse(self.raw.get_ref()));
-        req.path.ok_or(Error::new(Kind::Protocol, "The resource is missing. This is likely because the request is incomplete"))
+    pub fn resource(&self) -> &str {
+        &self.path
     }
 
-    /// Get the possible protocols the other endpoint supports.
+    /// Get the possible protocols for the WebSocket connection.
     #[allow(dead_code)]
     pub fn protocols(&self) -> Result<Vec<&str>> {
-        if let Some(protos) = try!(self.get_header("sec-websocket-protocol")) {
+        if let Some(protos) = self.header("sec-websocket-protocol") {
             Ok(try!(from_utf8(protos)).split(',').map(|proto| proto.trim()).collect())
         } else {
             Ok(Vec::new())
         }
     }
 
-    /// Get the extensions that the other endpoint is trying to negotiate.
+    /// Add a possible protocol to this request.
+    /// This may result in duplicate protocols listed.
+    #[allow(dead_code)]
+    pub fn add_protocol(&mut self, protocol: &str) {
+        if let Some(protos) = self.header_mut("sec-websocket-protocol") {
+            protos.push(b","[0]);
+            protos.extend(protocol.as_bytes());
+            return
+        }
+        self.headers_mut().push(("Sec-WebSocket-Protocol".into(), protocol.into()))
+    }
+
+    /// Remove a possible protocol from this request.
+    #[allow(dead_code)]
+    pub fn remove_protocol(&mut self, protocol: &str) {
+        if let Some(protos) = self.header_mut("sec-websocket-protocol") {
+            let mut new_protos = Vec::with_capacity(protos.len());
+
+            if let Ok(protos_str) = from_utf8(protos) {
+                new_protos = protos_str
+                    .split(',')
+                    .filter(|proto| proto.trim() == protocol)
+                    .collect::<Vec<&str>>()
+                    .join(",").into();
+            }
+            if new_protos.len() < protos.len() {
+                *protos = new_protos
+            }
+        }
+    }
+
+    /// Get the possible extensions for the WebSocket connection.
     #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
-        if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
+        if let Some(exts) = self.header("sec-websocket-extensions") {
             Ok(try!(from_utf8(exts)).split(',').map(|ext| ext.trim()).collect())
         } else {
             Ok(Vec::new())
         }
     }
 
-    /// Access the request headers as a vector of tuples.
+    /// Add a possible extension to this request.
+    /// This may result in duplicate extensions listed. Also, the order of extensions
+    /// indicates preference, so if the preference matters, consider using the
+    /// `Sec-WebSocket-Protocol` header directly.
     #[allow(dead_code)]
-    pub fn headers(&self) -> Result<Vec<(&str, &str)>> {
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut req = httparse::Request::new(&mut headers);
-        try!(req.parse(self.raw.get_ref()));
-
-        let mut headers = Vec::with_capacity(MAX_HEADERS);
-        for header in req.headers.iter() {
-            headers.push((header.name, try!(from_utf8(header.value))))
+    pub fn add_extension(&mut self, ext: &str) {
+        if let Some(exts) = self.header_mut("sec-websocket-extensions") {
+            exts.push(b","[0]);
+            exts.extend(ext.as_bytes());
+            return
         }
-        Ok(headers)
+        self.headers_mut().push(("Sec-WebSocket-Extensions".into(), ext.into()))
+    }
+
+    /// Remove a possible extension from this request.
+    /// This will remove all configurations of the extension.
+    #[allow(dead_code)]
+    pub fn remove_extension(&mut self, ext: &str) {
+        if let Some(exts) = self.header_mut("sec-websocket-extensions") {
+            let mut new_exts = Vec::with_capacity(exts.len());
+
+            if let Ok(exts_str) = from_utf8(exts) {
+                new_exts = exts_str
+                    .split(',')
+                    .filter(|e| e.trim().starts_with(ext))
+                    .collect::<Vec<&str>>()
+                    .join(",").into();
+            }
+            if new_exts.len() < exts.len() {
+                *exts = new_exts
+            }
+        }
     }
 
     /// Get the IP address of the client.
@@ -243,12 +291,12 @@ impl Request {
     /// This method does not ensure that the address is a valid IP address.
     #[allow(dead_code)]
     pub fn client_addr(&self) -> Result<Option<&str>> {
-        if let Some(x_forward) = try!(self.get_header("x-forwarded-for")) {
+        if let Some(x_forward) = self.header("x-forwarded-for") {
             return Ok(try!(from_utf8(x_forward)).split(',').next())
         }
 
-        // We only care about the first forwarded header, so get_header is ok
-        if let Some(forward) = try!(self.get_header("forwarded")) {
+        // We only care about the first forwarded header, so header is ok
+        if let Some(forward) = self.header("forwarded") {
             if let Some(_for) = try!(from_utf8(forward))
                 .split(';')
                 .find(|f| f.trim().starts_with("for"))
@@ -263,253 +311,279 @@ impl Request {
         Ok(None)
     }
 
-    #[doc(hidden)]
-    #[inline]
-    pub fn new(data: Vec<u8>) -> Request {
-        Request {
-            raw: Cursor::new(data),
-        }
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn buffer(&mut self) -> &mut Vec<u8> {
-        self.raw.get_mut()
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn cursor(&mut self) -> &mut Cursor<Vec<u8>> {
-        &mut self.raw
-    }
-
-    #[doc(hidden)]
-    pub fn parse(&self) -> Result<Option<String>> {
+    /// Attempt to parse an HTTP request from a buffer. If the buffer does not contain a complete
+    /// request, this will return `Ok(None)`.
+    pub fn parse(buf: &[u8]) -> Result<Option<Request>> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut req = httparse::Request::new(&mut headers);
-        let parsed = try!(req.parse(self.raw.get_ref()));
+        let parsed = try!(req.parse(buf));
         if !parsed.is_partial() {
-            debug!(
-                "Handshake request received: \n{}",
-                String::from_utf8_lossy(self.raw.get_ref()));
-
-            let key = try!(req.headers.iter()
-                                      .find(|h| h.name.to_lowercase() == "sec-websocket-key")
-                                      .map(|h| h.value)
-                                      .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key.")));
-            Ok(Some(hash_key(key)))
+            Ok(Some(Request {
+                path: req.path.unwrap().into(),
+                method: req.method.unwrap().into(),
+                headers: req.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
+            }))
         } else {
             Ok(None)
         }
     }
 
-    #[doc(hidden)]
-    pub fn from_url(url: &url::Url, protocols: Option<&str>, extensions: Option<&str>) -> Result<Request> {
-        debug!("Building handshake request from url {:?}", url.serialize());
-        let mut req = Request::default();
-        if let Some(proto) = protocols {
-            if let Some(ext) = extensions {
-                try!(write!(
-                    req.buffer(),
-                    "GET {path}{query} HTTP/1.1\r\n\
-                     Connection: Upgrade\r\n\
-                     Host: {host}:{port}\r\n\
-                     Sec-WebSocket-Version: 13\r\n\
-                     Sec-WebSocket-Key: {key}\r\n\
-                     Sec-WebSocket-Protocol: {proto}\r\n\
-                     Sec-WebSocket-Extensions: {ext}\r\n\
-                     Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_owned()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
-                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                    port=url.port_or_default().unwrap_or(80),
-                    key=generate_key(),
-                    proto=proto,
-                    ext=ext,
-                ));
-            } else {
-                try!(write!(
-                    req.buffer(),
-                    "GET {path}{query} HTTP/1.1\r\n\
-                     Connection: Upgrade\r\n\
-                     Host: {host}:{port}\r\n\
-                     Sec-WebSocket-Version: 13\r\n\
-                     Sec-WebSocket-Key: {key}\r\n\
-                     Sec-WebSocket-Protocol: {proto}\r\n\
-                     Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_owned()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
-                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                    port=url.port_or_default().unwrap_or(80),
-                    key=generate_key(),
-                    proto=proto,
-                ));
-            }
+    /// Construct a new WebSocket handshake HTTP request from a url.
+    pub fn from_url(url: &url::Url) -> Result<Request> {
+        let req = Request {
+            path: format!(
+                "{}{}",
+                url.serialize_path().unwrap_or("/".to_owned()),
+                url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned())),
+            method: "GET".to_owned(),
+            headers: vec![
+                ("Connection".into(), "Upgrade".into()),
+                (
+                    "Host".into(),
+                    format!(
+                        "{}:{}",
+                        try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                        url.port_or_default().unwrap_or(80)).into(),
+                ),
+                ("Sec-WebSocket-Version".into(), "13".into()),
+                ("Sec-WebSocket-Key".into(), generate_key().into()),
+                ("Upgrade".into(), "websocket".into()),
+            ],
+        };
 
-        } else {
-            if let Some(ext) = extensions {
-                try!(write!(
-                    req.buffer(),
-                    "GET {path}{query} HTTP/1.1\r\n\
-                     Connection: Upgrade\r\n\
-                     Host: {host}:{port}\r\n\
-                     Sec-WebSocket-Version: 13\r\n\
-                     Sec-WebSocket-Key: {key}\r\n\
-                     Sec-WebSocket-Extensions: {ext}\r\n\
-                     Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_owned()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
-                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                    port=url.port_or_default().unwrap_or(80),
-                    key=generate_key(),
-                    ext=ext,
-                ));
-            } else {
-                try!(write!(
-                    req.buffer(),
-                    "GET {path}{query} HTTP/1.1\r\n\
-                     Connection: Upgrade\r\n\
-                     Host: {host}:{port}\r\n\
-                     Sec-WebSocket-Version: 13\r\n\
-                     Sec-WebSocket-Key: {key}\r\n\
-                     Upgrade: websocket\r\n\r\n",
-                    path=url.serialize_path().unwrap_or("/".to_owned()),
-                    query=url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned()),
-                    host=try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                    port=url.port_or_default().unwrap_or(80),
-                    key=generate_key(),
-                ));
-            }
-        }
+        debug!("Built request from URL:\n{}", req);
 
-        if log_enabled!(TraceLevel) {
-            use std::io::Read;
-            let mut req_string = String::with_capacity(req.buffer().len());
-            try!(req.cursor().read_to_string(&mut req_string));
-            trace!("{}", req_string);
-            req.cursor().set_position(0);
-        }
         Ok(req)
+    }
+
+    /// Write a request out to a buffer
+    pub fn format<W>(&self, w: &mut W) -> Result<()>
+        where W: Write,
+    {
+        try!(write!(w, "{} {} HTTP/1.1\r\n", self.method, self.path));
+        for &(ref key, ref val) in self.headers.iter() {
+            try!(write!(w, "{}: ", key));
+            try!(w.write(val));
+            try!(write!(w, "\r\n"));
+        }
+        try!(write!(w, "\r\n"));
+        Ok(())
     }
 
 }
 
-impl Default for Request {
+impl fmt::Display for Request {
 
-    fn default() -> Request {
-        Request::new(Vec::with_capacity(2048))
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = Vec::with_capacity(2048);
+        try!(self.format(&mut s).map_err(|err| {
+            error!("{:?}", err);
+            fmt::Error
+        }));
+        write!(f, "{}", try!(from_utf8(&s).map_err(|err| {
+            error!("Unable to format request as utf8: {:?}", err);
+            fmt::Error
+        })))
     }
+
 }
 
 /// The handshake response.
 #[derive(Debug)]
 pub struct Response {
-    raw: Cursor<Vec<u8>>,
+    status: u16,
+    reason: String,
+    headers: Vec<(String, Vec<u8>)>,
 }
 
 impl Response {
+    // TODO: resolve the overlap with Request
 
-    fn get_header(&self, header: &str) -> Result<Option<&[u8]>> {
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut res = httparse::Response::new(&mut headers);
-        try!(res.parse(self.raw.get_ref()));
-
-        Ok(res.headers.iter()
-                      .find(|h| h.name.to_lowercase() == header)
-                      .map(|h| h.value))
+    /// Get the value of the first instance of an HTTP header.
+    fn header(&self, header: &str) -> Option<&Vec<u8>> {
+        self.headers
+            .iter()
+            .find(|&&(ref key, _)| key.to_lowercase() == header.to_lowercase())
+            .map(|&(_, ref val)| val)
+    }
+    /// Edit the value of the first instance of an HTTP header.
+    pub fn header_mut(&mut self, header: &str) -> Option<&mut Vec<u8>> {
+        self.headers
+            .iter_mut()
+            .find(|&&mut (ref key, _)| key.to_lowercase() == header.to_lowercase())
+            .map(|&mut (_, ref mut val)| val)
     }
 
-    /// Get the status of the response
+    /// Access the request headers.
     #[allow(dead_code)]
-    pub fn status(&self) -> Result<u16> {
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut res = httparse::Response::new(&mut headers);
-        try!(res.parse(self.raw.get_ref()));
-        res.code.ok_or(Error::new(Kind::Protocol, "Unable to parse HTTP status."))
+    pub fn headers(&self) -> &Vec<(String, Vec<u8>)> {
+        &self.headers
     }
 
-    /// Get the hashed WebSocket key
-    pub fn key(&self) -> Result<&[u8]> {
-        try!(self.get_header("sec-websocket-accept")).ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    /// Edit the request headers.
+    #[allow(dead_code)]
+    pub fn headers_mut(&mut self) -> &mut Vec<(String, Vec<u8>)> {
+        &mut self.headers
     }
 
-    /// Get the protocol that the server has decided to use
+    /// Get the HTTP status code.
+    #[allow(dead_code)]
+    pub fn status(&self) -> u16 {
+        self.status
+    }
+
+    /// Set the HTTP status code.
+    #[allow(dead_code)]
+    pub fn set_status(&mut self, status: u16)  {
+        self.status = status
+    }
+
+    /// Get the HTTP status reason.
+    #[allow(dead_code)]
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+
+    /// Set the HTTP status reason.
+    #[allow(dead_code)]
+    pub fn set_reason(&mut self, reason: String) {
+        self.reason = reason
+    }
+
+    /// Get the hashed WebSocket key.
+    pub fn key(&self) -> Result<&Vec<u8>> {
+        self.header("sec-websocket-accept").ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+    }
+
+    /// Get the protocol that the server has decided to use.
     #[allow(dead_code)]
     pub fn protocol(&self) -> Result<Option<&str>> {
-        if let Some(proto) = try!(self.get_header("sec-websocket-protocol")) {
+        if let Some(proto) = self.header("sec-websocket-protocol") {
             Ok(Some(try!(from_utf8(proto))))
         } else {
             Ok(None)
         }
     }
 
+    /// Set the protocol that the server has decided to use.
+    #[allow(dead_code)]
+    pub fn set_protocol(&mut self, protocol: &str) {
+        if let Some(proto) = self.header_mut("sec-websocket-protocol") {
+            *proto = protocol.into();
+            return
+        }
+        self.headers_mut().push(("Sec-WebSocket-Protocol".into(), protocol.into()))
+    }
+
     /// Get the extensions that the server has decided to use. If these are unacceptable, it is
-    /// appropriate to send an Extension close code
+    /// appropriate to send an Extension close code.
     #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
-        if let Some(exts) = try!(self.get_header("sec-websocket-extensions")) {
+        if let Some(exts) = self.header("sec-websocket-extensions") {
             Ok(try!(from_utf8(exts)).split(',').map(|proto| proto.trim()).collect())
         } else {
             Ok(Vec::new())
         }
     }
 
-    #[doc(hidden)]
-    #[inline]
-    pub fn new(data: Vec<u8>) -> Response {
-        Response {
-            raw: Cursor::new(data),
+    /// Add an accepted extension to this response.
+    /// This may result in duplicate extensions listed.
+    #[allow(dead_code)]
+    pub fn add_extension(&mut self, ext: &str) {
+        if let Some(exts) = self.header_mut("sec-websocket-extensions") {
+            exts.push(b","[0]);
+            exts.extend(ext.as_bytes());
+            return
+        }
+        self.headers_mut().push(("Sec-WebSocket-Extensions".into(), ext.into()))
+    }
+
+    /// Remove an accepted extension from this response.
+    /// This will remove all configurations of the extension.
+    #[allow(dead_code)]
+    pub fn remove_extension(&mut self, ext: &str) {
+        if let Some(exts) = self.header_mut("sec-websocket-extensions") {
+            let mut new_exts = Vec::with_capacity(exts.len());
+
+            if let Ok(exts_str) = from_utf8(exts) {
+                new_exts = exts_str
+                    .split(',')
+                    .filter(|e| e.trim().starts_with(ext))
+                    .collect::<Vec<&str>>()
+                    .join(",").into();
+            }
+            if new_exts.len() < exts.len() {
+                *exts = new_exts
+            }
         }
     }
 
-    #[doc(hidden)]
-    #[inline]
-    pub fn buffer(&mut self) -> &mut Vec<u8> {
-        self.raw.get_mut()
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn cursor(&mut self) -> &mut Cursor<Vec<u8>> {
-        &mut self.raw
-    }
-
-    #[doc(hidden)]
-    pub fn parse(&self) -> Result<Option<&[u8]>> {
-        let data = self.raw.get_ref();
-        let end = data.iter()
-                      .enumerate()
-                      .take_while(|&(ind, _)| !data[..ind].ends_with(b"\r\n\r\n"))
-                      .count();
-        if !data[..end].ends_with(b"\r\n\r\n") {
-            return Ok(None)
-        }
-
-        let res_data = &data[..end];
-
+    /// Attempt to parse an HTTP response from a buffer. If the buffer does not contain a complete
+    /// response, thiw will return `Ok(None)`.
+    pub fn parse(buf: &[u8]) -> Result<Option<Response>> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut res = httparse::Response::new(&mut headers);
 
-        let parsed = try!(res.parse(res_data));
+        let parsed = try!(res.parse(buf));
         if !parsed.is_partial() {
-            debug!(
-                "Handshake response received: \n{}",
-                String::from_utf8_lossy(res_data));
-
-            // parse was successful, the rest of the data is incoming frames
-            Ok(Some(&data[end..]))
+            Ok(Some(Response {
+                status: res.code.unwrap(),
+                reason: res.reason.unwrap().into(),
+                headers: res.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
+            }))
         } else {
             Ok(None)
         }
+    }
 
+    /// Construct a new WebSocket handshake HTTP response from a request.
+    /// This will create a response that ignores protocols and extensions. Edit this response to
+    /// accept a protocol and extensions as necessary.
+    pub fn from_request(req: &Request) -> Result<Response> {
+        let res = Response {
+            status: 101,
+            reason: "Switching Protocols".into(),
+            headers: vec![
+                ("Connection".into(), "Upgrade".into()),
+                ("Sec-WebSocket-Accept".into(), try!(req.hashed_key()).into()),
+                ("Upgrade".into(), "websocket".into()),
+            ],
+        };
+
+        debug!("Built response from request:\n{}", res);
+        Ok(res)
+    }
+
+    /// Write a response out to a buffer
+    pub fn format<W>(&self, w: &mut W) -> Result<()>
+        where W: Write
+    {
+        try!(write!(w, "HTTP/1.1 {} {}\r\n", self.status, self.reason));
+        for &(ref key, ref val) in self.headers.iter() {
+            try!(write!(w, "{}: ", key));
+            try!(w.write(val));
+            try!(write!(w, "\r\n"));
+        }
+        try!(write!(w, "\r\n"));
+        Ok(())
     }
 }
 
-impl Default for Response {
+impl fmt::Display for Response {
 
-    fn default() -> Response {
-        Response::new(Vec::with_capacity(1024))
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = Vec::with_capacity(2048);
+        try!(self.format(&mut s).map_err(|err| {
+            error!("{:?}", err);
+            fmt::Error
+        }));
+        write!(f, "{}", try!(from_utf8(&s).map_err(|err| {
+            error!("Unable to format response as utf8: {:?}", err);
+            fmt::Error
+        })))
     }
+
 }
 
 mod test {
@@ -519,31 +593,46 @@ mod test {
 
     #[test]
     fn test_remote_addr_x_forwarded_for() {
-        let mut shake = Handshake::default();
-        shake.request = Request::default();
+        let mut buf = Vec::with_capacity(2048);
         write!(
-            shake.request.buffer(),
+            &mut buf,
             "GET / HTTP/1.1\r\n\
             Connection: Upgrade\r\n\
             Upgrade: websocket\r\n\
             X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
             Sec-WebSocket-Version: 13\r\n\
             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+
+        let req = Request::parse(&buf).unwrap().unwrap();
+        let res = Response::from_request(&req).unwrap();
+        let shake = Handshake {
+            request: req,
+            response: res,
+            peer_addr: None,
+            local_addr: None,
+        };
         assert_eq!(shake.remote_addr().unwrap().unwrap(), "192.168.1.1");
     }
 
     #[test]
     fn test_remote_addr_forwarded() {
-        let mut shake = Handshake::default();
-        shake.request = Request::default();
+        let mut buf = Vec::with_capacity(2048);
         write!(
-            shake.request.buffer(),
+            &mut buf,
             "GET / HTTP/1.1\r\n\
             Connection: Upgrade\r\n\
             Upgrade: websocket\r\n\
-            Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown
+            Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown\r\n\
             Sec-WebSocket-Version: 13\r\n\
             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+        let req = Request::parse(&buf).unwrap().unwrap();
+        let res = Response::from_request(&req).unwrap();
+        let shake = Handshake {
+            request: req,
+            response: res,
+            peer_addr: None,
+            local_addr: None,
+        };
         assert_eq!(shake.remote_addr().unwrap().unwrap(), "192.0.2.43");
     }
 }

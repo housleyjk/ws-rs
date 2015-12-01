@@ -1,6 +1,7 @@
 extern crate ws;
 
 use std::thread;
+use std::time::Duration;
 use std::sync::mpsc::channel;
 
 #[test]
@@ -20,7 +21,7 @@ fn shutdown_before_connections() {
     });
 
     loop {
-        thread::sleep_ms(500);
+        thread::sleep(Duration::from_millis(500));
         let res = rx.try_recv();
         assert!(res.is_err());
         match res {

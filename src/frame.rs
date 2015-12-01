@@ -1,3 +1,4 @@
+use std::fmt;
 use std::mem::transmute;
 use std::io::{Cursor, Read, Write};
 use std::default::Default;
@@ -21,7 +22,6 @@ fn generate_mask() -> [u8; 4] {
     unsafe { transmute(rand::random::<u32>()) }
 }
 
-// TODO: implement display for Frame
 #[derive(Debug)]
 pub struct Frame {
     finished: bool,
@@ -30,15 +30,31 @@ pub struct Frame {
     rsv3: bool,
     opcode: OpCode,
 
-    length: u64,
     mask: Option<[u8; 4]>,
 
     payload: Vec<u8>,
-
-    header_length: u8,
 }
 
 impl Frame {
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        let mut header_length = 2;
+        let payload_len = self.payload().len();
+        if payload_len > 125 {
+            if payload_len <= u16::max_value() as usize {
+                header_length += 2;
+            } else {
+                header_length += 8;
+            }
+        }
+
+        if self.is_masked() {
+            header_length += 4;
+        }
+
+        header_length + payload_len
+    }
 
     #[inline]
     pub fn is_final(&self) -> bool {
@@ -66,20 +82,8 @@ impl Frame {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.length as usize + self.header_length as usize
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn payload_len(&self) -> u64 {
-        self.length
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn header_len(&self) -> u8 {
-        self.header_length
+    pub fn payload(&self) -> &Vec<u8> {
+        &self.payload
     }
 
     #[inline]
@@ -87,8 +91,55 @@ impl Frame {
         self.mask.is_some()
     }
 
+    #[allow(dead_code)]
     #[inline]
-    pub fn mask(&mut self) -> &mut Frame {
+    pub fn mask(&self) -> &Option<[u8; 4]> {
+        &self.mask
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn set_final(&mut self, is_final: bool) -> &mut Frame {
+        self.finished = is_final;
+        self
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn set_rsv1(&mut self, has_rsv1: bool) -> &mut Frame {
+        self.rsv1 = has_rsv1;
+        self
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn set_rsv2(&mut self, has_rsv2: bool) -> &mut Frame {
+        self.rsv2 = has_rsv2;
+        self
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn set_rsv3(&mut self, has_rsv3: bool) -> &mut Frame {
+        self.rsv1 = has_rsv3;
+        self
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn set_opcode(&mut self, opcode: OpCode) -> &mut Frame {
+        self.opcode = opcode;
+        self
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn payload_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.payload
+    }
+
+    #[inline]
+    pub fn set_mask(&mut self) -> &mut Frame {
         self.mask = Some(generate_mask());
         self
     }
@@ -110,7 +161,6 @@ impl Frame {
         Frame {
             finished: finished,
             opcode: code,
-            length: data.len() as u64,
             payload: data,
             .. Frame::default()
         }
@@ -120,7 +170,6 @@ impl Frame {
     pub fn pong(data: Vec<u8>) -> Frame {
         Frame {
             opcode: OpCode::Pong,
-            length: data.len() as u64,
             payload: data,
             .. Frame::default()
         }
@@ -130,7 +179,6 @@ impl Frame {
     pub fn ping(data: Vec<u8>) -> Frame {
         Frame {
             opcode: OpCode::Ping,
-            length: data.len() as u64,
             payload: data,
             .. Frame::default()
         }
@@ -153,16 +201,16 @@ impl Frame {
         };
 
         Frame {
-            length: payload.len() as u64,
             payload: payload,
             .. Frame::default()
         }
     }
 
     /// Parse the input stream into a frame.
-    pub fn parse(cursor: &mut Cursor<Vec<u8>>, size: &mut usize) -> Result<Option<Frame>> {
+    pub fn parse(cursor: &mut Cursor<Vec<u8>>) -> Result<Option<Frame>> {
+        let size = cursor.get_ref().len() - cursor.position() as usize;
         let initial = cursor.position();
-        trace!("Position in buffer {}", initial);
+        debug!("Position in buffer {}", initial);
 
         let mut head = [0u8; 2];
         if try!(cursor.read(&mut head)) != 2 {
@@ -170,12 +218,12 @@ impl Frame {
             return Ok(None)
         }
 
-        trace!("Headers {:?}", head);
+        debug!("Parsed headers {:?}", head);
 
         let first = head[0];
         let second = head[1];
-        trace!("{:b}", first);
-        trace!("{:b}", second);
+        debug!("First: {:b}", first);
+        debug!("Second: {:b}", second);
 
         let finished = first & 0x80 != 0;
 
@@ -184,12 +232,12 @@ impl Frame {
         let rsv3 = first & 0x10 != 0;
 
         let opcode = OpCode::from(first & 0x0F);
-        trace!("Opcode {:?}", opcode);
+        debug!("Opcode: {:?}", opcode);
         if let OpCode::Bad = opcode {
             return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
         }
         let masked = second & 0x80 != 0;
-        trace!("Masked {:?}", masked);
+        debug!("Masked: {:?}", masked);
 
         let mut header_length = 2;
 
@@ -219,7 +267,7 @@ impl Frame {
             length = u64::from_be(length);
             header_length += 8;
         }
-        trace!("Payload length {}", length);
+        debug!("Payload length: {}", length);
 
         // control frames must have length <= 125
         match opcode {
@@ -242,7 +290,7 @@ impl Frame {
             None
         };
 
-        if *size < length as usize + header_length {
+        if size < length as usize + header_length {
             cursor.set_position(initial);
             return Ok(None)
         }
@@ -260,15 +308,13 @@ impl Frame {
             rsv2: rsv2,
             rsv3: rsv3,
             opcode: opcode,
-            length: length,
             mask: mask,
             payload: data,
-            header_length: header_length as u8,
         };
-        *size -= frame.len();
         Ok(Some(frame))
     }
 
+    /// Write a frame out to a buffer
     pub fn format<W>(&mut self, w: &mut W) -> Result<()>
         where W: Write
     {
@@ -294,24 +340,22 @@ impl Frame {
             two |= 0x80;
         }
 
-        if self.length < 126 {
-            two |= self.length as u8;
+        if self.payload.len() < 126 {
+            two |= self.payload.len() as u8;
             let headers = [one, two];
-            trace!("Headers {:?}", headers);
             try!(w.write(&headers));
-        } else if self.length <= 65535 {
+        } else if self.payload.len() <= 65535 {
             two |= 126;
             let length_bytes: [u8; 2] = unsafe {
-                let short = self.length as u16;
+                let short = self.payload.len() as u16;
                 transmute(short.to_be())
             };
             let headers = [one, two, length_bytes[0], length_bytes[1]];
-            trace!("Headers {:?}", headers);
             try!(w.write(&headers));
         } else {
             two |= 127;
             let length_bytes: [u8; 8] = unsafe {
-                transmute(self.length.to_be())
+                transmute(self.payload.len().to_be())
             };
             let headers = [
                 one,
@@ -325,7 +369,6 @@ impl Frame {
                 length_bytes[6],
                 length_bytes[7],
             ];
-            trace!("Headers {:?}", headers);
             try!(w.write(&headers));
         }
 
@@ -348,11 +391,42 @@ impl Default for Frame {
             rsv2: false,
             rsv3: false,
             opcode: OpCode::Close,
-            length: 0,
             mask: None,
             payload: Vec::new(),
-            header_length: 0,
         }
     }
 }
 
+impl fmt::Display for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+            "
+<FRAME>
+final: {}
+reserved: {} {} {}
+opcode: {}
+mask: {}
+payload: {:?}
+            ",
+            self.finished,
+            self.rsv1,
+            self.rsv2,
+            self.rsv3,
+            self.opcode,
+            self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
+            self.payload)
+    }
+}
+
+mod test {
+    #![allow(unused_imports, unused_variables, dead_code)]
+    use super::*;
+    use protocol::OpCode;
+
+    #[test]
+    fn test_display_frame() {
+        let f = Frame::message("hi there".into(), OpCode::Text, true);
+        let view = format!("{}", f);
+        view.contains("payload:");
+    }
+}

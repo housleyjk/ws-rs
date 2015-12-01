@@ -1,6 +1,6 @@
 [package]
 name = "ws"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Jason Housley <HousleyJK@gmail.com>"]
 
 description = "Lightweight, event-driven WebSockets for Rust."
@@ -17,6 +17,7 @@ httparse = "*"
 sha1 = "*"
 rand = "*"
 url = "*"
+openssl = "*"
 
 [dev-dependencies]
 env_logger = "*"
