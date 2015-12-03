@@ -81,7 +81,7 @@
 //! Guide
 //! -----
 //!
-//! You may have noticed in the usage exmaples that the client example calls `unwrap` when sending the first
+//! You may have noticed in the usage examples that the client example calls `unwrap` when sending the first
 //! message, which will panic in the factory if the Message can't be sent for some reason. Also,
 //! sending messages before a handler is returned means that the message will be queued before
 //! the WebSocket handshake is complete. The handshake could fail for some reason, and then the
@@ -252,19 +252,23 @@ extern crate mio;
 extern crate sha1;
 extern crate rand;
 extern crate url;
+extern crate openssl;
 #[macro_use] extern crate log;
 
 mod result;
 mod connection;
+mod handler;
+mod factory;
 mod frame;
 mod message;
 mod handshake;
 mod protocol;
 mod communication;
 mod io;
+mod stream;
 
-pub use connection::factory::Factory;
-pub use connection::handler::Handler;
+pub use factory::Factory;
+pub use handler::Handler;
 
 pub use result::{Result, Error};
 pub use result::Kind as ErrorKind;
@@ -364,14 +368,6 @@ pub struct Settings {
     /// Whether to panic when a shutdown of the WebSocket is requested.
     /// Default: false
     pub panic_on_shutdown: bool,
-    /// A protocol string representing the subprotocols that this WebSocket can support. This will
-    /// be sent in Requests to server endpoints to help determine a subprotocol if any for the
-    /// connection.
-    /// Default: None
-    pub protocols: Option<&'static str>,
-    /// A WebSocket extension string indicating the extensions that this WebSocket can support.
-    /// Default: None
-    pub extensions: Option<&'static str>,
     /// The maximum number of fragments the connection can handle without reallocating.
     /// Default: 10
     pub fragments_capacity: usize,
@@ -427,6 +423,20 @@ pub struct Settings {
     /// fail late if a protocol error occurs. Change this setting to enable key verification.
     /// Default: false
     pub key_strict: bool,
+    /// The WebSocket protocol requires clients to perform an opening handshake using the HTTP
+    /// GET method for the request. However, since only websockets are supported on the connection,
+    /// verifying the method of handshake requests is not always necessary. To enforce the
+    /// requirement that handshakes begin with a GET method, set this to true.
+    /// Default: false
+    pub method_strict: bool,
+    /// Indicate whether server connections should use ssl encryption when accepting connections.
+    /// Setting this to true means that clients should use the `wss` scheme to connect to this
+    /// server. Note that using this flag will in general necessitate overriding the
+    /// `Handler::build_ssl` method in order to provide the details of the ssl context. It may be
+    /// simpler for most users to use a reverse proxy such as nginx to provide server side
+    /// encryption.
+    /// Default: false
+    pub encrypt_server: bool,
 }
 
 impl Default for Settings {
@@ -436,8 +446,6 @@ impl Default for Settings {
             max_connections: 100,
             panic_on_new_connection: false,
             panic_on_shutdown: false,
-            protocols: None,
-            extensions: None,
             fragments_capacity: 10,
             fragments_grow: true,
             fragment_size: u16::max_value() as usize,
@@ -452,6 +460,8 @@ impl Default for Settings {
             panic_on_io: false,
             masking_strict: false,
             key_strict: false,
+            method_strict: false,
+            encrypt_server: false,
         }
     }
 }
@@ -502,6 +512,7 @@ impl<F> WebSocket<F>
         for addr in try!(addr_spec.to_socket_addrs()) {
             result = self.handler.listen(&mut self.event_loop, &addr).map(|_| ());
             if result.is_ok() {
+                info!("Listening for new connections on {}.", addr);
                 return self.run()
             }
         }
@@ -513,6 +524,7 @@ impl<F> WebSocket<F>
     /// but the actuall connections will not be established until after `run` is called.
     pub fn connect(&mut self, url: url::Url) -> Result<&mut WebSocket<F>> {
         let sender = Sender::new(io::ALL, self.event_loop.channel());
+        info!("Queuing connection to {}", url);
         try!(sender.connect(url));
         Ok(self)
     }

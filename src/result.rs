@@ -8,6 +8,7 @@ use std::convert::{From, Into};
 
 use httparse;
 use mio;
+use openssl::ssl::error::SslError;
 
 use communication::Command;
 
@@ -42,6 +43,8 @@ pub enum Kind {
     /// Indicates a failure to send a command on the internal EventLoop channel. This means that
     /// the WebSocket is overloaded and the Connection will disconnect.
     Queue(mio::NotifyError<Command>),
+    /// Indicates a failure to perform SSL encryption.
+    Ssl(SslError),
     /// A custom error kind for use by applications. This error kind involves extra overhead
     /// because it will allocate the memory on the heap. The WebSocket ignores such errors by
     /// default, simply passing them to the Connection Handler.
@@ -104,6 +107,7 @@ impl StdError for Error {
             Kind::Encoding(ref err) => err.description(),
             Kind::Io(ref err)       => err.description(),
             Kind::Parse(_)          => "Unable to parse HTTP",
+            Kind::Ssl(ref err)      => err.description(),
             Kind::Queue(_)          => "Unable to send signal on event loop",
             Kind::Custom(ref err)   => err.description(),
         }
@@ -113,6 +117,7 @@ impl StdError for Error {
         match self.kind {
             Kind::Encoding(ref err) => Some(err),
             Kind::Io(ref err)       => Some(err),
+            Kind::Ssl(ref err)      => Some(err),
             // Kind::Custom(ref err)   => Some(err.as_ref()),
             _ => None,
         }
@@ -148,6 +153,12 @@ impl From<mio::NotifyError<Command>> for Error {
 impl From<Utf8Error> for Error {
     fn from(err: Utf8Error) -> Error {
         Error::new(Kind::Encoding(err), "")
+    }
+}
+
+impl From<SslError> for Error {
+    fn from(err: SslError) -> Error {
+        Error::new(Kind::Ssl(err), "")
     }
 }
 

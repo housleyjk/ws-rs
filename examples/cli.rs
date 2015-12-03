@@ -163,12 +163,12 @@ impl Handler for Client {
         }
 
         if let Err(err) = self.thread_out.send(Event::Disconnect) {
-            display(format!("{}", err))
+            display(format!("{:?}", err))
         }
     }
 
     fn on_error(&mut self, err: Error) {
-        display(format!("<<< Error<{}>", err))
+        display(format!("<<< Error<{:?}>", err))
     }
 
 }

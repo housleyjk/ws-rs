@@ -1,3 +1,4 @@
+use std::fmt;
 use std::convert::{Into, From};
 
 use self::OpCode::*;
@@ -10,6 +11,20 @@ pub enum OpCode {
     Ping,
     Pong,
     Bad,
+}
+
+impl fmt::Display for OpCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Continue   =>   write!(f, "CONTINUE"),
+            Text       =>   write!(f, "TEXT"),
+            Binary     =>   write!(f, "BINARY"),
+            Close      =>   write!(f, "CLOSE"),
+            Ping       =>   write!(f, "PING"),
+            Pong       =>   write!(f, "PONG"),
+            Bad        =>   write!(f, "BAD"),
+        }
+    }
 }
 
 impl Into<u8> for OpCode {

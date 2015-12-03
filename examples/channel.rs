@@ -12,7 +12,8 @@ extern crate ws;
 extern crate env_logger;
 
 use std::thread;
-use std::thread::sleep_ms;
+use std::thread::sleep;
+use std::time::Duration;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender as ThreadOut;
 
@@ -65,7 +66,7 @@ fn main () {
     }).unwrap();
 
     // Give the server a little time to get going
-    sleep_ms(10);
+    sleep(Duration::from_millis(10));
 
     // WebSocket connection handler for the client connection
     struct Client {

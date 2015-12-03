@@ -1,6 +1,7 @@
 extern crate ws;
 
 use std::thread;
+use std::time::Duration;
 use std::sync::mpsc::channel;
 
 
@@ -24,7 +25,7 @@ fn main() {
     });
 
     // Wait for 5 seconds only for incoming connections;
-    thread::sleep_ms(5000);
+    thread::sleep(Duration::from_millis(5000));
 
     if let Err(_) = rx.try_recv() {
 
