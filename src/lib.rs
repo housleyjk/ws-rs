@@ -274,6 +274,7 @@ pub use result::{Result, Error};
 pub use result::Kind as ErrorKind;
 pub use message::Message;
 pub use communication::Sender;
+pub use frame::Frame;
 pub use protocol::CloseCode;
 pub use handshake::{Handshake, Request, Response};
 

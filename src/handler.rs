@@ -59,27 +59,6 @@ pub trait Handler {
 
     // handshake events
 
-    /// A method for creating the initial handshake request for WebSocket clients.
-    ///
-    /// The default implementation provides conformance with the WebSocket protocol, but this
-    /// method may be overriden. In order to facilitate conformance,
-    /// implementors should use the `Request::from_url` method and then modify the resulting
-    /// request as necessary.
-    ///
-    /// Implementors should indicate any available WebSocket extensions here.
-    ///
-    /// # Examples
-    /// ```ignore
-    /// let mut req = try!(Request::from_url(url));
-    /// req.add_extension("permessage-deflate; client_max_window_bits");
-    /// Ok(req)
-    /// ```
-    #[inline]
-    fn build_request(&mut self, url: &url::Url) -> Result<Request> {
-        debug!("Handler is building request from {}.", url);
-        Request::from_url(url)
-    }
-
     /// A method for handling the low-level workings of the request portion of the WebSocket
     /// handshake.
     ///
@@ -165,6 +144,29 @@ pub trait Handler {
         } else {
             Ok(Some(frame))
         }
+    }
+
+    // constructors
+
+    /// A method for creating the initial handshake request for WebSocket clients.
+    ///
+    /// The default implementation provides conformance with the WebSocket protocol, but this
+    /// method may be overriden. In order to facilitate conformance,
+    /// implementors should use the `Request::from_url` method and then modify the resulting
+    /// request as necessary.
+    ///
+    /// Implementors should indicate any available WebSocket extensions here.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// let mut req = try!(Request::from_url(url));
+    /// req.add_extension("permessage-deflate; client_max_window_bits");
+    /// Ok(req)
+    /// ```
+    #[inline]
+    fn build_request(&mut self, url: &url::Url) -> Result<Request> {
+        debug!("Handler is building request from {}.", url);
+        Request::from_url(url)
     }
 
     /// A method for obtaining an Ssl object for use in wss connections.

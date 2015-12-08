@@ -143,12 +143,14 @@ impl Request {
 
     /// Access the request headers.
     #[allow(dead_code)]
+    #[inline]
     pub fn headers(&self) -> &Vec<(String, Vec<u8>)> {
         &self.headers
     }
 
     /// Edit the request headers.
     #[allow(dead_code)]
+    #[inline]
     pub fn headers_mut(&mut self) -> &mut Vec<(String, Vec<u8>)> {
         &mut self.headers
     }
@@ -186,6 +188,7 @@ impl Request {
 
     /// Get the path of the request.
     #[allow(dead_code)]
+    #[inline]
     pub fn resource(&self) -> &str {
         &self.path
     }
@@ -416,30 +419,35 @@ impl Response {
 
     /// Access the request headers.
     #[allow(dead_code)]
+    #[inline]
     pub fn headers(&self) -> &Vec<(String, Vec<u8>)> {
         &self.headers
     }
 
     /// Edit the request headers.
     #[allow(dead_code)]
+    #[inline]
     pub fn headers_mut(&mut self) -> &mut Vec<(String, Vec<u8>)> {
         &mut self.headers
     }
 
     /// Get the HTTP status code.
     #[allow(dead_code)]
+    #[inline]
     pub fn status(&self) -> u16 {
         self.status
     }
 
     /// Set the HTTP status code.
     #[allow(dead_code)]
+    #[inline]
     pub fn set_status(&mut self, status: u16)  {
         self.status = status
     }
 
     /// Get the HTTP status reason.
     #[allow(dead_code)]
+    #[inline]
     pub fn reason(&self) -> &str {
         &self.reason
     }
@@ -447,8 +455,11 @@ impl Response {
 
     /// Set the HTTP status reason.
     #[allow(dead_code)]
-    pub fn set_reason(&mut self, reason: String) {
-        self.reason = reason
+    #[inline]
+    pub fn set_reason<R>(&mut self, reason: R)
+        where R: Into<String>
+    {
+        self.reason = reason.into()
     }
 
     /// Get the hashed WebSocket key.
