@@ -274,6 +274,7 @@ pub use result::{Result, Error};
 pub use result::Kind as ErrorKind;
 pub use message::Message;
 pub use communication::Sender;
+pub use frame::Frame;
 pub use protocol::CloseCode;
 pub use handshake::{Handshake, Request, Response};
 
@@ -482,7 +483,7 @@ impl<F> WebSocket<F>
     pub fn new(factory: F) -> Result<WebSocket<F>> {
         let settings = Settings::default();
         let mut config = EventLoopConfig::default();
-        config.notify_capacity = settings.max_connections * 5;  // every handler can do 5 things at once
+        config.notify_capacity(settings.max_connections * 5);  // every handler can do 5 things at once
         Ok(WebSocket {
             event_loop: try!(io::Loop::configured(config)),
             handler: io::Handler::new(factory, settings),
@@ -575,7 +576,7 @@ impl Builder {
             event_config = config.clone();
         } else {
             event_config = EventLoopConfig::default();
-            event_config.notify_capacity = self.settings.max_connections * 5;
+            event_config.notify_capacity(self.settings.max_connections * 5);
         }
         Ok(WebSocket {
             event_loop: try!(io::Loop::configured(event_config)),

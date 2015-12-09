@@ -86,7 +86,7 @@ impl<F> Handler<F>
 
         let tcp = try!(TcpListener::bind(addr));
         // TODO: consider net2 in order to set reuse_addr
-        try!(eloop.register_opt(&tcp, ALL, EventSet::readable(), PollOpt::level()));
+        try!(eloop.register(&tcp, ALL, EventSet::readable(), PollOpt::level()));
         self.listener = Some(tcp);
         Ok(self)
     }
@@ -116,7 +116,7 @@ impl<F> Handler<F>
             try!(conn.encrypt())
         }
 
-        eloop.register_opt(
+        eloop.register(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -147,7 +147,7 @@ impl<F> Handler<F>
             try!(conn.encrypt())
         }
 
-        eloop.register_opt(
+        eloop.register(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -204,7 +204,7 @@ impl<F> mio::Handler for Handler <F>
         match token {
             ALL => {
                 if events.is_readable() {
-                    if let Some(sock) = {
+                    if let Some((sock, addr)) = {
                             match self.listener.as_ref().expect("No listener provided for server websocket connections").accept() {
                                 Ok(inner) => inner,
                                 Err(err) => {
@@ -214,7 +214,7 @@ impl<F> mio::Handler for Handler <F>
                             }
                         }
                     {
-                        info!("Accepted a new tcp connection.");
+                        info!("Accepted a new tcp connection from {}.", addr);
                         if let Err(err) = self.accept(eloop, sock) {
                             error!("Unable to build WebSocket connection {:?}", err);
                             if self.settings.panic_on_new_connection {
@@ -236,7 +236,7 @@ impl<F> mio::Handler for Handler <F>
                             if errno == 111 {
                                 match self.connections[token].reset() {
                                     Ok(_) => {
-                                        eloop.register_opt(
+                                        eloop.register(
                                             self.connections[token].socket(),
                                             self.connections[token].token(),
                                             self.connections[token].events(),
