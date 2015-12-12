@@ -91,7 +91,7 @@ impl<F> Handler<F>
         Ok(self)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature="ssl"))]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
         let mut addresses = try!(url_to_addrs(url));
         // note popping from the vector will most likely give us a tcpip v4 address
@@ -132,7 +132,7 @@ impl<F> Handler<F>
         })
     }
 
-    #[cfg(windows)]
+    #[cfg(not(feature="ssl"))]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
         let mut addresses = try!(url_to_addrs(url));
         // note popping from the vector will most likely give us a tcpip v4 address
@@ -173,7 +173,7 @@ impl<F> Handler<F>
         })
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature="ssl"))]
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
@@ -205,7 +205,7 @@ impl<F> Handler<F>
         })
     }
 
-    #[cfg(windows)]
+    #[cfg(not(feature="ssl"))]
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;

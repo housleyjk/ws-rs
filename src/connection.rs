@@ -9,6 +9,7 @@ use std::str::from_utf8;
 use url;
 use mio::{Token, TryRead, TryWrite, EventSet};
 use mio::tcp::TcpStream;
+#[cfg(all(not(windows), feature="ssl"))]
 use openssl::ssl::NonblockingSslStream;
 
 use message::Message;
@@ -131,7 +132,7 @@ impl<H> Connection<H>
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature="ssl"))]
     pub fn encrypt(&mut self) -> Result<()> {
         let ssl_stream = match self.endpoint {
             Server => try!(NonblockingSslStream::accept(
@@ -155,7 +156,7 @@ impl<H> Connection<H>
     }
 
     // Resetting may be necessary in order to try all possible addresses for a server
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), feature="ssl"))]
     pub fn reset(&mut self) -> Result<()> {
         if self.is_client() {
             if let Connecting(ref mut req, ref mut res) = self.state {
@@ -189,7 +190,7 @@ impl<H> Connection<H>
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(not(feature="ssl"))]
     pub fn reset(&mut self) -> Result<()> {
         if self.is_client() {
             if let Connecting(ref mut req, ref mut res) = self.state {
@@ -249,6 +250,7 @@ impl<H> Connection<H>
         match self.state {
             Connecting(_, ref mut res) => {
                 match err.kind {
+                    #[cfg(all(not(windows), feature="ssl"))]
                     Kind::Ssl(_) | Kind::Io(_) => {
                         self.handler.on_error(err);
                         self.events = EventSet::none();

@@ -252,7 +252,7 @@ extern crate mio;
 extern crate sha1;
 extern crate rand;
 extern crate url;
-extern crate openssl;
+#[cfg(all(not(windows), feature="ssl"))] extern crate openssl;
 #[macro_use] extern crate log;
 
 mod result;
