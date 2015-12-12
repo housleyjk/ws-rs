@@ -436,6 +436,8 @@ pub struct Settings {
     /// `Handler::build_ssl` method in order to provide the details of the ssl context. It may be
     /// simpler for most users to use a reverse proxy such as nginx to provide server side
     /// encryption.
+    ///
+    /// Note: This setting is not supported on Windows.
     /// Default: false
     pub encrypt_server: bool,
 }

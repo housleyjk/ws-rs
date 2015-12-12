@@ -112,7 +112,7 @@ impl<F> Handler<F>
 
         try!(conn.as_client(url, addresses));
 
-        if url.scheme == "wss" {
+        if url.scheme == "wss" && cfg!(not(windows)) {
             try!(conn.encrypt())
         }
 
@@ -143,7 +143,7 @@ impl<F> Handler<F>
         let conn = &mut self.connections[tok];
 
         try!(conn.as_server());
-        if settings.encrypt_server {
+        if settings.encrypt_server && cfg!(not(windows)) {
             try!(conn.encrypt())
         }
 
