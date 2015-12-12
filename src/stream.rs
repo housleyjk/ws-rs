@@ -11,6 +11,7 @@ use result::{Result, Error, Kind};
 use self::Stream::*;
 pub enum Stream {
     Tcp(TcpStream),
+    #[cfg(not(windows))]
     Tls {
         sock: NonblockingSslStream<TcpStream>,
         negotiating: bool,
@@ -24,13 +25,16 @@ impl Stream {
         Tcp(stream)
     }
 
+    #[cfg(not(windows))]
     pub fn tls(stream: NonblockingSslStream<TcpStream>) -> Stream {
         Tls { sock: stream, negotiating: false }
     }
 
+    #[cfg(not(windows))]
     pub fn is_tls(&self) -> bool {
         match *self {
             Tcp(_) => false,
+            #[cfg(not(windows))]
             Tls {..} => true,
         }
     }
@@ -38,6 +42,7 @@ impl Stream {
     pub fn evented(&self) -> &TcpStream {
         match *self {
             Tcp(ref sock) => sock,
+            #[cfg(not(windows))]
             Tls { ref sock, ..} => sock.get_ref(),
         }
     }
@@ -45,6 +50,7 @@ impl Stream {
     pub fn is_negotiating(&self) -> bool {
         match *self {
             Tcp(_) => false,
+            #[cfg(not(windows))]
             Tls { sock: _, ref negotiating } => *negotiating,
         }
 
@@ -54,6 +60,7 @@ impl Stream {
         debug!("Clearing negotiating status for {}", try!(self.peer_addr()));
         match *self {
             Tcp(_) => Err(Error::new(Kind::Internal, "Attempted to clear negotiating flag on non ssl connection.")),
+            #[cfg(not(windows))]
             Tls { sock: _, ref mut negotiating } => Ok(*negotiating = false),
         }
     }
@@ -61,6 +68,7 @@ impl Stream {
     pub fn peer_addr(&self) -> io::Result<SocketAddr> {
         match *self {
             Tcp(ref sock) => sock.peer_addr(),
+            #[cfg(not(windows))]
             Tls { ref sock, ..} => sock.get_ref().peer_addr(),
         }
     }
@@ -68,6 +76,7 @@ impl Stream {
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         match *self {
             Tcp(ref sock) => sock.local_addr(),
+            #[cfg(not(windows))]
             Tls { ref sock, ..} => sock.get_ref().local_addr(),
         }
     }
@@ -78,6 +87,7 @@ impl TryRead for Stream {
     fn try_read(&mut self, buf: &mut [u8]) -> io::Result<Option<usize>> {
         match *self {
             Tcp(ref mut sock) => sock.try_read(buf),
+            #[cfg(not(windows))]
             Tls { ref mut sock, ref mut negotiating } => {
                 match sock.read(buf) {
                     Ok(cnt) => Ok(Some(cnt)),
@@ -99,6 +109,7 @@ impl TryWrite for Stream {
     fn try_write(&mut self, buf: &[u8]) -> io::Result<Option<usize>> {
         match *self {
             Tcp(ref mut sock) => sock.try_write(buf),
+            #[cfg(not(windows))]
             Tls { ref mut sock, ref mut negotiating } => {
 
                 *negotiating = false;

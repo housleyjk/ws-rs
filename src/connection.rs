@@ -131,6 +131,7 @@ impl<H> Connection<H>
         }
     }
 
+    #[cfg(not(windows))]
     pub fn encrypt(&mut self) -> Result<()> {
         let ssl_stream = match self.endpoint {
             Server => try!(NonblockingSslStream::accept(
@@ -153,7 +154,8 @@ impl<H> Connection<H>
         &self.socket.evented()
     }
 
-    /// Resetting may be necessary in order to try all possible addresses for a server
+    // Resetting may be necessary in order to try all possible addresses for a server
+    #[cfg(not(windows))]
     pub fn reset(&mut self) -> Result<()> {
         if self.is_client() {
             if let Connecting(ref mut req, ref mut res) = self.state {
@@ -173,6 +175,32 @@ impl<H> Connection<H>
                     } else {
                         Ok(self.socket = Stream::tcp(sock))
                     }
+                } else {
+                    if self.settings.panic_on_new_connection {
+                        panic!("Unable to connect to server.");
+                    }
+                    Err(Error::new(Kind::Internal, "Unable to connect to server."))
+                }
+            } else {
+                Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
+            }
+        } else {
+            Err(Error::new(Kind::Internal, "Server connections cannot be reset."))
+        }
+    }
+
+    #[cfg(windows)]
+    pub fn reset(&mut self) -> Result<()> {
+        if self.is_client() {
+            if let Connecting(ref mut req, ref mut res) = self.state {
+                req.set_position(0);
+                res.set_position(0);
+                self.events.remove(EventSet::readable());
+                self.events.insert(EventSet::writable());
+
+                if let Some(ref addr) = self.addresses.pop() {
+                    let sock = try!(TcpStream::connect(addr));
+                    Ok(self.socket = Stream::tcp(sock))
                 } else {
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");

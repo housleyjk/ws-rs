@@ -22,6 +22,7 @@ fn generate_mask() -> [u8; 4] {
     unsafe { transmute(rand::random::<u32>()) }
 }
 
+/// A struct representing a WebSocket frame.
 #[derive(Debug)]
 pub struct Frame {
     finished: bool,
@@ -37,6 +38,8 @@ pub struct Frame {
 
 impl Frame {
 
+    /// Get the length of the frame.
+    /// This is the length of the header + the length of the payload.
     #[inline]
     pub fn len(&self) -> usize {
         let mut header_length = 2;
@@ -56,47 +59,56 @@ impl Frame {
         header_length + payload_len
     }
 
+    /// Test whether the frame is a final frame.
     #[inline]
     pub fn is_final(&self) -> bool {
         self.finished
     }
 
+    /// Test whether the first reserved bit is set.
     #[inline]
     pub fn has_rsv1(&self) -> bool {
         self.rsv1
     }
 
+    /// Test whether the second reserved bit is set.
     #[inline]
     pub fn has_rsv2(&self) -> bool {
         self.rsv2
     }
 
+    /// Test whether the third reserved bit is set.
     #[inline]
     pub fn has_rsv3(&self) -> bool {
         self.rsv3
     }
 
+    /// Get the OpCode of the frame.
     #[inline]
     pub fn opcode(&self) -> OpCode {
         self.opcode
     }
 
+    /// Get a reference to the frame's payload.
     #[inline]
     pub fn payload(&self) -> &Vec<u8> {
         &self.payload
     }
 
+    /// Test whether the frame is masked.
     #[inline]
     pub fn is_masked(&self) -> bool {
         self.mask.is_some()
     }
 
+    /// Get an optional reference to the frame's mask.
     #[allow(dead_code)]
     #[inline]
-    pub fn mask(&self) -> &Option<[u8; 4]> {
-        &self.mask
+    pub fn mask(&self) -> Option<&[u8; 4]> {
+        self.mask.as_ref()
     }
 
+    /// Make this frame a final frame.
     #[allow(dead_code)]
     #[inline]
     pub fn set_final(&mut self, is_final: bool) -> &mut Frame {
@@ -104,6 +116,7 @@ impl Frame {
         self
     }
 
+    /// Set the first reserved bit.
     #[allow(dead_code)]
     #[inline]
     pub fn set_rsv1(&mut self, has_rsv1: bool) -> &mut Frame {
@@ -111,6 +124,7 @@ impl Frame {
         self
     }
 
+    /// Set the second reserved bit.
     #[allow(dead_code)]
     #[inline]
     pub fn set_rsv2(&mut self, has_rsv2: bool) -> &mut Frame {
@@ -118,6 +132,7 @@ impl Frame {
         self
     }
 
+    /// Set the third reserved bit.
     #[allow(dead_code)]
     #[inline]
     pub fn set_rsv3(&mut self, has_rsv3: bool) -> &mut Frame {
@@ -125,6 +140,7 @@ impl Frame {
         self
     }
 
+    /// Set the OpCode.
     #[allow(dead_code)]
     #[inline]
     pub fn set_opcode(&mut self, opcode: OpCode) -> &mut Frame {
@@ -132,18 +148,21 @@ impl Frame {
         self
     }
 
+    /// Edit the frame's payload.
     #[allow(dead_code)]
     #[inline]
     pub fn payload_mut(&mut self) -> &mut Vec<u8> {
         &mut self.payload
     }
 
+    /// Generate a new mask for this frame.
     #[inline]
     pub fn set_mask(&mut self) -> &mut Frame {
         self.mask = Some(generate_mask());
         self
     }
 
+    /// Consume the frame into its payload.
     pub fn into_data(mut self) -> Vec<u8> {
         self.mask.and_then(|mask| {
             Some(apply_mask(&mut self.payload, &mask))
@@ -151,6 +170,7 @@ impl Frame {
         self.payload
     }
 
+    /// Create a new data frame.
     #[inline]
     pub fn message(data: Vec<u8>, code: OpCode, finished: bool) -> Frame {
         debug_assert!(match code {
@@ -166,6 +186,7 @@ impl Frame {
         }
     }
 
+    /// Create a new Pong control frame.
     #[inline]
     pub fn pong(data: Vec<u8>) -> Frame {
         Frame {
@@ -175,6 +196,7 @@ impl Frame {
         }
     }
 
+    /// Create a new Ping control frame.
     #[inline]
     pub fn ping(data: Vec<u8>) -> Frame {
         Frame {
@@ -184,6 +206,7 @@ impl Frame {
         }
     }
 
+    /// Create a new Close control frame.
     #[inline]
     pub fn close(code: CloseCode, reason: &str) -> Frame {
         let raw: [u8; 2] = unsafe {

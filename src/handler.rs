@@ -173,6 +173,7 @@ pub trait Handler {
     ///
     /// Override this method to customize the Ssl object used to encrypt the connection.
     #[inline]
+    #[cfg(not(windows))]
     fn build_ssl(&mut self) -> Result<Ssl> {
         let context = try!(SslContext::new(SslMethod::Tlsv1));
         (&context).into_ssl().map_err(Error::from)
