@@ -91,6 +91,7 @@ impl<F> Handler<F>
         Ok(self)
     }
 
+    #[cfg(not(windows))]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
         let mut addresses = try!(url_to_addrs(url));
         // note popping from the vector will most likely give us a tcpip v4 address
@@ -112,7 +113,7 @@ impl<F> Handler<F>
 
         try!(conn.as_client(url, addresses));
 
-        if url.scheme == "wss" && cfg!(not(windows)) {
+        if url.scheme == "wss" {
             try!(conn.encrypt())
         }
 
@@ -131,6 +132,48 @@ impl<F> Handler<F>
         })
     }
 
+    #[cfg(windows)]
+    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+        let mut addresses = try!(url_to_addrs(url));
+        // note popping from the vector will most likely give us a tcpip v4 address
+        let addr = try!(addresses.pop().ok_or(
+            Error::new(
+                Kind::Internal,
+                format!("Unable to obtain any socket address for {}", url))));
+
+        let sock = try!(TcpStream::connect(&addr));
+        let factory = &mut self.factory;
+        let settings = self.settings;
+
+        let tok = try!(self.connections.insert_with(|tok| {
+            let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+            Connection::new(tok, sock, handler, settings)
+        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+
+        let conn = &mut self.connections[tok];
+
+        try!(conn.as_client(url, addresses));
+
+        if url.scheme == "wss" {
+            return Err(Error::new(Kind::Protocol, "The encryption is not supported on Windows."))
+        }
+
+        eloop.register(
+            conn.socket(),
+            conn.token(),
+            conn.events(),
+            PollOpt::edge() | PollOpt::oneshot(),
+        ).map_err(Error::from).or_else(|err| {
+            error!("Encountered error while trying to build WebSocket connection: {}", err);
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(not(windows))]
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
@@ -143,8 +186,40 @@ impl<F> Handler<F>
         let conn = &mut self.connections[tok];
 
         try!(conn.as_server());
-        if settings.encrypt_server && cfg!(not(windows)) {
+        if settings.encrypt_server {
             try!(conn.encrypt())
+        }
+
+        eloop.register(
+            conn.socket(),
+            conn.token(),
+            conn.events(),
+            PollOpt::edge() | PollOpt::oneshot(),
+        ).map_err(Error::from).or_else(|err| {
+            error!("Encountered error while trying to build WebSocket connection: {}", err);
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
+        let factory = &mut self.factory;
+        let settings = self.settings;
+
+        let tok = try!(self.connections.insert_with(|tok| {
+            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+            Connection::new(tok, sock, handler, settings)
+        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+
+        let conn = &mut self.connections[tok];
+
+        try!(conn.as_server());
+        if settings.encrypt_server {
+            return Err(Error::new(Kind::Protocol, "The encryption is not supported on Windows."))
         }
 
         eloop.register(
