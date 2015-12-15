@@ -155,7 +155,7 @@ impl<F> Handler<F>
         try!(conn.as_client(url, addresses));
 
         if url.scheme == "wss" {
-            return Err(Error::new(Kind::Protocol, "The encryption is not supported on Windows."))
+            return Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."))
         }
 
         eloop.register(
@@ -219,7 +219,7 @@ impl<F> Handler<F>
 
         try!(conn.as_server());
         if settings.encrypt_server {
-            return Err(Error::new(Kind::Protocol, "The encryption is not supported on Windows."))
+            return Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."))
         }
 
         eloop.register(
