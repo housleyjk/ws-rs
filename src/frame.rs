@@ -23,7 +23,7 @@ fn generate_mask() -> [u8; 4] {
 }
 
 /// A struct representing a WebSocket frame.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     finished: bool,
     rsv1: bool,
@@ -95,13 +95,15 @@ impl Frame {
         &self.payload
     }
 
-    /// Test whether the frame is masked.
+    // Test whether the frame is masked.
+    #[doc(hidden)]
     #[inline]
     pub fn is_masked(&self) -> bool {
         self.mask.is_some()
     }
 
-    /// Get an optional reference to the frame's mask.
+    // Get an optional reference to the frame's mask.
+    #[doc(hidden)]
     #[allow(dead_code)]
     #[inline]
     pub fn mask(&self) -> Option<&[u8; 4]> {
@@ -155,18 +157,32 @@ impl Frame {
         &mut self.payload
     }
 
-    /// Generate a new mask for this frame.
+    // Generate a new mask for this frame.
+    //
+    // This method simply generates and stores the mask. It does not change the payload data.
+    // Instead, the payload data will be masked with the generated mask when the frame is sent
+    // to the other endpoint.
+    #[doc(hidden)]
     #[inline]
     pub fn set_mask(&mut self) -> &mut Frame {
         self.mask = Some(generate_mask());
         self
     }
 
-    /// Consume the frame into its payload.
-    pub fn into_data(mut self) -> Vec<u8> {
+    // This method unmasks the payload and should only be called on frames that are actually
+    // masked. In other words, those frames that have just been received from a client endpoint.
+    #[doc(hidden)]
+    #[inline]
+    pub fn remove_mask(&mut self) -> &mut Frame {
         self.mask.and_then(|mask| {
             Some(apply_mask(&mut self.payload, &mask))
         });
+        self.mask = None;
+        self
+    }
+
+    /// Consume the frame into its payload.
+    pub fn into_data(self) -> Vec<u8> {
         self.payload
     }
 

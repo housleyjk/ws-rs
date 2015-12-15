@@ -536,7 +536,7 @@ impl<H> Connection<H>
     }
 
     fn read_frames(&mut self) -> Result<()> {
-        while let Some(frame) = try!(Frame::parse(&mut self.in_buffer)) {
+        while let Some(mut frame) = try!(Frame::parse(&mut self.in_buffer)) {
 
             if self.settings.masking_strict {
                 if frame.is_masked() {
@@ -549,6 +549,9 @@ impl<H> Connection<H>
                     }
                 }
             }
+
+            // This is safe whether or not a frame is masked.
+            frame.remove_mask();
 
             if frame.is_final() {
                 match frame.opcode() {
@@ -824,19 +827,21 @@ impl<H> Connection<H>
         }
     }
 
-    fn buffer_frame(&mut self, mut frame: Frame) -> Result<()> {
-        try!(self.check_buffer_out(&frame));
+    fn buffer_frame(&mut self, frame: Frame) -> Result<()> {
+        if let Some(mut frame) = try!(self.handler.on_send_frame(frame)) {
+            try!(self.check_buffer_out(&frame));
 
-        if self.is_client() {
-            frame.set_mask();
+            if self.is_client() {
+                frame.set_mask();
+            }
+
+            debug!("Buffering frame to {}:\n{}", try!(self.socket.peer_addr()), frame);
+
+            let pos = self.out_buffer.position();
+            try!(self.out_buffer.seek(SeekFrom::End(0)));
+            try!(frame.format(&mut self.out_buffer));
+            try!(self.out_buffer.seek(SeekFrom::Start(pos)));
         }
-
-        debug!("Buffering frame to {}:\n{}", try!(self.socket.peer_addr()), frame);
-
-        let pos = self.out_buffer.position();
-        try!(self.out_buffer.seek(SeekFrom::End(0)));
-        try!(frame.format(&mut self.out_buffer));
-        try!(self.out_buffer.seek(SeekFrom::Start(pos)));
         Ok(())
     }
 

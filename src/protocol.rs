@@ -2,14 +2,22 @@ use std::fmt;
 use std::convert::{Into, From};
 
 use self::OpCode::*;
+/// Operation codes as part of rfc6455.
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum OpCode {
+    /// Indicates a continuation frame of a fragmented message.
     Continue,
+    /// Indicates a text data frame.
     Text,
+    /// Indicates a binary data frame.
     Binary,
+    /// Indicates a close control frame.
     Close,
+    /// Indicates a ping control frame.
     Ping,
+    /// Indicates a pong control frame.
     Pong,
+    /// Indicates an invalid opcode was received.
     Bad,
 }
 

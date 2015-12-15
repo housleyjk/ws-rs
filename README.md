@@ -19,10 +19,9 @@ Introduction
 
 This library provides an implementation of WebSockets, [RFC6455](https://tools.ietf.org/html/rfc6455) using [MIO](https://github.com/carllerche/mio).
 It allows for handling multiple connections on a single thread, and even spawning new client connections on the same thread. This makes for very fast
-and resource efficient WebSockets. The API design abstracts away the menial parts of the WebSocket protocol, such as sending and receiving Ping/Pong
-frames, which allows you to focus on application code and rely on WS-RS to handle protocol conformance. However, it is also possible to get low-level
+and resource efficient WebSockets. The API design abstracts away the menial parts of the WebSocket protocol, masking and unmasking frames,
+which allows you to focus on application code and rely on WS-RS to handle protocol conformance. However, it is also possible to get low-level
 access to individual WebSocket frames if you need to write extensions or want to optimize around the WebSocket protocol.
-
 
 **[API documentation](http://housleyjk.github.io/ws-rs/ws)**
 
@@ -39,7 +38,8 @@ An example of an echo client and an echo server on one thread using closures.
 An example of an echo client and an echo server on separate threads. This demonstrates using a struct as a WebSocket handler.
 * [Channels](https://github.com/housleyjk/ws-rs/tree/stable/examples/channel.rs)
 A more complex example using channels to communicate with a WebSocket handler to accomplish a separate task.
-
+* [Pong](https://github.com/housleyjk/ws-rs/tree/stable/examples/pong.rs)
+An example demonstrating how to send and recieve a custom ping/pong frame.
 
 Stability and Testing
 ---------------------
@@ -73,8 +73,30 @@ cd tests
 wstest -m fuzzingclient
 ```
 
-The library is currently unstable, but as it matures, I hope to make the same stability guarantees as the [Rust Standard Library](http://www.rust-lang.org) in so far as dependencies will allow.
-I am commited to avoiding excessive allocations and costly abstractions.
+SSL
+---
+WS-RS supports WebSocket connections using SSL (e.g. `wss://mysecure/websocket`). To enable the ssl feature, require WS-RS in your `Cargo.toml`
+file as so:
+
+``` TOML
+[dependencies.ws]
+version = "*"
+features = ["ssl"]
+```
+
+Then simply specify the `wss` scheme to use an encypted connection.
+
+```rust
+/// An encypted Websocket echo client
+connect("wss://localhost:3012", |ws| {
+    move |msg| {
+        ws.send(msg)
+    }
+})
+```
+
+Note: The ssl feature is currently not available on Windows.
+
 
 Contributing
 ------------
