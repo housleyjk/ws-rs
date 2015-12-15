@@ -11,19 +11,19 @@ repository = "https://github.com/housleyjk/ws-rs"
 version = "0.4.2"
 
 [dependencies]
-httparse = "*"
-log = "*"
-mio = "*"
-openssl = { version = "*", optional = true }
-rand = "*"
-sha1 = "*"
-url = "*"
+httparse = "1.1.0"
+log = "0.3.4"
+mio = "0.5.0"
+openssl = { version = "0.7.1", optional = true}
+rand = "0.3.12"
+sha1 = "0.1.1"
+url = "0.5.0"
 
 [dev-dependencies]
-clap = "*"
-env_logger = "*"
-term = "*"
-time = "*"
+clap = "1.5.3"
+env_logger = "0.3.2"
+term = "0.2.14"
+time = "0.1.34"
 
 [features]
 default = []
