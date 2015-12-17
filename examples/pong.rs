@@ -23,7 +23,7 @@ fn main () {
     let (tx, rx) = channel();
 
     // Create WebSocket
-    let socket = ws::Builder::new().build(ServerFactory { timer: tx }).unwrap();
+    let socket = Builder::new().build(ServerFactory { timer: tx }).unwrap();
 
     // Get broadcaster for timer
     let all = socket.broadcaster();
@@ -112,4 +112,3 @@ impl Handler for Server {
         DefaultHandler.on_frame(frame)
     }
 }
-
