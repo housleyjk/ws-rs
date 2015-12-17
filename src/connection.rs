@@ -10,7 +10,7 @@ use url;
 use mio::{Token, TryRead, TryWrite, EventSet};
 use mio::tcp::TcpStream;
 #[cfg(all(not(windows), feature="ssl"))]
-use openssl::ssl::NonblockingSslStream;
+use openssl::ssl::SslStream;
 
 use message::Message;
 use handshake::{Handshake, Request, Response};
@@ -134,12 +134,13 @@ impl<H> Connection<H>
 
     #[cfg(all(not(windows), feature="ssl"))]
     pub fn encrypt(&mut self) -> Result<()> {
+        println!("{:?} {:?} {:?}", self.endpoint, self.handler.build_ssl(), self.socket());
         let ssl_stream = match self.endpoint {
-            Server => try!(NonblockingSslStream::accept(
+            Server => try!(SslStream::accept(
                 try!(self.handler.build_ssl()),
                 try!(self.socket().try_clone()))),
 
-            Client => try!(NonblockingSslStream::connect(
+            Client => try!(SslStream::connect(
                 try!(self.handler.build_ssl()),
                 try!(self.socket().try_clone()))),
         };
@@ -169,7 +170,7 @@ impl<H> Connection<H>
                     let sock = try!(TcpStream::connect(addr));
                     if self.socket.is_tls() {
                         Ok(self.socket = Stream::tls(
-                                try!(NonblockingSslStream::connect(
+                                try!(SslStream::connect(
                                     try!(self.handler.build_ssl()),
                                     sock))))
 
