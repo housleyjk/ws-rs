@@ -267,6 +267,8 @@ mod communication;
 mod io;
 mod stream;
 
+pub mod util;
+
 pub use factory::Factory;
 pub use handler::Handler;
 
@@ -412,6 +414,9 @@ pub struct Settings {
     /// Whether to panic when an Io error is encountered.
     /// Default: false
     pub panic_on_io: bool,
+    /// Whether to panic when a Timer error is encountered.
+    /// Default: false
+    pub panic_on_timeout: bool,
     /// The WebSocket protocol requires frames sent from client endpoints to be masked as a
     /// security and sanity precaution. Enforcing this requirement, which may be removed at some
     /// point may cause incompatibilities. If you need the extra security, set this to true.
@@ -461,6 +466,7 @@ impl Default for Settings {
             panic_on_protocol: false,
             panic_on_encoding: false,
             panic_on_io: false,
+            panic_on_timeout: false,
             masking_strict: false,
             key_strict: false,
             method_strict: false,

@@ -249,7 +249,7 @@ impl Frame {
     pub fn parse(cursor: &mut Cursor<Vec<u8>>) -> Result<Option<Frame>> {
         let size = cursor.get_ref().len() - cursor.position() as usize;
         let initial = cursor.position();
-        debug!("Position in buffer {}", initial);
+        trace!("Position in buffer {}", initial);
 
         let mut head = [0u8; 2];
         if try!(cursor.read(&mut head)) != 2 {
@@ -257,12 +257,12 @@ impl Frame {
             return Ok(None)
         }
 
-        debug!("Parsed headers {:?}", head);
+        trace!("Parsed headers {:?}", head);
 
         let first = head[0];
         let second = head[1];
-        debug!("First: {:b}", first);
-        debug!("Second: {:b}", second);
+        trace!("First: {:b}", first);
+        trace!("Second: {:b}", second);
 
         let finished = first & 0x80 != 0;
 
@@ -271,12 +271,12 @@ impl Frame {
         let rsv3 = first & 0x10 != 0;
 
         let opcode = OpCode::from(first & 0x0F);
-        debug!("Opcode: {:?}", opcode);
+        trace!("Opcode: {:?}", opcode);
         if let OpCode::Bad = opcode {
             return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
         }
         let masked = second & 0x80 != 0;
-        debug!("Masked: {:?}", masked);
+        trace!("Masked: {:?}", masked);
 
         let mut header_length = 2;
 
@@ -306,7 +306,7 @@ impl Frame {
             length = u64::from_be(length);
             header_length += 8;
         }
-        debug!("Payload length: {}", length);
+        trace!("Payload length: {}", length);
 
         // control frames must have length <= 125
         match opcode {

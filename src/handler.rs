@@ -8,6 +8,7 @@ use frame::Frame;
 use protocol::CloseCode;
 use handshake::{Handshake, Request, Response};
 use result::{Result, Error, Kind};
+use util::{Token, Timeout};
 
 
 /// The core trait of this library.
@@ -37,7 +38,9 @@ pub trait Handler {
         Ok(())
     }
 
-    /// Called when the other endpoint is asking to close the connection.
+    /// Called any time this endpoint receives a close control frame.
+    /// This may be because the other endpoint is initiating a closing handshake,
+    /// or it may be the other endpoint confirming the handshake initiated by this endpoint.
     fn on_close(&mut self, code: CloseCode, reason: &str) {
         debug!("Connection closing due to ({:?}) {}", code, reason);
     }
@@ -81,6 +84,7 @@ pub trait Handler {
     ///     res.add_extension("myextension")
     /// }
     /// Ok(res)
+    /// ```
     ///
     #[inline]
     fn on_request(&mut self, req: &Request) -> Result<Response> {
@@ -98,6 +102,95 @@ pub trait Handler {
     #[inline]
     fn on_response(&mut self, res: &Response) -> Result<()> {
         debug!("Handler received response:\n{}", res);
+        Ok(())
+    }
+
+    // timeout events
+
+    /// Called when a timeout is triggered.
+    ///
+    /// This method will be called when the eventloop encounters a timeout on the specified
+    /// token. To schedule a timeout with your specific token use the `Sender::timeout` method.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// const GRATI: Token = Token(1);
+    ///
+    /// ... Handler
+    ///
+    /// fn on_open(&mut self, _: Handshake) -> Result<()> {
+    ///     // schedule a timeout to send a gratuitous pong every 5 seconds
+    ///     self.ws.timeout(5_000, GRATI)
+    /// }
+    ///
+    /// fn on_timeout(&mut self, event: Token) -> Result<()> {
+    ///     if event == GRATI {
+    ///         // send gratuitous pong
+    ///         try!(self.ws.pong(vec![]))
+    ///         // reschedule the timeout
+    ///         self.ws.timeout(5_000, GRATI)
+    ///     } else {
+    ///         Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
+    ///     }
+    /// }
+    /// ```
+    ///
+    ///
+    #[inline]
+    fn on_timeout(&mut self, event: Token) -> Result<()> {
+        debug!("Handler received timeout token: {:?}", event);
+        Ok(())
+    }
+
+    /// Called when a timeout has been scheduled on the eventloop.
+    ///
+    /// This method is the hook for obtaining a Timeout object that may be used to cancel a
+    /// timeout. This is a noop by default.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// const PING: Token = Token(1);
+    /// const EXPIRE: Token = Token(2);
+    ///
+    /// ... Handler
+    ///
+    /// fn on_open(&mut self, _: Handshake) -> Result<()> {
+    ///     // schedule a timeout to send a ping every 5 seconds
+    ///     try!(self.ws.timeout(5_000, PING));
+    ///     // schedule a timeout to close the connection if there is no activity for 30 seconds
+    ///     self.ws.timeout(30_000, EXPIRE)
+    /// }
+    ///
+    /// fn on_timeout(&mut self, event: Token) -> Result<()> {
+    ///     match event {
+    ///         PING => {
+    ///             self.ws.ping(vec![]);
+    ///             self.ws.timeout(5_000, PING)
+    ///         }
+    ///         EXPIRE => self.ws.close(CloseCode::Away),
+    ///         _ => Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
+    ///     }
+    /// }
+    ///
+    /// fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> Result<()> {
+    ///     if event == EXPIRE {
+    ///         if let Some(t) = self.timeout.take() {
+    ///             try!(self.ws.cancel(t))
+    ///         }
+    ///         self.timeout = Some(timeout)
+    ///     }
+    ///     Ok(())
+    /// }
+    ///
+    /// fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
+    ///     // some activity has occurred, let's reset the expiration
+    ///     try!(self.ws.timeout(30_000, EXPIRE));
+    ///     Ok(Some(frame))
+    /// }
+    ///```
+    #[inline]
+    fn on_new_timeout(&mut self, _: Token, _: Timeout) -> Result<()> {
+        // default implementation discards the timeout handle
         Ok(())
     }
 

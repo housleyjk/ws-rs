@@ -10,7 +10,7 @@ use result::{Result, Error};
 use protocol::CloseCode;
 use io::ALL;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Clone)]
 pub enum Signal {
     Message(message::Message),
     Close(CloseCode, Cow<'static, str>),
@@ -18,10 +18,14 @@ pub enum Signal {
     Pong(Vec<u8>),
     Connect(url::Url),
     Shutdown,
-    // Stats
+    Timeout {
+        delay: u64,
+        token: Token,
+    },
+    Cancel(mio::Timeout),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Clone)]
 pub struct Command {
     token: Token,
     signal: Signal,
@@ -145,6 +149,32 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Shutdown,
+        }).map_err(Error::from)
+    }
+
+    /// Schedule a `token` to be sent to the WebSocket Handler's `on_timeout` method
+    /// after `ms` milliseconds
+    #[inline]
+    pub fn timeout(&self, ms: u64, token: Token) -> Result<()> {
+        self.channel.send(Command {
+            token: self.token,
+            signal: Signal::Timeout {
+                delay: ms,
+                token: token,
+            },
+        }).map_err(Error::from)
+    }
+
+    /// Queue the cancellation of a previously scheduled timeout.
+    ///
+    /// This method is not guaranteed to prevent the timeout from occuring, because it is
+    /// possible to call this method after a timeout has already occured. It is still necessary to
+    /// handle spurious timeouts.
+    #[inline]
+    pub fn cancel(&self, timeout: mio::Timeout) -> Result<()> {
+        self.channel.send(Command {
+            token: self.token,
+            signal: Signal::Cancel(timeout),
         }).map_err(Error::from)
     }
 
