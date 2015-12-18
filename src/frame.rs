@@ -394,7 +394,8 @@ impl Frame {
         } else {
             two |= 127;
             let length_bytes: [u8; 8] = unsafe {
-                transmute(self.payload.len().to_be())
+                let long = self.payload.len() as u64;
+                transmute(long.to_be())
             };
             let headers = [
                 one,
