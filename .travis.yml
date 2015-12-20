@@ -23,7 +23,7 @@ after_success: |
   [ $TRAVIS_BRANCH = stable ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
   [ $TRAVIS_RUST_VERSION = stable ] &&
-  cargo doc --no-deps &&
+  cargo doc --no-deps --features ssl &&
   pip install --user ghp-import &&
   /home/travis/.local/bin/ghp-import -n target/doc &&
   git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG} gh-pages

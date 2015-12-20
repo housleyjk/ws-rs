@@ -272,9 +272,7 @@ impl Frame {
 
         let opcode = OpCode::from(first & 0x0F);
         trace!("Opcode: {:?}", opcode);
-        if let OpCode::Bad = opcode {
-            return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
-        }
+
         let masked = second & 0x80 != 0;
         trace!("Masked: {:?}", masked);
 
@@ -308,14 +306,6 @@ impl Frame {
         }
         trace!("Payload length: {}", length);
 
-        // control frames must have length <= 125
-        match opcode {
-            OpCode::Close | OpCode::Ping | OpCode::Pong if length > 125 => {
-                return Err(Error::new(Kind::Protocol, format!("Rejected WebSocket handshake.Received control frame with length: {}.", length)))
-            }
-            _ => ()
-        }
-
         let mask = if masked {
             let mut mask_bytes = [0u8; 4];
             if try!(cursor.read(&mut mask_bytes)) != 4 {
@@ -336,9 +326,26 @@ impl Frame {
 
         let mut data = Vec::with_capacity(length as usize);
         if length > 0 {
-            // It is ok to unwrap here because this cursor won't block
-            let read = try!(cursor.try_read_buf(&mut data)).unwrap();
-            debug_assert!(read == length as usize, "Read incorrect payload length!");
+            if let Some(read) = try!(cursor.try_read_buf(&mut data)) {
+                debug_assert!(read == length as usize, "Read incorrect payload length!");
+            }
+        }
+
+        // Disallow bad opcode
+        if let OpCode::Bad = opcode {
+            return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
+        }
+
+        // control frames must have length <= 125
+        match opcode {
+            OpCode::Ping | OpCode::Pong if length > 125 => {
+                return Err(Error::new(Kind::Protocol, format!("Rejected WebSocket handshake.Received control frame with length: {}.", length)))
+            }
+            OpCode::Close if length > 125 => {
+                debug!("Received close frame with payload length exceeding 125. Morphing to protocol close frame.");
+                return Ok(Some(Frame::close(CloseCode::Protocol, "Received close frame with payload length exceeding 125.")))
+            }
+            _ => ()
         }
 
         let frame = Frame {
@@ -350,6 +357,8 @@ impl Frame {
             mask: mask,
             payload: data,
         };
+
+
         Ok(Some(frame))
     }
 
@@ -446,6 +455,8 @@ final: {}
 reserved: {} {} {}
 opcode: {}
 mask: {}
+length: {}
+payload length: {}
 payload: {:?}
             ",
             self.finished,
@@ -454,6 +465,8 @@ payload: {:?}
             self.rsv3,
             self.opcode,
             self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
+            self.len(),
+            self.payload.len(),
             self.payload)
     }
 }

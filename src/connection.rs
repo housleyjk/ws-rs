@@ -31,8 +31,9 @@ pub enum State {
     Connecting(Cursor<Vec<u8>>, Cursor<Vec<u8>>),
     // Ready to send/receive messages
     Open,
-    StartClosing,
-    EndClosing,
+    AwaitingClose,
+    RespondingClose,
+    FinishedClose,
 }
 
 /// A little more semantic than a boolean
@@ -66,8 +67,8 @@ impl State {
     #[inline]
     pub fn is_closing(&self) -> bool {
         match *self {
-            State::StartClosing => true,
-            State::EndClosing => true,
+            State::AwaitingClose => true,
+            State::FinishedClose => true,
             _ => false,
         }
     }
@@ -135,7 +136,6 @@ impl<H> Connection<H>
 
     #[cfg(all(not(windows), feature="ssl"))]
     pub fn encrypt(&mut self) -> Result<()> {
-        println!("{:?} {:?} {:?}", self.endpoint, self.handler.build_ssl(), self.socket());
         let ssl_stream = match self.endpoint {
             Server => try!(SslStream::accept(
                 try!(self.handler.build_ssl()),
@@ -539,11 +539,17 @@ impl<H> Connection<H>
                 self.read_handshake()
             } else {
                 trace!("Ready to read messages from {}.", try!(self.socket.peer_addr()));
-                if let Some(_) = try!(self.buffer_in()) {
-                    self.read_frames()
-                } else {
-                    Ok(())
+                while let Some(_) = try!(self.buffer_in()) {
+                    // consume the whole buffer if possible
+                    while let Err(err) = self.read_frames() {
+                        // break on first IO error, other errors don't imply that the buffer is bad
+                        if let Kind::Io(_) = err.kind {
+                            return Err(err)
+                        }
+                        self.error(err)
+                    }
                 }
+                Ok(())
             };
 
             if self.socket.is_negotiating() && res.is_ok() {
@@ -556,6 +562,11 @@ impl<H> Connection<H>
 
     fn read_frames(&mut self) -> Result<()> {
         while let Some(mut frame) = try!(Frame::parse(&mut self.in_buffer)) {
+            match self.state {
+                // Ignore data received after receiving close frame
+                RespondingClose | FinishedClose => continue,
+                _ => (),
+            }
 
             if self.settings.masking_strict {
                 if frame.is_masked() {
@@ -607,6 +618,23 @@ impl<H> Connection<H>
                         if let Some(frame) = try!(self.handler.on_frame(frame)) {
                             debug_assert!(frame.opcode() == OpCode::Close, "Handler passed back corrupted frame.");
 
+                            // Closing handshake
+                            if self.state.is_closing() {
+
+                                if self.is_server() {
+                                    // Finished handshake, disconnect server side
+                                    self.events = EventSet::none()
+                                } else {
+                                    // We are a client, so we wait for the server to close the
+                                    // connection
+                                }
+
+                            } else {
+
+                                // Starting handshake, will send the respondig close frame
+                                self.state = RespondingClose;
+                            }
+
                             let mut close_code = [0u8; 2];
                             let mut data = Cursor::new(frame.into_data());
                             if let 2 = try!(data.read(&mut close_code)) {
@@ -648,28 +676,23 @@ impl<H> Connection<H>
                                 } else if let CloseCode::Tls = named {
                                     return Err(Error::new(Kind::Protocol, "Received TLS close code outside of TLS handshake."))
                                 } else {
-                                    if has_reason {
-                                        try!(self.send_close(named, "")); // note this drops any extra close data
-                                    } else {
-                                        try!(self.send_close(CloseCode::Invalid, ""));
+                                    if !self.state.is_closing() {
+                                        if has_reason {
+                                            try!(self.send_close(named, "")); // note this drops any extra close data
+                                        } else {
+                                            try!(self.send_close(CloseCode::Invalid, ""));
+                                        }
                                     }
                                 }
                             } else {
                                 // This is not an error. It is allowed behavior in the
                                 // protocol, so we don't trigger an error
                                 self.handler.on_close(CloseCode::Status, "Unable to read close code. Sending empty close frame.");
-                                try!(self.send_close(CloseCode::Empty, ""));
+                                if !self.state.is_closing() {
+                                    try!(self.send_close(CloseCode::Empty, ""));
+                                }
                             }
-
-                            // Handle closing handshake
-                            if !self.state.is_closing() {
-                                self.state = StartClosing;
-                            } else if self.is_server() {
-                                self.events = EventSet::none();
-                            }
-
                         }
-
                     }
                     OpCode::Ping => {
                         trace!("Received ping frame {:?}", frame);
@@ -768,7 +791,7 @@ impl<H> Connection<H>
                         match self.state {
                             // we are are a server that is closing and just wrote out our confirming
                             // close frame, let's disconnect
-                            EndClosing if self.is_server()  => return Ok(self.events = EventSet::none()),
+                            FinishedClose if self.is_server()  => return Ok(self.events = EventSet::none()),
                             _ => break,
                         }
                     }
@@ -787,6 +810,13 @@ impl<H> Connection<H>
     }
 
     pub fn send_message(&mut self, msg: Message) -> Result<()> {
+        if self.state.is_closing() {
+            trace!("Connection is closing. Ignoring request to send message {:?} to {}.",
+                msg,
+                try!(self.socket.peer_addr()));
+            return Ok(())
+        }
+
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
@@ -819,6 +849,12 @@ impl<H> Connection<H>
 
     #[inline]
     pub fn send_ping(&mut self, data: Vec<u8>) -> Result<()> {
+        if self.state.is_closing() {
+            trace!("Connection is closing. Ignoring request to send ping {:?} to {}.",
+                data,
+                try!(self.socket.peer_addr()));
+            return Ok(())
+        }
         trace!("Sending ping to {}.", try!(self.socket.peer_addr()));
         try!(self.buffer_frame(Frame::ping(data)));
         Ok(self.check_events())
@@ -827,6 +863,9 @@ impl<H> Connection<H>
     #[inline]
     pub fn send_pong(&mut self, data: Vec<u8>) -> Result<()> {
         if self.state.is_closing() {
+            trace!("Connection is closing. Ignoring request to send pong {:?} to {}.",
+                data,
+                try!(self.socket.peer_addr()));
             return Ok(())
         }
         trace!("Sending pong to {}.", try!(self.socket.peer_addr()));
@@ -838,13 +877,30 @@ impl<H> Connection<H>
     pub fn send_close<R>(&mut self, code: CloseCode, reason: R) -> Result<()>
         where R: Borrow<str>
     {
+        match self.state {
+            // We are responding to a close frame the other endpoint, when this frame goes out, we
+            // are done.
+            RespondingClose => self.state = FinishedClose,
+            // Multiple close frames are being sent from our end, ignore the later frames
+            AwaitingClose | FinishedClose => {
+                trace!("Connection is already closing. Ignoring close {:?} -- {:?} to {}.",
+                    code,
+                    reason.borrow(),
+                    try!(self.socket.peer_addr()));
+                return Ok(self.check_events())
+            }
+            // We are initiating a closing handshake.
+            Open => self.state = AwaitingClose,
+            Connecting(_, _) => {
+                debug_assert!(false, "Attempted to close connection while not yet open.")
+            }
+        }
+
         trace!("Sending close {:?} -- {:?} to {}.", code, reason.borrow(), try!(self.socket.peer_addr()));
         try!(self.buffer_frame(Frame::close(code, reason.borrow())));
 
         trace!("Connection to {} is now closing.", try!(self.socket.peer_addr()));
-        if self.state.is_closing() {
-            self.state = EndClosing;
-        }
+
         Ok(self.check_events())
     }
 

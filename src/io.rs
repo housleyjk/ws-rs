@@ -19,7 +19,8 @@ use factory::Factory;
 use super::Settings;
 
 pub const ALL: Token = Token(0);
-const CONN_START: Token = Token(1);
+pub const SYSTEM: Token = Token(1);
+const CONN_START: Token = Token(2);
 
 pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<<F as Factory>::Handler>;
@@ -282,6 +283,10 @@ impl<F> mio::Handler for Handler <F>
     fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: EventSet) {
 
         match token {
+            SYSTEM => {
+                debug_assert!(false, "System token used for io event. This is a bug!");
+                error!("System token used for io event. This is a bug!")
+            }
             ALL => {
                 if events.is_readable() {
                     if let Some((sock, addr)) = {
@@ -402,6 +407,9 @@ impl<F> mio::Handler for Handler <F>
 
     fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
         match cmd.token() {
+            SYSTEM => {
+                // Scaffolding for system events such as internal timeouts
+            }
             ALL => {
                 let mut dead = Vec::with_capacity(self.connections.count());
 
@@ -588,7 +596,8 @@ impl<F> mio::Handler for Handler <F>
         }
     }
 
-    fn interrupted(&mut self, _: &mut Loop<F>) {
+    fn interrupted(&mut self, eloop: &mut Loop<F>) {
         error!("Websocket shutting down for interrupt.");
+        eloop.shutdown()
     }
 }

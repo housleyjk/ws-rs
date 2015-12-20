@@ -28,7 +28,9 @@ pub trait Handler {
     /// Called when the WebSocket handshake is successful and the connection is open for sending
     /// and receiving messages.
     fn on_open(&mut self, shake: Handshake) -> Result<()> {
-        debug!("Connection opened with {:?}", shake);
+        if let Some(addr) = try!(shake.remote_addr()) {
+            debug!("Connection with {} now open", addr);
+        }
         Ok(())
     }
 
