@@ -245,7 +245,7 @@ impl<F> Handler<F>
 
     #[inline]
     fn schedule(&self, eloop: &mut Loop<F>, conn: &Conn<F>) -> Result<()> {
-        trace!("Scheduling connection to {} as {:?}", try!(conn.socket().peer_addr()), conn.events());
+        trace!("Scheduling connection to {} as {:?}", conn.socket().peer_addr().map(|addr| addr.to_string()).unwrap_or("UNKNOWN".into()), conn.events());
         Ok(try!(eloop.reregister(
             conn.socket(),
             conn.token(),

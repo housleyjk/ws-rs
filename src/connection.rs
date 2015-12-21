@@ -157,6 +157,14 @@ impl<H> Connection<H>
         &self.socket.evented()
     }
 
+    fn peer_addr(&self) -> String {
+        if let Ok(addr) = self.socket.peer_addr() {
+            addr.to_string()
+        } else {
+            "UNKNOWN".into()
+        }
+    }
+
     // Resetting may be necessary in order to try all possible addresses for a server
     #[cfg(all(not(windows), feature="ssl"))]
     pub fn reset(&mut self) -> Result<()> {
@@ -402,7 +410,11 @@ impl<H> Connection<H>
                 Client =>  {
                     if let Some(len) = try!(self.socket.try_write_buf(req)) {
                         if req.get_ref().len() == len {
-                            trace!("Finished writing handshake request to {}", try!(self.socket.peer_addr()));
+                            trace!("Finished writing handshake request to {}",
+                                self.socket
+                                    .peer_addr()
+                                    .map(|addr| addr.to_string())
+                                    .unwrap_or("UNKNOWN".into()));
                             self.events.insert(EventSet::readable());
                             self.events.remove(EventSet::writable());
                         }
@@ -413,8 +425,8 @@ impl<H> Connection<H>
         }
 
         if let Connecting(ref req, ref res) = replace(&mut self.state, Open) {
-            trace!("Finished writing handshake response to {}", try!(self.socket.peer_addr()));
-            debug!("Connection to {} is now open.", try!(self.socket.peer_addr()));
+            trace!("Finished writing handshake response to {}", self.peer_addr());
+            debug!("Connection to {} is now open.", self.peer_addr());
 
             let request = try!(try!(Request::parse(req.get_ref())).ok_or(
                 Error::new(Kind::Internal, "Failed to parse request after handshake is complete.")));
@@ -483,8 +495,7 @@ impl<H> Connection<H>
         }
 
         if let Connecting(ref req, ref res) = replace(&mut self.state, Open) {
-            trace!("Finished reading handshake response from {}", try!(self.socket.peer_addr()));
-            debug!("Connection to {} is now open.", try!(self.socket.peer_addr()));
+            trace!("Finished reading handshake response from {}", self.peer_addr());
 
             let request = try!(try!(Request::parse(req.get_ref())).ok_or(
                 Error::new(Kind::Internal, "Failed to parse request after handshake is complete.")));
@@ -530,15 +541,15 @@ impl<H> Connection<H>
 
     pub fn read(&mut self) -> Result<()> {
         if self.socket.is_negotiating() {
-            trace!("Performing TLS negotiation on {}.", try!(self.socket.peer_addr()));
+            trace!("Performing TLS negotiation on {}.", self.peer_addr());
             try!(self.socket.clear_negotiating());
             self.write()
         } else {
             let res = if self.state.is_connecting() {
-                trace!("Ready to read handshake from {}.", try!(self.socket.peer_addr()));
+                trace!("Ready to read handshake from {}.", self.peer_addr());
                 self.read_handshake()
             } else {
-                trace!("Ready to read messages from {}.", try!(self.socket.peer_addr()));
+                trace!("Ready to read messages from {}.", self.peer_addr());
                 while let Some(_) = try!(self.buffer_in()) {
                     // consume the whole buffer if possible
                     while let Err(err) = self.read_frames() {
@@ -639,7 +650,7 @@ impl<H> Connection<H>
                             let mut data = Cursor::new(frame.into_data());
                             if let 2 = try!(data.read(&mut close_code)) {
                                 let code_be: u16 = unsafe {transmute(close_code) };
-                                trace!("Connection to {} received raw close code: {:?}, {:b}", try!(self.socket.peer_addr()), code_be, code_be);
+                                trace!("Connection to {} received raw close code: {:?}, {:b}", self.peer_addr(), code_be, code_be);
                                 let named = CloseCode::from(u16::from_be(code_be));
                                 if let CloseCode::Other(code) = named {
                                     if
@@ -771,21 +782,21 @@ impl<H> Connection<H>
 
     pub fn write(&mut self) -> Result<()> {
         if self.socket.is_negotiating() {
-            trace!("Performing TLS negotiation on {}.", try!(self.socket.peer_addr()));
+            trace!("Performing TLS negotiation on {}.", self.peer_addr());
             try!(self.socket.clear_negotiating());
             self.read()
         } else {
             let res = if self.state.is_connecting() {
-                trace!("Ready to write handshake to {}.", try!(self.socket.peer_addr()));
+                trace!("Ready to write handshake to {}.", self.peer_addr());
                 self.write_handshake()
             } else {
-                trace!("Ready to write messages to {}.", try!(self.socket.peer_addr()));
+                trace!("Ready to write messages to {}.", self.peer_addr());
 
                 // Start out assuming that this write will clear the whole buffer
                 self.events.remove(EventSet::writable());
 
                 while let Some(len) = try!(self.socket.try_write_buf(&mut self.out_buffer)) {
-                    trace!("Wrote {} bytes to {}", len, try!(self.socket.peer_addr()));
+                    trace!("Wrote {} bytes to {}", len, self.peer_addr());
                     let finished = len == 0 || self.out_buffer.position() as usize == self.out_buffer.get_ref().len();
                     if finished {
                         match self.state {
@@ -813,7 +824,7 @@ impl<H> Connection<H>
         if self.state.is_closing() {
             trace!("Connection is closing. Ignoring request to send message {:?} to {}.",
                 msg,
-                try!(self.socket.peer_addr()));
+                self.peer_addr());
             return Ok(())
         }
 
@@ -852,10 +863,10 @@ impl<H> Connection<H>
         if self.state.is_closing() {
             trace!("Connection is closing. Ignoring request to send ping {:?} to {}.",
                 data,
-                try!(self.socket.peer_addr()));
+                self.peer_addr());
             return Ok(())
         }
-        trace!("Sending ping to {}.", try!(self.socket.peer_addr()));
+        trace!("Sending ping to {}.", self.peer_addr());
         try!(self.buffer_frame(Frame::ping(data)));
         Ok(self.check_events())
     }
@@ -865,10 +876,10 @@ impl<H> Connection<H>
         if self.state.is_closing() {
             trace!("Connection is closing. Ignoring request to send pong {:?} to {}.",
                 data,
-                try!(self.socket.peer_addr()));
+                self.peer_addr());
             return Ok(())
         }
-        trace!("Sending pong to {}.", try!(self.socket.peer_addr()));
+        trace!("Sending pong to {}.", self.peer_addr());
         try!(self.buffer_frame(Frame::pong(data)));
         Ok(self.check_events())
     }
@@ -886,7 +897,7 @@ impl<H> Connection<H>
                 trace!("Connection is already closing. Ignoring close {:?} -- {:?} to {}.",
                     code,
                     reason.borrow(),
-                    try!(self.socket.peer_addr()));
+                    self.peer_addr());
                 return Ok(self.check_events())
             }
             // We are initiating a closing handshake.
@@ -896,10 +907,10 @@ impl<H> Connection<H>
             }
         }
 
-        trace!("Sending close {:?} -- {:?} to {}.", code, reason.borrow(), try!(self.socket.peer_addr()));
+        trace!("Sending close {:?} -- {:?} to {}.", code, reason.borrow(), self.peer_addr());
         try!(self.buffer_frame(Frame::close(code, reason.borrow())));
 
-        trace!("Connection to {} is now closing.", try!(self.socket.peer_addr()));
+        trace!("Connection to {} is now closing.", self.peer_addr());
 
         Ok(self.check_events())
     }
@@ -921,7 +932,7 @@ impl<H> Connection<H>
                 frame.set_mask();
             }
 
-            trace!("Buffering frame to {}:\n{}", try!(self.socket.peer_addr()), frame);
+            trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
 
             let pos = self.out_buffer.position();
             try!(self.out_buffer.seek(SeekFrom::End(0)));
@@ -951,7 +962,7 @@ impl<H> Connection<H>
 
     fn buffer_in(&mut self) -> Result<Option<usize>> {
 
-        trace!("Reading buffer for connection to {}.", try!(self.socket.peer_addr()));
+        trace!("Reading buffer for connection to {}.", self.peer_addr());
         if let Some(mut len) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
             if len == 0 {
                 trace!("Buffered {}.", len);
