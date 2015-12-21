@@ -457,7 +457,7 @@ opcode: {}
 mask: {}
 length: {}
 payload length: {}
-payload: {:?}
+payload: 0x{}
             ",
             self.finished,
             self.rsv1,
@@ -467,7 +467,7 @@ payload: {:?}
             self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
             self.len(),
             self.payload.len(),
-            self.payload)
+            self.payload.iter().map(|byte| format!("{:x}", byte)).collect::<String>())
     }
 }
 
