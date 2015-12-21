@@ -1,7 +1,6 @@
 /// WebSocket client used for testing against the Autobahn Test Suite
 
 extern crate ws;
-extern crate env_logger;
 
 use std::rc::Rc;
 use std::cell::Cell;
@@ -10,7 +9,6 @@ use ws::{connect, CloseCode, Message, Result};
 const AGENT: &'static str = "WS-RS";
 
 fn main () {
-    env_logger::init().unwrap();
 
     let total = get_case_count().unwrap();
     let mut case_id = 1;

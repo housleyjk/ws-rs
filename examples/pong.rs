@@ -1,91 +1,45 @@
 /// An example demonstrating how to send and recieve a custom ping/pong frame.
-/// This example also shows using a separate thread to represent another
-/// component of your system as well as how to use a custom Factory.
 extern crate ws;
 extern crate env_logger;
 extern crate time;
 
-use std::thread;
-use std::thread::sleep;
-use std::time::Duration;
 use std::str::from_utf8;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender as ThreadOut;
 
-use ws::{Builder, CloseCode, OpCode, Sender, Frame, Factory, Handler, Message, Result};
+use ws::{listen, CloseCode, OpCode, Sender, Frame, Handler, Handshake, Message, Result, Error, ErrorKind};
+use ws::util::{Token, Timeout};
+
+const PING: Token = Token(1);
+const EXPIRE: Token = Token(2);
 
 fn main () {
 
     // Setup logging
     env_logger::init().unwrap();
 
-    // Set timer channel
-    let (tx, rx) = channel();
-
-    // Create WebSocket
-    let socket = ws::Builder::new().build(ServerFactory { timer: tx }).unwrap();
-
-    // Get broadcaster for timer
-    let all = socket.broadcaster();
-
-    // Start timer thread
-    let timer = thread::spawn(move || {
-        loop {
-            // Test latency every 5 seconds
-            sleep(Duration::from_secs(5));
-
-            // Check if timer needs to go down
-            if let Ok(_) = rx.try_recv() {
-                println!("Timer is going down.");
-                break;
-            }
-
-            // Ping all connections with current time
-            if let Err(err) = all.ping(time::precise_time_ns().to_string().into()) {
-                println!("Unable to ping connections: {:?}", err);
-                println!("Timer is going down.");
-                break;
-            }
+    // Run the WebSocket
+    listen("127.0.0.1:3012", |out| {
+        Server {
+            out: out,
+            timeout: None,
         }
-    });
-
-    // Start WebSocket server
-    socket.listen("127.0.0.1:3012").unwrap();
-
-    // Once the server is done, wait for the timer to shutdown as well
-    timer.join().unwrap();
-}
-
-struct ServerFactory {
-    timer: ThreadOut<usize>,
-}
-
-impl Factory for ServerFactory {
-    type Handler = Server;
-
-    fn connection_made(&mut self, out: Sender) -> Self::Handler {
-        Server { out: out }
-    }
-
-    fn on_shutdown(&mut self) {
-        if let Err(err) = self.timer.send(0) {
-            println!("Unable to shut down timer: {:?}", err)
-        }
-    }
+    }).unwrap();
 
 }
-
-// For accessing the default handler implementation
-struct DefaultHandler;
-
-impl Handler for DefaultHandler {}
 
 // Server WebSocket handler
 struct Server {
     out: Sender,
+    timeout: Option<Timeout>,
 }
 
 impl Handler for Server {
+
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
+        // schedule a timeout to send a ping every 5 seconds
+        try!(self.out.timeout(5_000, PING));
+        // schedule a timeout to close the connection if there is no activity for 30 seconds
+        self.out.timeout(30_000, EXPIRE)
+    }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
         println!("Server got message '{}'. ", msg);
@@ -98,7 +52,42 @@ impl Handler for Server {
         self.out.shutdown().unwrap();
     }
 
+    fn on_error(&mut self, err: Error) {
+        // Shutdown on any error
+        println!("Shutting down server for error: {}", err);
+        self.out.shutdown().unwrap();
+    }
+
+    fn on_timeout(&mut self, event: Token) -> Result<()> {
+        match event {
+            // PING timeout has occured, send a ping and reschedule
+            PING => {
+                try!(self.out.ping(time::precise_time_ns().to_string().into()));
+                self.out.timeout(5_000, PING)
+            }
+            // EXPIRE timeout has occured, this means that the connection is inactive, let's close
+            EXPIRE => self.out.close(CloseCode::Away),
+            // No other timeouts are possible
+            _ => Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
+        }
+    }
+
+    fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> Result<()> {
+        // If the new scheduled timeout is an EXPIRE timeout,
+        // we cancel the old timeout and replace.
+        if event == EXPIRE {
+            if let Some(t) = self.timeout.take() {
+                try!(self.out.cancel(t))
+            }
+            self.timeout = Some(timeout)
+        }
+
+        Ok(())
+    }
+
     fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
+        // If the frame is a pong, print the latency.
+        // The pong should contain data from out ping, but it isn't guaranteed to.
         if frame.opcode() == OpCode::Pong {
             if let Ok(pong) = try!(from_utf8(frame.payload())).parse::<u64>() {
                 let now = time::precise_time_ns();
@@ -108,8 +97,16 @@ impl Handler for Server {
             }
         }
 
+        // Some activity has occured, so reset the expiration
+        try!(self.out.timeout(30_000, EXPIRE));
+
         // Run default frame validation
         DefaultHandler.on_frame(frame)
     }
 }
+
+// For accessing the default handler implementation
+struct DefaultHandler;
+
+impl Handler for DefaultHandler {}
 

@@ -44,6 +44,8 @@ pub enum Kind {
     /// Indicates a failure to send a command on the internal EventLoop channel. This means that
     /// the WebSocket is overloaded and the Connection will disconnect.
     Queue(mio::NotifyError<Command>),
+    /// Indicates a failure to schedule a timeout on the EventLoop.
+    Timer(mio::TimerError),
     /// Indicates a failure to perform SSL encryption.
     #[cfg(all(not(windows), feature="ssl"))]
     Ssl(SslError),
@@ -112,6 +114,7 @@ impl StdError for Error {
             #[cfg(all(not(windows), feature="ssl"))]
             Kind::Ssl(ref err)      => err.description(),
             Kind::Queue(_)          => "Unable to send signal on event loop",
+            Kind::Timer(_)          => "Unable to schedule timeout on event loop",
             Kind::Custom(ref err)   => err.description(),
         }
     }
@@ -122,7 +125,7 @@ impl StdError for Error {
             Kind::Io(ref err)       => Some(err),
             #[cfg(all(not(windows), feature="ssl"))]
             Kind::Ssl(ref err)      => Some(err),
-            // Kind::Custom(ref err)   => Some(err.as_ref()),
+            Kind::Custom(ref err)   => Some(err.as_ref()),
             _ => None,
         }
     }
@@ -149,6 +152,16 @@ impl From<mio::NotifyError<Command>> for Error {
         match err {
             mio::NotifyError::Io(err) => Error::from(err),
             _ => Error::new(Kind::Queue(err), "")
+        }
+    }
+
+}
+
+impl From<mio::TimerError> for Error {
+
+    fn from(err: mio::TimerError) -> Error {
+        match err {
+            _ => Error::new(Kind::Timer(err), "")
         }
     }
 

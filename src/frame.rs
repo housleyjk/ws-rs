@@ -249,7 +249,7 @@ impl Frame {
     pub fn parse(cursor: &mut Cursor<Vec<u8>>) -> Result<Option<Frame>> {
         let size = cursor.get_ref().len() - cursor.position() as usize;
         let initial = cursor.position();
-        debug!("Position in buffer {}", initial);
+        trace!("Position in buffer {}", initial);
 
         let mut head = [0u8; 2];
         if try!(cursor.read(&mut head)) != 2 {
@@ -257,12 +257,12 @@ impl Frame {
             return Ok(None)
         }
 
-        debug!("Parsed headers {:?}", head);
+        trace!("Parsed headers {:?}", head);
 
         let first = head[0];
         let second = head[1];
-        debug!("First: {:b}", first);
-        debug!("Second: {:b}", second);
+        trace!("First: {:b}", first);
+        trace!("Second: {:b}", second);
 
         let finished = first & 0x80 != 0;
 
@@ -271,12 +271,10 @@ impl Frame {
         let rsv3 = first & 0x10 != 0;
 
         let opcode = OpCode::from(first & 0x0F);
-        debug!("Opcode: {:?}", opcode);
-        if let OpCode::Bad = opcode {
-            return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
-        }
+        trace!("Opcode: {:?}", opcode);
+
         let masked = second & 0x80 != 0;
-        debug!("Masked: {:?}", masked);
+        trace!("Masked: {:?}", masked);
 
         let mut header_length = 2;
 
@@ -306,15 +304,7 @@ impl Frame {
             length = u64::from_be(length);
             header_length += 8;
         }
-        debug!("Payload length: {}", length);
-
-        // control frames must have length <= 125
-        match opcode {
-            OpCode::Close | OpCode::Ping | OpCode::Pong if length > 125 => {
-                return Err(Error::new(Kind::Protocol, format!("Rejected WebSocket handshake.Received control frame with length: {}.", length)))
-            }
-            _ => ()
-        }
+        trace!("Payload length: {}", length);
 
         let mask = if masked {
             let mut mask_bytes = [0u8; 4];
@@ -336,9 +326,26 @@ impl Frame {
 
         let mut data = Vec::with_capacity(length as usize);
         if length > 0 {
-            // It is ok to unwrap here because this cursor won't block
-            let read = try!(cursor.try_read_buf(&mut data)).unwrap();
-            debug_assert!(read == length as usize, "Read incorrect payload length!");
+            if let Some(read) = try!(cursor.try_read_buf(&mut data)) {
+                debug_assert!(read == length as usize, "Read incorrect payload length!");
+            }
+        }
+
+        // Disallow bad opcode
+        if let OpCode::Bad = opcode {
+            return Err(Error::new(Kind::Protocol, format!("Encountered invalid opcode: {}", first & 0x0F)))
+        }
+
+        // control frames must have length <= 125
+        match opcode {
+            OpCode::Ping | OpCode::Pong if length > 125 => {
+                return Err(Error::new(Kind::Protocol, format!("Rejected WebSocket handshake.Received control frame with length: {}.", length)))
+            }
+            OpCode::Close if length > 125 => {
+                debug!("Received close frame with payload length exceeding 125. Morphing to protocol close frame.");
+                return Ok(Some(Frame::close(CloseCode::Protocol, "Received close frame with payload length exceeding 125.")))
+            }
+            _ => ()
         }
 
         let frame = Frame {
@@ -350,6 +357,8 @@ impl Frame {
             mask: mask,
             payload: data,
         };
+
+
         Ok(Some(frame))
     }
 
@@ -394,7 +403,8 @@ impl Frame {
         } else {
             two |= 127;
             let length_bytes: [u8; 8] = unsafe {
-                transmute(self.payload.len().to_be())
+                let long = self.payload.len() as u64;
+                transmute(long.to_be())
             };
             let headers = [
                 one,
@@ -445,7 +455,9 @@ final: {}
 reserved: {} {} {}
 opcode: {}
 mask: {}
-payload: {:?}
+length: {}
+payload length: {}
+payload: 0x{}
             ",
             self.finished,
             self.rsv1,
@@ -453,7 +465,9 @@ payload: {:?}
             self.rsv3,
             self.opcode,
             self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
-            self.payload)
+            self.len(),
+            self.payload.len(),
+            self.payload.iter().map(|byte| format!("{:x}", byte)).collect::<String>())
     }
 }
 

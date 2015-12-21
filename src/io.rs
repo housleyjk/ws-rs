@@ -19,7 +19,8 @@ use factory::Factory;
 use super::Settings;
 
 pub const ALL: Token = Token(0);
-const CONN_START: Token = Token(1);
+pub const SYSTEM: Token = Token(1);
+const CONN_START: Token = Token(2);
 
 pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<<F as Factory>::Handler>;
@@ -54,6 +55,11 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Timeout {
+    connection: Token,
+    event: Token,
+}
 
 pub struct Handler<F>
     where F: Factory
@@ -239,7 +245,7 @@ impl<F> Handler<F>
 
     #[inline]
     fn schedule(&self, eloop: &mut Loop<F>, conn: &Conn<F>) -> Result<()> {
-        debug!("Scheduling connection to {} as {:?}", try!(conn.socket().peer_addr()), conn.events());
+        trace!("Scheduling connection to {} as {:?}", conn.socket().peer_addr().map(|addr| addr.to_string()).unwrap_or("UNKNOWN".into()), conn.events());
         Ok(try!(eloop.reregister(
             conn.socket(),
             conn.token(),
@@ -271,12 +277,16 @@ impl<F> Handler<F>
 impl<F> mio::Handler for Handler <F>
     where F: Factory
 {
-    type Timeout = ();
+    type Timeout = Timeout;
     type Message = Command;
 
     fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: EventSet) {
 
         match token {
+            SYSTEM => {
+                debug_assert!(false, "System token used for io event. This is a bug!");
+                error!("System token used for io event. This is a bug!")
+            }
             ALL => {
                 if events.is_readable() {
                     if let Some((sock, addr)) = {
@@ -298,15 +308,15 @@ impl<F> mio::Handler for Handler <F>
                         }
 
                     } else {
-                        debug!("Blocked while accepting new tcp connection.")
+                        trace!("Blocked while accepting new tcp connection.")
                     }
                 }
             }
             _ => {
                 if events.is_error() {
-                    debug!("Encountered error on tcp stream.");
+                    trace!("Encountered error on tcp stream.");
                     if let Err(err) = self.connections[token].socket().take_socket_error() {
-                        debug!("Error was {}", err);
+                        trace!("Error was {}", err);
                         if let Some(errno) = err.raw_os_error() {
                             if errno == 111 {
                                 match self.connections[token].reset() {
@@ -324,16 +334,17 @@ impl<F> mio::Handler for Handler <F>
                                         return
                                     },
                                     Err(err) => {
-                                        debug!("Encountered error while trying to reset connection: {:?}", err);
+                                        trace!("Encountered error while trying to reset connection: {:?}", err);
                                     }
                                 }
                             }
                         }
                         self.connections[token].error(Error::from(err));
                     }
-                    debug!("Dropping connection token={:?}.", token);
+                    trace!("Dropping connection token={:?}.", token);
                     self.connections.remove(token);
                 } else if events.is_hup() {
+                    trace!("Connection token={:?} hung up.", token);
                     self.connections.remove(token);
                 } else {
 
@@ -363,12 +374,12 @@ impl<F> mio::Handler for Handler <F>
                             self.connections[token].state().is_closing(),
                             "Connection neither readable nor writable in active state!"
                         );
+                        if let Ok(addr) = self.connections[token].socket().peer_addr() {
+                            debug!("WebSocket connection to {} disconnected.", addr);
+                        } else {
+                            trace!("WebSocket connection to token={:?} disconnected.", token);
+                        }
                         self.connections.remove(token);
-                        // if let Ok(addr) = self.connections[token].socket().peer_addr() {
-                            // debug!("WebSocket connection to {} disconnected.", addr);
-                        // } else {
-                            debug!("WebSocket connection to token={:?} disconnected.", token);
-                        // }
                     } else {
                         self.schedule(eloop, &self.connections[token]).or_else(|err| {
                             self.connections[token].error(Error::from(err));
@@ -379,7 +390,7 @@ impl<F> mio::Handler for Handler <F>
 
                 }
 
-                debug!("Active connections {:?}", self.connections.count());
+                trace!("Active connections {:?}", self.connections.count());
                 if self.connections.count() == 0 {
                     if !self.state.is_active() {
                         debug!("Shutting down websocket server.");
@@ -396,12 +407,15 @@ impl<F> mio::Handler for Handler <F>
 
     fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
         match cmd.token() {
+            SYSTEM => {
+                // Scaffolding for system events such as internal timeouts
+            }
             ALL => {
                 let mut dead = Vec::with_capacity(self.connections.count());
 
                 match cmd.into_signal() {
                     Signal::Message(msg) => {
-                        debug!("Broadcasting message: {:?}", msg);
+                        trace!("Broadcasting message: {:?}", msg);
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_message(msg.clone()) {
                                 dead.push((conn.token(), err))
@@ -409,7 +423,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Close(code, reason) => {
-                        debug!("Broadcasting close: {:?} - {}", code, reason);
+                        trace!("Broadcasting close: {:?} - {}", code, reason);
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_close(code, reason.borrow()) {
                                 dead.push((conn.token(), err))
@@ -417,7 +431,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Ping(data) => {
-                        debug!("Broadcasting ping");
+                        trace!("Broadcasting ping");
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_ping(data.clone()) {
                                 dead.push((conn.token(), err))
@@ -425,7 +439,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     }
                     Signal::Pong(data) => {
-                        debug!("Broadcasting pong");
+                        trace!("Broadcasting pong");
                         for conn in self.connections.iter_mut() {
                             if let Err(err) = conn.send_pong(data.clone()) {
                                 dead.push((conn.token(), err))
@@ -442,6 +456,32 @@ impl<F> mio::Handler for Handler <F>
                         return
                     }
                     Signal::Shutdown => self.shutdown(eloop),
+                    Signal::Timeout { delay, token: event } => {
+                        match eloop.timeout_ms(Timeout {
+                                connection: ALL,
+                                event: event,
+                            }, delay).map_err(Error::from)
+                        {
+                            Ok(timeout) => {
+                                for conn in self.connections.iter_mut() {
+                                    if let Err(err) = conn.new_timeout(event, timeout) {
+                                        conn.error(err)
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                if self.settings.panic_on_timeout {
+                                    panic!("Unable to schedule timeout: {:?}", err);
+                                }
+                                error!("Unable to schedule timeout: {:?}", err);
+                            }
+                        }
+                        return
+                    }
+                    Signal::Cancel(timeout) => {
+                        eloop.clear_timeout(timeout);
+                        return
+                    }
                 }
 
                 for conn in self.connections.iter() {
@@ -462,7 +502,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            debug!("Connection disconnected while a message was waiting in the queue.")
+                            trace!("Connection disconnected while a message was waiting in the queue.")
                         }
                     }
                     Signal::Close(code, reason) => {
@@ -471,7 +511,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            debug!("Connection disconnected while close signal was waiting in the queue.")
+                            trace!("Connection disconnected while close signal was waiting in the queue.")
                         }
                     }
                     Signal::Ping(data) => {
@@ -480,7 +520,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            debug!("Connection disconnected while ping signal was waiting in the queue.")
+                            trace!("Connection disconnected while ping signal was waiting in the queue.")
                         }
                     }
                     Signal::Pong(data) => {
@@ -489,7 +529,7 @@ impl<F> mio::Handler for Handler <F>
                                 conn.error(err)
                             }
                         } else {
-                            debug!("Connection disconnected while pong signal was waiting in the queue.")
+                            trace!("Connection disconnected while pong signal was waiting in the queue.")
                         }
                     }
                     Signal::Connect(ref url) => {
@@ -497,12 +537,44 @@ impl<F> mio::Handler for Handler <F>
                             if let Some(conn) = self.connections.get_mut(token) {
                                 conn.error(err)
                             } else {
+                                if self.settings.panic_on_new_connection {
+                                    panic!("Unable to establish connection to {}: {:?}", url, err);
+                                }
                                 error!("Unable to establish connection to {}: {:?}", url, err);
                             }
                         }
                         return
                     }
                     Signal::Shutdown => self.shutdown(eloop),
+                    Signal::Timeout { delay, token: event } => {
+                        match eloop.timeout_ms(Timeout {
+                                connection: token,
+                                event: event,
+                            }, delay).map_err(Error::from)
+                        {
+                            Ok(timeout) => {
+                                if let Some(conn) = self.connections.get_mut(token) {
+                                    if let Err(err) = conn.new_timeout(event, timeout) {
+                                        conn.error(err)
+                                    }
+                                } else {
+                                    trace!("Connection disconnected while pong signal was waiting in the queue.")
+                                }
+                            }
+                            Err(err) => {
+                                if let Some(conn) = self.connections.get_mut(token) {
+                                    conn.error(err)
+                                } else {
+                                    trace!("Connection disconnected while pong signal was waiting in the queue.")
+                                }
+                            }
+                        }
+                        return
+                    }
+                    Signal::Cancel(timeout) => {
+                        eloop.clear_timeout(timeout);
+                        return
+                    }
                 }
 
                 if let Some(_) = self.connections.get(token) {
@@ -514,11 +586,18 @@ impl<F> mio::Handler for Handler <F>
         }
     }
 
-    fn timeout(&mut self, _: &mut Loop<F>, tout: ()) {
-        debug!("Got timeout {:?}", tout);
+    fn timeout(&mut self, _: &mut Loop<F>, Timeout { connection, event }: Timeout) {
+        if let Some(conn) = self.connections.get_mut(connection) {
+            if let Err(err) = conn.timeout_triggered(event) {
+                conn.error(err)
+            }
+        } else {
+            trace!("Connection disconnected while timeout was waiting.")
+        }
     }
 
-    fn interrupted(&mut self, _: &mut Loop<F>) {
+    fn interrupted(&mut self, eloop: &mut Loop<F>) {
         error!("Websocket shutting down for interrupt.");
+        eloop.shutdown()
     }
 }

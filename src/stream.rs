@@ -4,9 +4,9 @@ use std::net::SocketAddr;
 use mio::{TryRead, TryWrite};
 use mio::tcp::TcpStream;
 #[cfg(all(not(windows), feature="ssl"))]
-use openssl::ssl::NonblockingSslStream;
+use openssl::ssl::SslStream;
 #[cfg(all(not(windows), feature="ssl"))]
-use openssl::ssl::error::NonblockingSslError;
+use openssl::ssl::error::Error as SslError;
 
 use result::{Result, Error, Kind};
 
@@ -15,7 +15,7 @@ pub enum Stream {
     Tcp(TcpStream),
     #[cfg(all(not(windows), feature="ssl"))]
     Tls {
-        sock: NonblockingSslStream<TcpStream>,
+        sock: SslStream<TcpStream>,
         negotiating: bool,
     }
 }
@@ -28,7 +28,7 @@ impl Stream {
     }
 
     #[cfg(all(not(windows), feature="ssl"))]
-    pub fn tls(stream: NonblockingSslStream<TcpStream>) -> Stream {
+    pub fn tls(stream: SslStream<TcpStream>) -> Stream {
         Tls { sock: stream, negotiating: false }
     }
 
@@ -91,15 +91,15 @@ impl TryRead for Stream {
             Tcp(ref mut sock) => sock.try_read(buf),
             #[cfg(all(not(windows), feature="ssl"))]
             Tls { ref mut sock, ref mut negotiating } => {
-                match sock.read(buf) {
+                match sock.ssl_read(buf) {
                     Ok(cnt) => Ok(Some(cnt)),
-                    Err(NonblockingSslError::SslError(err)) =>
-                        Err(io::Error::new(io::ErrorKind::Other, err)),
-                    Err(NonblockingSslError::WantWrite) => {
+                    Err(SslError::WantWrite(_)) => {
                         *negotiating = true;
                         Ok(None)
-                    }
-                    Err(NonblockingSslError::WantRead) => Ok(None),
+                    },
+                    Err(SslError::WantRead(_)) => Ok(None),
+                    Err(err) =>
+                        Err(io::Error::new(io::ErrorKind::Other, err)),
                 }
             }
         }
@@ -116,15 +116,15 @@ impl TryWrite for Stream {
 
                 *negotiating = false;
 
-                match sock.write(buf) {
+                match sock.ssl_write(buf) {
                     Ok(cnt) => Ok(Some(cnt)),
-                    Err(NonblockingSslError::SslError(err)) =>
-                        Err(io::Error::new(io::ErrorKind::Other, err)),
-                    Err(NonblockingSslError::WantRead) => {
+                    Err(SslError::WantRead(_)) => {
                         *negotiating = true;
                         Ok(None)
-                    }
-                    Err(NonblockingSslError::WantWrite) => Ok(None),
+                    },
+                    Err(SslError::WantWrite(_)) => Ok(None),
+                    Err(err) =>
+                        Err(io::Error::new(io::ErrorKind::Other, err)),
                 }
             }
         }
