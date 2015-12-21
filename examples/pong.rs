@@ -86,12 +86,12 @@ impl Handler for Server {
     }
 
     fn on_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
-        // If the frame is a pong, print the latency.
+        // If the frame is a pong, print the round-trip time.
         // The pong should contain data from out ping, but it isn't guaranteed to.
         if frame.opcode() == OpCode::Pong {
             if let Ok(pong) = try!(from_utf8(frame.payload())).parse::<u64>() {
                 let now = time::precise_time_ns();
-                println!("Latency is {:.3}ms.", (now - pong) as f64 / 1_000_000f64);
+                println!("RTT is {:.3}ms.", (now - pong) as f64 / 1_000_000f64);
             } else {
                 println!("Received bad pong.");
             }
