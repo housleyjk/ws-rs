@@ -3,7 +3,7 @@
 //!
 //! For simple applications, use one of the utility functions `listen` and `connect`:
 //!
-//! `listen` accpets a string that represents a socket address and a Factory, see
+//! `listen` accepts a string that represents a socket address and a Factory, see
 //! [Architecture](#architecture).
 //!
 //! ```no_run
