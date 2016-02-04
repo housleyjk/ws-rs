@@ -797,7 +797,7 @@ impl<H> Connection<H>
 
                 while let Some(len) = try!(self.socket.try_write_buf(&mut self.out_buffer)) {
                     trace!("Wrote {} bytes to {}", len, self.peer_addr());
-                    let finished = len == 0 || self.out_buffer.position() as usize == self.out_buffer.get_ref().len();
+                    let finished = len == 0 || self.out_buffer.position() == self.out_buffer.get_ref().len() as u64;
                     if finished {
                         match self.state {
                             // we are are a server that is closing and just wrote out our confirming
@@ -918,7 +918,7 @@ impl<H> Connection<H>
     fn check_events(&mut self) {
         if !self.state.is_connecting() {
             self.events.insert(EventSet::readable());
-            if (self.out_buffer.position() as usize) < self.out_buffer.get_ref().len() {
+            if self.out_buffer.position() < self.out_buffer.get_ref().len() as u64 {
                 self.events.insert(EventSet::writable());
             }
         }

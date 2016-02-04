@@ -16,7 +16,7 @@ extern crate env_logger;
 use ws::{Builder, Settings, Sender, CloseCode, Handler, Message, Handshake, Result};
 
 const CONNECTIONS: usize = 10_000; // simultaneous
-const MESSAGES: usize = 10;
+const MESSAGES: u32 = 10;
 static MESSAGE: &'static str = "TEST TEST TEST TEST TEST TEST TEST TEST";
 
 fn main () {
@@ -26,7 +26,7 @@ fn main () {
 
     struct Connection {
         out: Sender,
-        count: usize,
+        count: u32,
         time: u64,
         total: u64,
     }

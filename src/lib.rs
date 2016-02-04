@@ -192,7 +192,7 @@
 //!
 //! struct Server {
 //!     out: Sender,
-//!     count: Rc<Cell<usize>>,
+//!     count: Rc<Cell<u32>>,
 //! }
 //!
 //! impl Handler for Server {
