@@ -78,7 +78,7 @@ pub enum CloseCode {
     /// Indicates that an endpoint is "going away", such as a server
     /// going down or a browser having navigated away from a page.
     Away,
-    /// indicates that an endpoint is terminating the connection due
+    /// Indicates that an endpoint is terminating the connection due
     /// to a protocol error.
     Protocol,
     /// Indicates that an endpoint is terminating the connection
@@ -86,9 +86,15 @@ pub enum CloseCode {
     /// endpoint that understands only text data MAY send this if it
     /// receives a binary message).
     Unsupported,
-    #[doc(hidden)]
+    /// Indicates that no status code was included in a closing frame. This
+    /// close code makes it possible to use a single method, `on_close` to 
+    /// handle even cases where no close code was provided.
     Status,
-    #[doc(hidden)]
+    /// Indicates an abnormal closure. If the abnormal closure was due to an
+    /// error, this close code will not be used. Instead, the `on_error` method
+    /// of the handler will be called with the error. However, if the connection
+    /// is simply dropped, without an error, this close code will be sent to the
+    /// handler.
     Abnormal,
     /// Indicates that an endpoint is terminating the connection
     /// because it has received data within a message that was not

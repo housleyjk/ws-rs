@@ -393,6 +393,10 @@ impl<H> Connection<H>
         }
     }
 
+    pub fn hang_up(&mut self) {
+        self.handler.on_close(CloseCode::Abnormal, "The other endpoint hung up.");
+    }
+
     fn write_handshake(&mut self) -> Result<()> {
         if let Connecting(ref mut req, ref mut res) = self.state {
             match self.endpoint {

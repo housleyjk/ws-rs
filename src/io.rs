@@ -344,6 +344,7 @@ impl<F> mio::Handler for Handler <F>
                     self.connections.remove(token);
                 } else if events.is_hup() {
                     trace!("Connection token={:?} hung up.", token);
+                    self.connections[token].hang_up();
                     self.connections.remove(token);
                 } else {
 
