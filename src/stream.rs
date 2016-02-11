@@ -59,7 +59,6 @@ impl Stream {
     }
 
     pub fn clear_negotiating(&mut self) -> Result<()> {
-        debug!("Clearing negotiating status for {}", try!(self.peer_addr()));
         match *self {
             Tcp(_) => Err(Error::new(Kind::Internal, "Attempted to clear negotiating flag on non ssl connection.")),
             #[cfg(all(not(windows), feature="ssl"))]

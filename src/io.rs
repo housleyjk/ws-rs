@@ -273,7 +273,6 @@ impl<F> Handler<F>
 
 }
 
-
 impl<F> mio::Handler for Handler <F>
     where F: Factory
 {
@@ -345,6 +344,7 @@ impl<F> mio::Handler for Handler <F>
                     self.connections.remove(token);
                 } else if events.is_hup() {
                     trace!("Connection token={:?} hung up.", token);
+                    self.connections[token].hang_up();
                     self.connections.remove(token);
                 } else {
 
@@ -600,4 +600,42 @@ impl<F> mio::Handler for Handler <F>
         error!("Websocket shutting down for interrupt.");
         eloop.shutdown()
     }
+}
+
+mod test {
+    #![allow(unused_imports, unused_variables, dead_code)]
+    use std::str::FromStr;
+
+    use url::Url;
+
+    use result::{Error, Kind};
+    use super::*;
+    use super::url_to_addrs;
+
+    #[test]
+    fn test_url_to_addrs() {
+        let ws_url = Url::from_str("ws://example.com?query=me").unwrap();
+        let wss_url = Url::from_str("wss://example.com/suburl#fragment").unwrap();
+        let bad_url = Url::from_str("http://howdy.bad.com").unwrap();
+        let no_resolve = Url::from_str("ws://bad.elucitrans.com").unwrap();
+
+        assert!(url_to_addrs(&ws_url).is_ok());
+        assert!(url_to_addrs(&ws_url).unwrap().len() > 0);
+        assert!(url_to_addrs(&wss_url).is_ok());
+        assert!(url_to_addrs(&wss_url).unwrap().len() > 0);
+
+        match url_to_addrs(&bad_url) {
+            Ok(_) => panic!("url_to_addrs accepts http urls."),
+            Err(Error { kind: Kind::Internal, details: _}) => (),  // pass
+            err => panic!("{:?}", err),
+        }
+
+        match url_to_addrs(&no_resolve) {
+            Ok(_) => panic!("url_to_addrs creates addresses for non-existent domains."),
+            Err(Error { kind: Kind::Io(_), details: _}) => (),  // pass
+            err => panic!("{:?}", err),
+        }
+
+    }
+
 }

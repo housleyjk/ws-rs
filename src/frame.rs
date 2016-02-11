@@ -247,7 +247,7 @@ impl Frame {
 
     /// Parse the input stream into a frame.
     pub fn parse(cursor: &mut Cursor<Vec<u8>>) -> Result<Option<Frame>> {
-        let size = cursor.get_ref().len() - cursor.position() as usize;
+        let size = cursor.get_ref().len() as u64 - cursor.position();
         let initial = cursor.position();
         trace!("Position in buffer {}", initial);
 
@@ -319,7 +319,7 @@ impl Frame {
             None
         };
 
-        if size < length as usize + header_length {
+        if size < length + header_length {
             cursor.set_position(initial);
             return Ok(None)
         }

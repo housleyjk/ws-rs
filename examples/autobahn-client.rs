@@ -30,7 +30,7 @@ fn main () {
     update_reports().unwrap();
 }
 
-fn get_case_count() -> Result<usize> {
+fn get_case_count() -> Result<u32> {
 
     // sadly we need to use a Cell because we need to set the total, and RC is immutable
     let total = Rc::new(Cell::new(0));
@@ -43,7 +43,7 @@ fn get_case_count() -> Result<usize> {
 
             let count = try!(msg.as_text());
 
-            my_total.set(count.parse::<usize>().unwrap());
+            my_total.set(count.parse::<u32>().unwrap());
 
             out.close(CloseCode::Normal)
         }

@@ -72,7 +72,7 @@ fn main () {
     struct Client {
         out: Sender,
         ind: usize,
-        data: Vec<usize>,
+        data: Vec<u32>,
     }
 
     impl Client {
@@ -130,7 +130,7 @@ fn main () {
     // Logger thread
     let logger = thread::Builder::new().name("logger".to_owned()).spawn(move || {
         // Make a new vector to store the numbers
-        let mut log: Vec<usize> = Vec::new();
+        let mut log: Vec<u32> = Vec::new();
 
         // Receive data and push it to the log, this only works if we have one WebSocket
         // connection, otherwise the log would have data from all connections. But for our example,
