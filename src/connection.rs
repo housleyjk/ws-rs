@@ -190,7 +190,7 @@ impl<H> Connection<H>
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");
                     }
-                    Err(Error::new(Kind::Internal, "Unable to connect to server."))
+                    Err(Error::new(Kind::Internal, "Exhausted possible addresses."))
                 }
             } else {
                 Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
@@ -216,7 +216,7 @@ impl<H> Connection<H>
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");
                     }
-                    Err(Error::new(Kind::Internal, "Unable to connect to server."))
+                    Err(Error::new(Kind::Internal, "Exhausted possible addresses."))
                 }
             } else {
                 Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))

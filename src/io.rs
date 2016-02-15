@@ -12,6 +12,9 @@ use mio::tcp::{TcpListener, TcpStream};
 use mio::util::Slab;
 use url::Url;
 
+#[cfg(all(not(windows), feature="ssl"))]
+use openssl::ssl::error::SslError;
+
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
@@ -99,83 +102,104 @@ impl<F> Handler<F>
 
     #[cfg(all(not(windows), feature="ssl"))]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
-        let mut addresses = try!(url_to_addrs(url));
-        // note popping from the vector will most likely give us a tcpip v4 address
-        let addr = try!(addresses.pop().ok_or(
-            Error::new(
-                Kind::Internal,
-                format!("Unable to obtain any socket address for {}", url))));
-
-        let sock = try!(TcpStream::connect(&addr));
-        let factory = &mut self.factory;
         let settings = self.settings;
+        let mut addresses = try!(url_to_addrs(url));
+        let tok = {
+            // note popping from the vector will most likely give us a tcpip v4 address
+            let addr = try!(addresses.pop().ok_or(
+                Error::new(
+                    Kind::Internal,
+                    format!("Unable to obtain any socket address for {}", url))));
+            addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
 
-        let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
-            Connection::new(tok, sock, handler, settings)
-        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+            let sock = try!(TcpStream::connect(&addr));
+            let factory = &mut self.factory;
 
-        let conn = &mut self.connections[tok];
+            try!(self.connections.insert_with(|tok| {
+                let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+                Connection::new(tok, sock, handler, settings)
+            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")))
+        };
 
-        try!(conn.as_client(url, addresses));
+        if let Err(error) = self.connections[tok].as_client(url, addresses) {
+            self.connections.remove(tok);
+            return Err(error)
+        }
 
         if url.scheme == "wss" {
-            try!(conn.encrypt())
+            while let Err(ssl_error) = self.connections[tok].encrypt() {
+                match ssl_error.kind {
+                    Kind::Ssl(SslError::StreamError(ref io_error)) => {
+                        if let Some(errno) = io_error.raw_os_error() {
+                            if errno == 111 {
+                                if let Err(reset_error) = self.connections[tok].reset() {
+                                    trace!("Encountered error while trying to reset connection: {:?}", reset_error);
+                                } else {
+                                    continue
+                                }
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+                self.connections[tok].error(ssl_error);
+                // Allow socket to be registered anyway to await hangup
+                break
+            }
         }
 
         eloop.register(
-            conn.socket(),
-            conn.token(),
-            conn.events(),
+            self.connections[tok].socket(),
+            self.connections[tok].token(),
+            self.connections[tok].events(),
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from).or_else(|err| {
             error!("Encountered error while trying to build WebSocket connection: {}", err);
-            conn.error(err);
-            if settings.panic_on_new_connection {
-                panic!("Encountered error while trying to build WebSocket connection.");
-            }
-            Ok(())
+            self.connections.remove(tok);
+            Err(err)
         })
     }
 
     #[cfg(not(feature="ssl"))]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
-        let mut addresses = try!(url_to_addrs(url));
-        // note popping from the vector will most likely give us a tcpip v4 address
-        let addr = try!(addresses.pop().ok_or(
-            Error::new(
-                Kind::Internal,
-                format!("Unable to obtain any socket address for {}", url))));
-
-        let sock = try!(TcpStream::connect(&addr));
-        let factory = &mut self.factory;
         let settings = self.settings;
+        let mut addresses = try!(url_to_addrs(url));
+        let tok = {
+            // note popping from the vector will most likely give us a tcpip v4 address
+            let addr = try!(addresses.pop().ok_or(
+                Error::new(
+                    Kind::Internal,
+                    format!("Unable to obtain any socket address for {}", url))));
 
-        let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
-            Connection::new(tok, sock, handler, settings)
-        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+            let sock = try!(TcpStream::connect(&addr));
+            let factory = &mut self.factory;
 
-        let conn = &mut self.connections[tok];
+            try!(self.connections.insert_with(|tok| {
+                let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+                Connection::new(tok, sock, handler, settings)
+            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")))
+        };
 
-        try!(conn.as_client(url, addresses));
+        if let Err(error) = self.connections[tok].as_client(url, addresses) {
+            self.connections.remove(tok);
+            return Err(error)
+        }
 
         if url.scheme == "wss" {
-            return Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."))
+            let error = Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."));
+            self.connections.remove(tok);
+            return Err(error)
         }
 
         eloop.register(
-            conn.socket(),
-            conn.token(),
-            conn.events(),
+            self.connections[tok].socket(),
+            self.connections[tok].token(),
+            self.connections[tok].events(),
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from).or_else(|err| {
             error!("Encountered error while trying to build WebSocket connection: {}", err);
-            conn.error(err);
-            if settings.panic_on_new_connection {
-                panic!("Encountered error while trying to build WebSocket connection.");
-            }
-            Ok(())
+            self.connections.remove(tok);
+            Err(err)
         })
     }
 
