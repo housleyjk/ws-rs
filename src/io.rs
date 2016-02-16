@@ -186,7 +186,7 @@ impl<F> Handler<F>
         }
 
         if url.scheme == "wss" {
-            let error = Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."));
+            let error = Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls.");
             self.connections.remove(tok);
             return Err(error)
         }
