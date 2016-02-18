@@ -282,10 +282,12 @@ impl<H> Connection<H>
                             res.get_mut().clear();
                             if let Err(err) = write!(
                                     res.get_mut(),
-                                    "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg) {
+                                    "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg)
+                            {
                                 self.handler.on_error(Error::from(err));
                                 self.events = EventSet::none();
                             } else {
+                                println!("Scheduling 400");
                                 self.events.remove(EventSet::readable());
                                 self.events.insert(EventSet::writable());
                             }
@@ -448,13 +450,8 @@ impl<H> Connection<H>
                 Error::new(Kind::Internal, "Failed to parse response after handshake is complete.")));
 
             if response.status() != 101 {
-                if response.status() != 301 && response.status() != 302 {
-                    return Err(Error::new(Kind::Protocol, "Handshake failed."));
-                } else {
-                    self.events.insert(EventSet::readable());
-                    self.events.remove(EventSet::writable());
-                    return Ok(())
-                }
+                self.events = EventSet::none();
+                return Ok(())
             } else {
                 try!(self.handler.on_open(Handshake {
                     request: request,
