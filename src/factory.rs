@@ -178,4 +178,27 @@ mod test {
             Sender::new(mio::Token(0), event_loop.channel())
         );
     }
+
+    #[test]
+    fn connection_lost() {
+        struct X;
+
+        impl Factory for X {
+            type Handler = M;
+            fn connection_made(&mut self, _: Sender) -> M {
+                M
+            }
+            fn connection_lost(&mut self, handler: M) {
+                assert_eq!(handler, M);
+            }
+        }
+
+        let event_loop = mio::EventLoop::<S>::new().unwrap();
+
+        let mut x = X;
+        let m = x.connection_made(
+            Sender::new(mio::Token(0), event_loop.channel())
+        );
+        x.connection_lost(m);
+    }
 }
