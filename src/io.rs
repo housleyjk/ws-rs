@@ -122,7 +122,8 @@ impl<F> Handler<F>
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
-            self.connections.remove(tok);
+            let handler = self.connections.remove(tok).unwrap().consume();
+            self.factory.connection_lost(handler);
             return Err(error)
         }
 
@@ -155,7 +156,8 @@ impl<F> Handler<F>
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from).or_else(|err| {
             error!("Encountered error while trying to build WebSocket connection: {}", err);
-            self.connections.remove(tok);
+            let handler = self.connections.remove(tok).unwrap().consume();
+            self.factory.connection_lost(handler);
             Err(err)
         })
     }
@@ -181,13 +183,15 @@ impl<F> Handler<F>
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
-            self.connections.remove(tok);
+            let handler = self.connections.remove(tok).unwrap().consume();
+            self.factory.connection_lost(handler);
             return Err(error)
         }
 
         if url.scheme == "wss" {
             let error = Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls.");
-            self.connections.remove(tok);
+            let handler = self.connections.remove(tok).unwrap().consume();
+            self.factory.connection_lost(handler);
             return Err(error)
         }
 
@@ -198,7 +202,8 @@ impl<F> Handler<F>
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from).or_else(|err| {
             error!("Encountered error while trying to build WebSocket connection: {}", err);
-            self.connections.remove(tok);
+            let handler = self.connections.remove(tok).unwrap().consume();
+            self.factory.connection_lost(handler);
             Err(err)
         })
     }
@@ -351,7 +356,8 @@ impl<F> mio::Handler for Handler <F>
                                             PollOpt::edge() | PollOpt::oneshot(),
                                         ).or_else(|err| {
                                             self.connections[token].error(Error::from(err));
-                                            self.connections.remove(token);
+                                            let handler = self.connections.remove(tok).unwrap().consume();
+                                            self.factory.connection_lost(handler);
                                             Ok::<(), Error>(())
                                         }).unwrap();
                                         return
@@ -362,14 +368,19 @@ impl<F> mio::Handler for Handler <F>
                                 }
                             }
                         }
+                        // This will trigger disconnect if the connection is open
                         self.connections[token].error(Error::from(err));
+                    } else {
+                        self.connections[token].disconnect();
                     }
                     trace!("Dropping connection token={:?}.", token);
-                    self.connections.remove(token);
+                    let handler = self.connections.remove(tok).unwrap().consume();
+                    self.factory.connection_lost(handler);
                 } else if events.is_hup() {
                     trace!("Connection token={:?} hung up.", token);
-                    self.connections[token].hang_up();
-                    self.connections.remove(token);
+                    self.connections[token].disconnect();
+                    let handler = self.connections.remove(tok).unwrap().consume();
+                    self.factory.connection_lost(handler);
                 } else {
 
                     let active = {
@@ -403,11 +414,14 @@ impl<F> mio::Handler for Handler <F>
                         } else {
                             trace!("WebSocket connection to token={:?} disconnected.", token);
                         }
-                        self.connections.remove(token);
+                        let handler = self.connections.remove(tok).unwrap().consume();
+                        self.factory.connection_lost(handler);
                     } else {
                         self.schedule(eloop, &self.connections[token]).or_else(|err| {
+                            // This will be an io error, so disconnect will already be called
                             self.connections[token].error(Error::from(err));
-                            self.connections.remove(token);
+                            let handler = self.connections.remove(tok).unwrap().consume();
+                            self.factory.connection_lost(handler);
                             Ok::<(), Error>(())
                         }).unwrap()
                     }

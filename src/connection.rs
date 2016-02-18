@@ -252,7 +252,7 @@ impl<H> Connection<H>
         self.handler.on_shutdown();
         if let Err(err) = self.send_close(CloseCode::Away, "Shutting down.") {
             self.handler.on_error(err);
-            self.events = EventSet::none();
+            self.disconnect()
         }
     }
 
@@ -292,7 +292,6 @@ impl<H> Connection<H>
                         } else {
                             self.events = EventSet::none();
                         }
-
                     }
                     _ => {
                         let msg = err.to_string();
@@ -326,7 +325,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Error, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Capacity => {
@@ -338,7 +337,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Size, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Protocol => {
@@ -350,7 +349,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Protocol, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Encoding(_) => {
@@ -362,7 +361,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Invalid, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Parse(_) => {
@@ -370,7 +369,7 @@ impl<H> Connection<H>
                         error!("Encountered HTTP parse error while not in connecting state!");
                         self.handler.on_error(err);
                         error!("Disconnecting WebSocket.");
-                        self.events = EventSet::none();
+                        self.disconnect()
                     }
                     Kind::Custom(_) => {
                         self.handler.on_error(err);
@@ -386,15 +385,25 @@ impl<H> Connection<H>
                             panic!("Panicking on io error -- {}", err);
                         }
                         self.handler.on_error(err);
-                        self.events = EventSet::none();
+                        self.disconnect()
                     }
                 }
             }
         }
     }
 
-    pub fn hang_up(&mut self) {
-        self.handler.on_close(CloseCode::Abnormal, "The other endpoint hung up.");
+    pub fn disconnect(&mut self) {
+        match self.state {
+            RespondingClose | FinishedClose | Connecting(_, _)=> (),
+            _ => {
+                self.handler.on_close(CloseCode::Abnormal, "");
+            }
+        }
+        self.events = EventSet::none()
+    }
+
+    pub fn consume(self) -> H {
+        self.handler
     }
 
     fn write_handshake(&mut self) -> Result<()> {
@@ -646,8 +655,9 @@ impl<H> Connection<H>
 
                             } else {
 
-                                // Starting handshake, will send the respondig close frame
+                                // Starting handshake, will send the responding close frame
                                 self.state = RespondingClose;
+
                             }
 
                             let mut close_code = [0u8; 2];

@@ -8,7 +8,7 @@ license = "MIT"
 name = "ws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
-version = "0.4.4"
+version = "0.4.5"
 
 [dependencies]
 httparse = "*"

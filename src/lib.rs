@@ -67,7 +67,7 @@
 //! the variable `out`, which is the Sender, representing the output of the WebSocket, so that it
 //! can use that sender later to send a Message. Closure Handlers generally need to take ownership of the variables
 //! that they close over because the Factory may be called multiple times. Think of Handlers as
-//! though they are threads and Rust's memory model should make sense. Closure Handlers must return
+//! though they are threads and they should make sense within Rust's memory model. Closure Handlers must return
 //! a `Result<()>`, in order to handle errors without panicking.
 //!
 //! In the above examples, `out.close` and `out.send` both actually return a `Result<()>` indicating
@@ -135,10 +135,20 @@
 //! original example, but this way is more flexible and gives you access to more of the underlying
 //! details of the WebSocket connection.
 //!
-//! Another method you will probably want to implement is `on_close`. This method is called anytime
-//! the other side of the WebSocket connection attempts to close the connection. Implementing
-//! `on_close` gives you a mechanism for informing the user regarding why the WebSocket connection
-//! may have been closed, and it also gives you an opportunity to clean up any resources or state
+//! It's also important to note that using `on_open` allows you to tie in to the lifecycle of the
+//! WebSocket. If the opening handshake is successful and `on_open` is called, the WebSocket is now
+//! open and alive. Until that point, it is not guaranteed that the connection will be
+//! upgraded. So, if you have important state that you need to tear down, or if
+//! you have some state that tracks closely the lifecycle of the WebScoket connection, it is best to
+//! set that up in the `on_open` method rather than when your handler is first created.
+//! If `on_open` returns Ok, then you are guaranteed that `on_close` will run when the WebSocket
+//! connection is about to go down, unless a panic has occurred.
+//!
+//! Therefore you will probably want to implement `on_close`. This method is called anytime
+//! the WebSocket connection will close. The `on_close` method implements the closing handshake of
+//! the WebSocket protocol. Using `on_close` gives you a mechanism for informing the user regarding
+//! why the WebSocket connection may have been closed even if no errors were encountered.
+//! It also gives you an opportunity to clean up any resources or state
 //! that may be dependent on the connection that is now about to disconnect.
 //!
 //! An example server might use this as follows:
@@ -174,14 +184,13 @@
 //! listen("127.0.0.1:3012", |out| { Server { out: out } }).unwrap()
 //! ```
 //!
-//! Errors don't just occur on the other side of the connection, sometimes your code will encounter
-//! an exceptional state too. You can access errors by implementing `on_error`. By implementing
-//! `on_error` you can inform the user of an error and tear down any resources that you may have
-//! setup for the connection, but which are not owned by the Handler. Also, note that certain kinds
-//! of errors have certain ramifications within the WebSocket protocol. WS-RS will take care of
-//! sending the appropriate close code.
+//! When errors occur, your handler will be informed via the `on_error` method. Depending on the
+//! type of the error, the connection may or may not be about to go down. If the error is such that
+//! the connection needs to close, your handler's `on_close` method will be called and WS-RS will
+//! send the appropriate close code to the other endpoint if possible.
 //!
-//! A server that tracks state outside of the handler might be as follows:
+//! A server that tracks state related to the life of the WebSocket connection
+//! and informs the user of errors might be as follows:
 //!
 //! ```no_run
 //!
@@ -214,6 +223,8 @@
 //!         match code {
 //!             CloseCode::Normal => println!("The client is done with the connection."),
 //!             CloseCode::Away   => println!("The client is leaving the site."),
+//!             CloseCode::Abnormal => println!(
+//!                 "Closing handshake failed! Unable to obtain closing status from client."),
 //!             _ => println!("The client encountered an error: {}", reason),
 //!         }
 //!
@@ -223,9 +234,6 @@
 //!
 //!     fn on_error(&mut self, err: Error) {
 //!         println!("The server encountered an error: {:?}", err);
-//!
-//!         // The connection is going down, so we need to decrement the count
-//!         self.count.set(self.count.get() - 1)
 //!     }
 //!
 //! }
@@ -239,8 +247,6 @@
 //!
 //! There are other Handler methods that allow even more fine-grained access, but most applications
 //! will usually only need these four methods.
-//!
-//!
 #![deny(
     missing_copy_implementations,
     trivial_casts, trivial_numeric_casts,
@@ -430,7 +436,7 @@ pub struct Settings {
     /// Default: false
     pub key_strict: bool,
     /// The WebSocket protocol requires clients to perform an opening handshake using the HTTP
-    /// GET method for the request. However, since only websockets are supported on the connection,
+    /// GET method for the request. However, since only WebSockets are supported on the connection,
     /// verifying the method of handshake requests is not always necessary. To enforce the
     /// requirement that handshakes begin with a GET method, set this to true.
     /// Default: false

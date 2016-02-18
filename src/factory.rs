@@ -5,10 +5,10 @@ use communication::Sender;
 pub trait Factory {
     type Handler: Handler;
 
-    /// Called when a TCP connection is made
+    /// Called when a TCP connection is made.
     fn connection_made(&mut self, Sender) -> Self::Handler;
 
-    /// Called when the WebSocket is shutting down
+    /// Called when the WebSocket is shutting down.
     #[inline]
     fn on_shutdown(&mut self) {
         debug!("Factory received WebSocket shutdown request.");
@@ -89,6 +89,16 @@ pub trait Factory {
     #[inline]
     fn server_connected(&mut self, ws: Sender) -> Self::Handler {
         self.connection_made(ws)
+    }
+
+    /// Called when a TCP connection is lost with the handler that was
+    /// setup for that connection.
+    ///
+    /// The default implementation is a noop that simply drops the handler.
+    /// You can use this to track connections being destroyed or to finalize
+    /// state that was not internally tracked by the handler.
+    #[inline]
+    fn connection_lost(&mut self, _: Self::Handler) {
     }
 
 }
