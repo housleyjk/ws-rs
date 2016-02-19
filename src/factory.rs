@@ -5,10 +5,10 @@ use communication::Sender;
 pub trait Factory {
     type Handler: Handler;
 
-    /// Called when a TCP connection is made
+    /// Called when a TCP connection is made.
     fn connection_made(&mut self, Sender) -> Self::Handler;
 
-    /// Called when the WebSocket is shutting down
+    /// Called when the WebSocket is shutting down.
     #[inline]
     fn on_shutdown(&mut self) {
         debug!("Factory received WebSocket shutdown request.");
@@ -91,6 +91,16 @@ pub trait Factory {
         self.connection_made(ws)
     }
 
+    /// Called when a TCP connection is lost with the handler that was
+    /// setup for that connection.
+    ///
+    /// The default implementation is a noop that simply drops the handler.
+    /// You can use this to track connections being destroyed or to finalize
+    /// state that was not internally tracked by the handler.
+    #[inline]
+    fn connection_lost(&mut self, _: Self::Handler) {
+    }
+
 }
 
 impl<F, H> Factory for F
@@ -167,5 +177,28 @@ mod test {
         factory.connection_made(
             Sender::new(mio::Token(0), event_loop.channel())
         );
+    }
+
+    #[test]
+    fn connection_lost() {
+        struct X;
+
+        impl Factory for X {
+            type Handler = M;
+            fn connection_made(&mut self, _: Sender) -> M {
+                M
+            }
+            fn connection_lost(&mut self, handler: M) {
+                assert_eq!(handler, M);
+            }
+        }
+
+        let event_loop = mio::EventLoop::<S>::new().unwrap();
+
+        let mut x = X;
+        let m = x.connection_made(
+            Sender::new(mio::Token(0), event_loop.channel())
+        );
+        x.connection_lost(m);
     }
 }

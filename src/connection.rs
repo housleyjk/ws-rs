@@ -190,7 +190,7 @@ impl<H> Connection<H>
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");
                     }
-                    Err(Error::new(Kind::Internal, "Unable to connect to server."))
+                    Err(Error::new(Kind::Internal, "Exhausted possible addresses."))
                 }
             } else {
                 Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
@@ -216,7 +216,7 @@ impl<H> Connection<H>
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");
                     }
-                    Err(Error::new(Kind::Internal, "Unable to connect to server."))
+                    Err(Error::new(Kind::Internal, "Exhausted possible addresses."))
                 }
             } else {
                 Err(Error::new(Kind::Internal, "Unable to reset client connection because it is active."))
@@ -252,7 +252,7 @@ impl<H> Connection<H>
         self.handler.on_shutdown();
         if let Err(err) = self.send_close(CloseCode::Away, "Shutting down.") {
             self.handler.on_error(err);
-            self.events = EventSet::none();
+            self.disconnect()
         }
     }
 
@@ -282,17 +282,18 @@ impl<H> Connection<H>
                             res.get_mut().clear();
                             if let Err(err) = write!(
                                     res.get_mut(),
-                                    "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg) {
+                                    "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg)
+                            {
                                 self.handler.on_error(Error::from(err));
                                 self.events = EventSet::none();
                             } else {
+                                println!("Scheduling 400");
                                 self.events.remove(EventSet::readable());
                                 self.events.insert(EventSet::writable());
                             }
                         } else {
                             self.events = EventSet::none();
                         }
-
                     }
                     _ => {
                         let msg = err.to_string();
@@ -326,7 +327,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Error, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Capacity => {
@@ -338,7 +339,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Size, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Protocol => {
@@ -350,7 +351,7 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Protocol, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Encoding(_) => {
@@ -362,15 +363,14 @@ impl<H> Connection<H>
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Invalid, reason) {
                             self.handler.on_error(err);
-                            self.events = EventSet::none();
+                            self.disconnect()
                         }
                     }
                     Kind::Parse(_) => {
-                        debug_assert!(false, "Encountered HTTP parse error while not in connecting state!");
-                        error!("Encountered HTTP parse error while not in connecting state!");
+                        // This may happen if some handler writes a bad response
                         self.handler.on_error(err);
                         error!("Disconnecting WebSocket.");
-                        self.events = EventSet::none();
+                        self.disconnect()
                     }
                     Kind::Custom(_) => {
                         self.handler.on_error(err);
@@ -386,15 +386,25 @@ impl<H> Connection<H>
                             panic!("Panicking on io error -- {}", err);
                         }
                         self.handler.on_error(err);
-                        self.events = EventSet::none();
+                        self.disconnect()
                     }
                 }
             }
         }
     }
 
-    pub fn hang_up(&mut self) {
-        self.handler.on_close(CloseCode::Abnormal, "The other endpoint hung up.");
+    pub fn disconnect(&mut self) {
+        match self.state {
+            RespondingClose | FinishedClose | Connecting(_, _)=> (),
+            _ => {
+                self.handler.on_close(CloseCode::Abnormal, "");
+            }
+        }
+        self.events = EventSet::none()
+    }
+
+    pub fn consume(self) -> H {
+        self.handler
     }
 
     fn write_handshake(&mut self) -> Result<()> {
@@ -430,22 +440,24 @@ impl<H> Connection<H>
 
         if let Connecting(ref req, ref res) = replace(&mut self.state, Open) {
             trace!("Finished writing handshake response to {}", self.peer_addr());
-            debug!("Connection to {} is now open.", self.peer_addr());
 
-            let request = try!(try!(Request::parse(req.get_ref())).ok_or(
-                Error::new(Kind::Internal, "Failed to parse request after handshake is complete.")));
+            let request = match Request::parse(req.get_ref()) {
+                Ok(Some(req)) => req,
+                _ => {
+                    // An error should already have been sent for the first time it failed to
+                    // parse. We don't call disconnect here because `on_open` hasn't been called yet.
+                    self.state = FinishedClose;
+                    self.events = EventSet::none();
+                    return Ok(())
+                }
+            };
 
             let response = try!(try!(Response::parse(res.get_ref())).ok_or(
                 Error::new(Kind::Internal, "Failed to parse response after handshake is complete.")));
 
             if response.status() != 101 {
-                if response.status() != 301 && response.status() != 302 {
-                    return Err(Error::new(Kind::Protocol, "Handshake failed."));
-                } else {
-                    self.events.insert(EventSet::readable());
-                    self.events.remove(EventSet::writable());
-                    return Ok(())
-                }
+                self.events = EventSet::none();
+                return Ok(())
             } else {
                 try!(self.handler.on_open(Handshake {
                     request: request,
@@ -453,6 +465,7 @@ impl<H> Connection<H>
                     peer_addr: self.socket.peer_addr().ok(),
                     local_addr: self.socket.local_addr().ok(),
                 }));
+                debug!("Connection to {} is now open.", self.peer_addr());
                 self.events.insert(EventSet::readable());
                 return Ok(self.check_events())
             }
@@ -646,8 +659,9 @@ impl<H> Connection<H>
 
                             } else {
 
-                                // Starting handshake, will send the respondig close frame
+                                // Starting handshake, will send the responding close frame
                                 self.state = RespondingClose;
+
                             }
 
                             let mut close_code = [0u8; 2];
