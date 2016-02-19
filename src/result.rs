@@ -140,8 +140,17 @@ impl From<io::Error> for Error {
 impl From<httparse::Error> for Error {
 
     fn from(err: httparse::Error) -> Error {
-        // TODO: match on parse error to determine details
-        Error::new(Kind::Parse(err), "")
+        let details = match err {
+            httparse::Error::HeaderName => "Invalid byte in header name.",
+            httparse::Error::HeaderValue => "Invalid byte in header value.",
+            httparse::Error::NewLine => "Invalid byte in new line.",
+            httparse::Error::Status => "Invalid byte in Response status.",
+            httparse::Error::Token => "Invalid byte where token is required.",
+            httparse::Error::TooManyHeaders => "Parsed more headers than provided buffer can contain.",
+            httparse::Error::Version => "Invalid byte in HTTP version.",
+        };
+
+        Error::new(Kind::Parse(err), details)
     }
 
 }

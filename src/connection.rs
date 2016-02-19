@@ -367,8 +367,7 @@ impl<H> Connection<H>
                         }
                     }
                     Kind::Parse(_) => {
-                        debug_assert!(false, "Encountered HTTP parse error while not in connecting state!");
-                        error!("Encountered HTTP parse error while not in connecting state!");
+                        // This may happen if some handler writes a bad response
                         self.handler.on_error(err);
                         error!("Disconnecting WebSocket.");
                         self.disconnect()
@@ -441,10 +440,17 @@ impl<H> Connection<H>
 
         if let Connecting(ref req, ref res) = replace(&mut self.state, Open) {
             trace!("Finished writing handshake response to {}", self.peer_addr());
-            debug!("Connection to {} is now open.", self.peer_addr());
 
-            let request = try!(try!(Request::parse(req.get_ref())).ok_or(
-                Error::new(Kind::Internal, "Failed to parse request after handshake is complete.")));
+            let request = match Request::parse(req.get_ref()) {
+                Ok(Some(req)) => req,
+                _ => {
+                    // An error should already have been sent for the first time it failed to
+                    // parse. We don't call disconnect here because `on_open` hasn't been called yet.
+                    self.state = FinishedClose;
+                    self.events = EventSet::none();
+                    return Ok(())
+                }
+            };
 
             let response = try!(try!(Response::parse(res.get_ref())).ok_or(
                 Error::new(Kind::Internal, "Failed to parse response after handshake is complete.")));
@@ -459,6 +465,7 @@ impl<H> Connection<H>
                     peer_addr: self.socket.peer_addr().ok(),
                     local_addr: self.socket.local_addr().ok(),
                 }));
+                debug!("Connection to {} is now open.", self.peer_addr());
                 self.events.insert(EventSet::readable());
                 return Ok(self.check_events())
             }
