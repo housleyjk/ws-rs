@@ -287,7 +287,6 @@ impl<H> Connection<H>
                                 self.handler.on_error(Error::from(err));
                                 self.events = EventSet::none();
                             } else {
-                                println!("Scheduling 400");
                                 self.events.remove(EventSet::readable());
                                 self.events.insert(EventSet::writable());
                             }
