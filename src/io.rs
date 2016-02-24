@@ -10,7 +10,6 @@ use mio::{
     PollOpt,
 };
 use mio::tcp::{TcpListener, TcpStream};
-use slab;
 
 use url::Url;
 
@@ -21,13 +20,12 @@ use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
 use factory::Factory;
+use util::Slab;
 use super::Settings;
 
 pub const ALL: Token = Token(0);
 pub const SYSTEM: Token = Token(1);
 const CONN_START: Token = Token(2);
-
-pub type Slab<T> = slab::Slab<T, Token>;
 
 pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<<F as Factory>::Handler>;
