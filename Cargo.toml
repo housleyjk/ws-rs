@@ -13,11 +13,12 @@ version = "0.4.5"
 [dependencies]
 httparse = "*"
 log = "*"
-mio = "*"
+mio = { version = "*", git = "https://github.com/carllerche/mio.git" }
 openssl = { version = "*", optional = true }
 rand = "*"
 sha1 = "*"
 url = "*"
+slab = "*"
 
 [dev-dependencies]
 clap = "*"

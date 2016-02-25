@@ -258,6 +258,7 @@ extern crate mio;
 extern crate sha1;
 extern crate rand;
 extern crate url;
+extern crate slab;
 #[cfg(all(not(windows), feature="ssl"))] extern crate openssl;
 #[macro_use] extern crate log;
 
@@ -289,7 +290,7 @@ pub use handshake::{Handshake, Request, Response};
 use std::fmt;
 use std::default::Default;
 use std::net::ToSocketAddrs;
-use mio::EventLoopConfig;
+use mio::EventLoopBuilder;
 use std::borrow::Borrow;
 
 /// A utility function for setting up a WebSocket server.
@@ -496,20 +497,20 @@ impl<F> WebSocket<F>
     /// Create a new WebSocket using the given Factory to create handlers.
     pub fn new(factory: F) -> Result<WebSocket<F>> {
         let settings = Settings::default();
-        let mut config = EventLoopConfig::default();
+        let mut config = EventLoopBuilder::default();
         config.notify_capacity(settings.max_connections * 5);  // every handler can do 5 things at once
         Ok(WebSocket {
-            event_loop: try!(io::Loop::configured(config)),
+            event_loop: try!(config.build()),
             handler: io::Handler::new(factory, settings),
         })
     }
 
     /// Create a new WebSocket with a Factory and use the event loop config to
     /// configure the event loop.
-    pub fn with_config(factory: F, config: EventLoopConfig) -> Result<WebSocket<F>> {
+    pub fn with_config(factory: F, config: EventLoopBuilder) -> Result<WebSocket<F>> {
         warn!("The with_config method is deprecated and will be removed in a future version.");
         Ok(WebSocket {
-            event_loop: try!(io::Loop::configured(config)),
+            event_loop: try!(config.build()),
             handler: io::Handler::new(factory, Settings::default()),
         })
     }
@@ -565,7 +566,7 @@ impl<F> WebSocket<F>
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct Builder {
-    event_config: Option<EventLoopConfig>,
+    event_builder: Option<EventLoopBuilder>,
     settings: Settings,
 }
 
@@ -574,7 +575,7 @@ impl Builder {
     /// Create a new Builder with default settings.
     pub fn new() -> Builder {
         Builder {
-            event_config: None,
+            event_builder: None,
             settings: Settings::default(),
         }
     }
@@ -584,24 +585,24 @@ impl Builder {
     pub fn build<F>(&self, factory: F) -> Result<WebSocket<F>>
         where F: Factory
     {
-        let mut event_config: EventLoopConfig;
+        let mut event_builder: EventLoopBuilder;
 
-        if let Some(ref config) = self.event_config {
-            event_config = config.clone();
+        if let Some(ref config) = self.event_builder {
+            event_builder = config.clone();
         } else {
-            event_config = EventLoopConfig::default();
-            event_config.notify_capacity(self.settings.max_connections * 5);
+            event_builder = EventLoopBuilder::default();
+            event_builder.notify_capacity(self.settings.max_connections * 5);
         }
         Ok(WebSocket {
-            event_loop: try!(io::Loop::configured(event_config)),
+            event_loop: try!(event_builder.build()),
             handler: io::Handler::new(factory, self.settings),
         })
     }
 
-    /// Set the EventLoopConfig to use with this WebSocket. If this is not set
-    /// the builder will use a default EventLoopConfig based on other settings.
-    pub fn with_config(&mut self, config: EventLoopConfig) -> &mut Builder {
-        self.event_config = Some(config);
+    /// Set the EventLoopBuilder to use with this WebSocket. If this is not set
+    /// the builder will use a default EventLoopBuilder based on other settings.
+    pub fn with_builder(&mut self, builder: EventLoopBuilder) -> &mut Builder {
+        self.event_builder = Some(builder);
         self
     }
 
