@@ -83,7 +83,7 @@ pub struct Handshake {
     /// The socket address of the other endpoint. This address may
     /// be an intermediary such as a proxy server.
     pub peer_addr: Option<SocketAddr>,
-    /// The socket address of this enpoint.
+    /// The socket address of this endpoint.
     pub local_addr: Option<SocketAddr>,
 }
 
