@@ -258,7 +258,7 @@ extern crate mio;
 extern crate sha1;
 extern crate rand;
 extern crate url;
-#[cfg(all(not(windows), feature="ssl"))] extern crate openssl;
+#[cfg(feature="ssl")] extern crate openssl;
 #[macro_use] extern crate log;
 
 mod result;
@@ -448,7 +448,6 @@ pub struct Settings {
     /// simpler for most users to use a reverse proxy such as nginx to provide server side
     /// encryption.
     ///
-    /// Note: This setting is not supported on Windows.
     /// Default: false
     pub encrypt_server: bool,
 }

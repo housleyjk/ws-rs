@@ -1,6 +1,6 @@
 use url;
 use log::LogLevel::Error as ErrorLevel;
-#[cfg(all(not(windows), feature="ssl"))]
+#[cfg(feature="ssl")]
 use openssl::ssl::{Ssl, SslContext, SslMethod};
 
 use message::Message;
@@ -269,7 +269,7 @@ pub trait Handler {
     ///
     /// Override this method to customize the Ssl object used to encrypt the connection.
     #[inline]
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     fn build_ssl(&mut self) -> Result<Ssl> {
         let context = try!(SslContext::new(SslMethod::Tlsv1));
         Ssl::new(&context).map_err(Error::from)

@@ -12,7 +12,7 @@ use mio::tcp::{TcpListener, TcpStream};
 use mio::util::Slab;
 use url::Url;
 
-#[cfg(all(not(windows), feature="ssl"))]
+#[cfg(feature="ssl")]
 use openssl::ssl::error::SslError;
 
 use communication::{Sender, Signal, Command};
@@ -100,7 +100,7 @@ impl<F> Handler<F>
         Ok(self)
     }
 
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
@@ -208,7 +208,7 @@ impl<F> Handler<F>
         })
     }
 
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
