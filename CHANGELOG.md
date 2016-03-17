@@ -1,3 +1,15 @@
+<a name="v0.4.6"></a>
+### v0.4.6 (2016-03-17)
+
+#### Bug Fixes
+
+*   Debug check failing when http handshake fails ([fb84fb32](fb84fb32))
+
+#### Features
+* **ssl:** Re-enable support for SSL in Windows ([536779e9](536779e9))
+
+
+
 <a name="v0.4.5"></a>
 ### v0.4.5 (2016-02-18)
 

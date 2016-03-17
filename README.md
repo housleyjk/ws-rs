@@ -95,9 +95,6 @@ connect("wss://localhost:3012", |ws| {
 })
 ```
 
-Note: The ssl feature is currently not available on Windows.
-
-
 Contributing
 ------------
 

@@ -13,7 +13,7 @@ use mio::tcp::{TcpListener, TcpStream};
 
 use url::Url;
 
-#[cfg(all(not(windows), feature="ssl"))]
+#[cfg(feature="ssl")]
 use openssl::ssl::error::SslError;
 
 use communication::{Sender, Signal, Command};
@@ -102,7 +102,7 @@ impl<F> Handler<F>
         Ok(self)
     }
 
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
@@ -210,7 +210,7 @@ impl<F> Handler<F>
         })
     }
 
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
@@ -405,12 +405,10 @@ impl<F> mio::Handler for Handler <F>
                         conn.events().is_readable() || conn.events().is_writable()
                     };
 
+                    // NOTE: Closing state only applies after a ws connection was successfully
+                    // established. It's possible that we may go inactive while in a connecting
+                    // state if the handshake fails.
                     if !active {
-                        // normal closure
-                        debug_assert!(
-                            self.connections[token].state().is_closing(),
-                            "Connection neither readable nor writable in active state!"
-                        );
                         if let Ok(addr) = self.connections[token].socket().peer_addr() {
                             debug!("WebSocket connection to {} disconnected.", addr);
                         } else {

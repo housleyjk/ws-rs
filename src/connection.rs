@@ -9,7 +9,7 @@ use std::str::from_utf8;
 use url;
 use mio::{Token, TryRead, TryWrite, EventSet, Timeout};
 use mio::tcp::TcpStream;
-#[cfg(all(not(windows), feature="ssl"))]
+#[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
 
 use message::Message;
@@ -134,7 +134,7 @@ impl<H> Connection<H>
         }
     }
 
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn encrypt(&mut self) -> Result<()> {
         let ssl_stream = match self.endpoint {
             Server => try!(SslStream::accept(
@@ -166,7 +166,7 @@ impl<H> Connection<H>
     }
 
     // Resetting may be necessary in order to try all possible addresses for a server
-    #[cfg(all(not(windows), feature="ssl"))]
+    #[cfg(feature="ssl")]
     pub fn reset(&mut self) -> Result<()> {
         if self.is_client() {
             if let Connecting(ref mut req, ref mut res) = self.state {
@@ -226,10 +226,6 @@ impl<H> Connection<H>
         }
     }
 
-    pub fn state(&mut self) -> &mut State {
-        &mut self.state
-    }
-
     pub fn events(&self) -> EventSet {
         self.events
     }
@@ -270,7 +266,7 @@ impl<H> Connection<H>
         match self.state {
             Connecting(_, ref mut res) => {
                 match err.kind {
-                    #[cfg(all(not(windows), feature="ssl"))]
+                    #[cfg(feature="ssl")]
                     Kind::Ssl(_) | Kind::Io(_) => {
                         self.handler.on_error(err);
                         self.events = EventSet::none();
