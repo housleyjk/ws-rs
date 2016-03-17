@@ -403,12 +403,10 @@ impl<F> mio::Handler for Handler <F>
                         conn.events().is_readable() || conn.events().is_writable()
                     };
 
+                    // NOTE: Closing state only applies after a ws connection was successfully
+                    // established. It's possible that we may go inactive while in a connecting
+                    // state if the handshake fails.
                     if !active {
-                        // normal closure
-                        debug_assert!(
-                            self.connections[token].state().is_closing(),
-                            "Connection neither readable nor writable in active state!"
-                        );
                         if let Ok(addr) = self.connections[token].socket().peer_addr() {
                             debug!("WebSocket connection to {} disconnected.", addr);
                         } else {
