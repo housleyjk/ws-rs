@@ -6,7 +6,7 @@ pub trait Factory {
     type Handler: Handler;
 
     /// Called when a TCP connection is made.
-    fn connection_made(&mut self, Sender) -> Self::Handler;
+    fn connection_made(&mut self, _: Sender) -> Self::Handler;
 
     /// Called when the WebSocket is shutting down.
     #[inline]
