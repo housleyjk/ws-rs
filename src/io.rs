@@ -635,8 +635,12 @@ impl<F> mio::Handler for Handler <F>
     }
 
     fn interrupted(&mut self, eloop: &mut Loop<F>) {
-        error!("Websocket shutting down for interrupt.");
-        eloop.shutdown()
+        if self.settings.shutdown_on_interrupt {
+            error!("Websocket shutting down for interrupt.");
+            eloop.shutdown()
+        } else {
+            error!("Websocket received interupt.");
+        }
     }
 }
 
