@@ -103,7 +103,7 @@ impl<F> Handler<F>
     }
 
     #[cfg(feature="ssl")]
-    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<Token> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
@@ -151,7 +151,7 @@ impl<F> Handler<F>
             }
         }
 
-        eloop.register(
+        try!(eloop.register(
             self.connections[tok].socket(),
             self.connections[tok].token(),
             self.connections[tok].events(),
@@ -161,11 +161,13 @@ impl<F> Handler<F>
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);
             Err(err)
-        })
+        }));
+
+        Ok(tok)
     }
 
     #[cfg(not(feature="ssl"))]
-    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<Token> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
@@ -197,7 +199,7 @@ impl<F> Handler<F>
             return Err(error)
         }
 
-        eloop.register(
+        try!(eloop.register(
             self.connections[tok].socket(),
             self.connections[tok].token(),
             self.connections[tok].events(),
@@ -207,7 +209,9 @@ impl<F> Handler<F>
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);
             Err(err)
-        })
+        }));
+
+        Ok(tok)
     }
 
     #[cfg(feature="ssl")]

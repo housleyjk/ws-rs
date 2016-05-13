@@ -290,7 +290,7 @@ pub use handshake::{Handshake, Request, Response};
 use std::fmt;
 use std::default::Default;
 use std::net::ToSocketAddrs;
-use mio::EventLoopBuilder;
+use mio::{EventLoopBuilder, Token};
 use std::borrow::Borrow;
 
 /// A utility function for setting up a WebSocket server.
@@ -457,7 +457,6 @@ pub struct Settings {
 }
 
 impl Default for Settings {
-
     fn default() -> Settings {
         Settings {
             max_connections: 100,
@@ -540,12 +539,19 @@ impl<F> WebSocket<F>
     }
 
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,
-    /// but the actuall connections will not be established until after `run` is called.
+    /// but the actual connections will not be established until after `run` is called.
     pub fn connect(&mut self, url: url::Url) -> Result<&mut WebSocket<F>> {
+        try!(self.connect_token(url));
+        Ok(self)
+    }
+
+    /// Queues an outgoing connection on this WebSocket and returns the token of the new connection.
+    /// This method may be called multiple times, but the actual connections will not be established
+    /// until after `run` is called.
+    pub fn connect_token(&mut self, url: url::Url) -> Result<Token> {
         let sender = Sender::new(io::ALL, self.event_loop.channel());
         info!("Queuing connection to {}", url);
-        try!(sender.connect(url));
-        Ok(self)
+        sender.connect(url)
     }
 
     /// Run the WebSocket. This will run the encapsulated event loop blocking until the WebSocket
