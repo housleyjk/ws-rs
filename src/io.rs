@@ -33,13 +33,13 @@ type Chan = mio::Sender<Command>;
 
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
-    let host = url.serialize_host();
-    if host.is_none() || ( url.scheme != "ws" && url.scheme != "wss" ) {
+    let host = url.host_str();
+    if host.is_none() || ( url.scheme() != "ws" && url.scheme() != "wss" ) {
         return Err(Error::new(Kind::Internal, format!("Not a valid websocket url: {}", url)))
     }
     let host = host.unwrap();
 
-    let port = url.port_or_default().unwrap_or(80);
+    let port = url.port_or_known_default().unwrap_or(80);
     let mut addrs = try!((&host[..], port).to_socket_addrs()).collect::<Vec<SocketAddr>>();
     addrs.dedup();
     Ok(addrs)
@@ -129,7 +129,7 @@ impl<F> Handler<F>
             return Err(error)
         }
 
-        if url.scheme == "wss" {
+        if url.scheme() == "wss" {
             while let Err(ssl_error) = self.connections[tok].encrypt() {
                 match ssl_error.kind {
                     Kind::Ssl(SslError::StreamError(ref io_error)) => {
@@ -190,7 +190,7 @@ impl<F> Handler<F>
             return Err(error)
         }
 
-        if url.scheme == "wss" {
+        if url.scheme() == "wss" {
             let error = Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls.");
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);

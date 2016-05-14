@@ -333,11 +333,18 @@ impl Request {
 
     /// Construct a new WebSocket handshake HTTP request from a url.
     pub fn from_url(url: &url::Url) -> Result<Request> {
+
+        let query = if let Some(q) = url.query() {
+            format!("?{}", q)
+        } else {
+            "".into()
+        };
+
         let req = Request {
             path: format!(
                 "{}{}",
-                url.serialize_path().unwrap_or("/".to_owned()),
-                url.query.clone().and_then(|query| Some(format!("?{}", query))).unwrap_or("".to_owned())),
+                url.path(),
+                query),
             method: "GET".to_owned(),
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
@@ -345,8 +352,9 @@ impl Request {
                     "Host".into(),
                     format!(
                         "{}:{}",
-                        try!(url.serialize_host().ok_or(Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                        url.port_or_default().unwrap_or(80)).into(),
+                        try!(url.host_str().ok_or(
+                            Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
+                        url.port_or_known_default().unwrap_or(80)).into(),
                 ),
                 ("Sec-WebSocket-Version".into(), "13".into()),
                 ("Sec-WebSocket-Key".into(), generate_key().into()),
