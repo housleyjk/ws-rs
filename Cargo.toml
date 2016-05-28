@@ -20,10 +20,10 @@ url = "*"
 slab = "0.1.3"
 
 [dev-dependencies]
-clap = "2.2.1"
-env_logger = "0.3.2"
-term = "0.4.4"
-time = "0.1.34"
+clap = "*"
+env_logger = "*"
+term = "*"
+time = "*"
 
 [features]
 default = []
