@@ -1,6 +1,6 @@
 use std::convert::Into;
 use std::borrow::Cow;
-
+use std::net::SocketAddr;
 use url;
 use mio;
 use mio::Token;
@@ -47,6 +47,7 @@ impl Command {
 pub struct Sender {
     token: Token,
     channel: mio::Sender<Command>,
+    pub addr:Option<SocketAddr>
 }
 
 impl Sender {
@@ -57,7 +58,13 @@ impl Sender {
         Sender {
             token: token,
             channel: channel,
+            addr:None
         }
+    }
+
+    #[inline]
+    pub fn set_addr(&mut self,addr:SocketAddr){
+        self.addr = Some(addr);
     }
 
     /// A Token identifying this sender within the WebSocket.
@@ -179,4 +186,3 @@ impl Sender {
     }
 
 }
-
