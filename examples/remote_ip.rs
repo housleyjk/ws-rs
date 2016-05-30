@@ -7,7 +7,7 @@ struct Server {
 impl ws::Handler for Server {
 
     fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
-        println!("Remote addres {:?}", self.ws.addr );
+        println!("Remote addres {:?}", self.ws.remote_addr() );
         Ok(())
     }
 

@@ -47,7 +47,7 @@ impl Command {
 pub struct Sender {
     token: Token,
     channel: mio::Sender<Command>,
-    pub addr:Option<SocketAddr>
+    addr: Option<SocketAddr>
 }
 
 impl Sender {
@@ -63,8 +63,13 @@ impl Sender {
     }
 
     #[inline]
-    pub fn set_addr(&mut self,addr:SocketAddr){
+    pub fn set_addr(&mut self, addr:SocketAddr){
         self.addr = Some(addr);
+    }
+
+    #[inline]
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.addr
     }
 
     /// A Token identifying this sender within the WebSocket.
