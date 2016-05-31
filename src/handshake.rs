@@ -404,11 +404,22 @@ impl fmt::Display for Request {
 pub struct Response {
     status: u16,
     reason: String,
+    body: String,
     headers: Vec<(String, Vec<u8>)>,
 }
 
 impl Response {
     // TODO: resolve the overlap with Request
+    
+    /// Creates new response.
+    pub fn ok(body: String) -> Self {
+      Response {
+        status: 200,
+        reason: "OK".into(),
+        body: body,
+        headers: Vec::new(),
+      }
+    }
 
     /// Get the value of the first instance of an HTTP header.
     fn header(&self, header: &str) -> Option<&Vec<u8>> {
@@ -549,6 +560,7 @@ impl Response {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
+                body: String::new(),
                 headers: res.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
             }))
         } else {
@@ -563,6 +575,7 @@ impl Response {
         let res = Response {
             status: 101,
             reason: "Switching Protocols".into(),
+            body: String::new(),
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
                 ("Sec-WebSocket-Accept".into(), try!(req.hashed_key()).into()),
@@ -585,6 +598,7 @@ impl Response {
             try!(write!(w, "\r\n"));
         }
         try!(write!(w, "\r\n"));
+        try!(w.write(self.body.as_bytes()));
         Ok(())
     }
 }
