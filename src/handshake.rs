@@ -431,6 +431,16 @@ impl Response {
       }
     }
 
+    /// Creates new response with 403 FORBIDDEN code.
+    pub fn not_found(body: String) -> Self {
+      Response {
+        status: 404,
+        reason: "NOT FOUND".into(),
+        body: body,
+        headers: Vec::new(),
+      }
+    }
+
     /// Get the value of the first instance of an HTTP header.
     fn header(&self, header: &str) -> Option<&Vec<u8>> {
         self.headers
