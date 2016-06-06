@@ -411,11 +411,21 @@ pub struct Response {
 impl Response {
     // TODO: resolve the overlap with Request
     
-    /// Creates new response.
+    /// Creates new response with 200 OK code.
     pub fn ok(body: String) -> Self {
       Response {
         status: 200,
         reason: "OK".into(),
+        body: body,
+        headers: Vec::new(),
+      }
+    }
+ 
+    /// Creates new response with 403 FORBIDDEN code.
+    pub fn forbidden(body: String) -> Self {
+      Response {
+        status: 403,
+        reason: "FORBIDDEN".into(),
         body: body,
         headers: Vec::new(),
       }
