@@ -431,7 +431,7 @@ impl Response {
       }
     }
 
-    /// Creates new response with 403 FORBIDDEN code.
+    /// Creates new response with 404 NOT FOUND code.
     pub fn not_found(body: String) -> Self {
       Response {
         status: 404,
