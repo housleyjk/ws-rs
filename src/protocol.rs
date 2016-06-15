@@ -21,6 +21,18 @@ pub enum OpCode {
     Bad,
 }
 
+impl OpCode {
+
+    /// Test whether the opcode indicates a control frame.
+    pub fn is_control(&self) -> bool {
+        match *self {
+            Text | Binary | Continue => false,
+            _ => true,
+        }
+    }
+
+}
+
 impl fmt::Display for OpCode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -87,7 +99,7 @@ pub enum CloseCode {
     /// receives a binary message).
     Unsupported,
     /// Indicates that no status code was included in a closing frame. This
-    /// close code makes it possible to use a single method, `on_close` to 
+    /// close code makes it possible to use a single method, `on_close` to
     /// handle even cases where no close code was provided.
     Status,
     /// Indicates an abnormal closure. If the abnormal closure was due to an
@@ -192,26 +204,26 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_opcode_from_u8() {
+    fn opcode_from_u8() {
         let byte = 2u8;
         assert_eq!(OpCode::from(byte), OpCode::Binary);
     }
 
     #[test]
-    fn test_opcode_into_u8() {
+    fn opcode_into_u8() {
         let text = OpCode::Text;
         let byte: u8 = text.into();
         assert_eq!(byte, 1u8);
     }
 
     #[test]
-    fn test_closecode_from_u16() {
+    fn closecode_from_u16() {
         let byte = 1008u16;
         assert_eq!(CloseCode::from(byte), CloseCode::Policy);
     }
 
     #[test]
-    fn test_closecode_into_u16() {
+    fn closecode_into_u16() {
         let text = CloseCode::Away;
         let byte: u16 = text.into();
         assert_eq!(byte, 1001u16);

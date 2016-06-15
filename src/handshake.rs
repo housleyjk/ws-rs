@@ -83,7 +83,7 @@ pub struct Handshake {
     /// The socket address of the other endpoint. This address may
     /// be an intermediary such as a proxy server.
     pub peer_addr: Option<SocketAddr>,
-    /// The socket address of this endpoint.
+    /// The socket address of this enpoint.
     pub local_addr: Option<SocketAddr>,
 }
 
@@ -341,7 +341,10 @@ impl Request {
         };
 
         let req = Request {
-            path: format!("{}{}", url.path(), query),
+            path: format!(
+                "{}{}",
+                url.path(),
+                query),
             method: "GET".to_owned(),
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
@@ -608,7 +611,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_remote_addr_x_forwarded_for() {
+    fn remote_addr_x_forwarded_for() {
         let mut buf = Vec::with_capacity(2048);
         write!(
             &mut buf,
@@ -631,7 +634,7 @@ mod test {
     }
 
     #[test]
-    fn test_remote_addr_forwarded() {
+    fn remote_addr_forwarded() {
         let mut buf = Vec::with_capacity(2048);
         write!(
             &mut buf,

@@ -79,13 +79,11 @@ impl Sender {
 
     /// Send a message to the endpoints of all connections.
     ///
-    /// Be careful with this method because it
-    /// does not discriminate between client and server connections, only connections that are not
-    /// part of *this* side of the WebSocket. If your WebSocket is only functioning as a server,
-    /// then usage is simple, however if you have a WebSocket that is listening for
-    /// connections and is also connected to another WebSocket, this method will broadcast a
-    /// message to all the clients connected and to the server at the other end of the single
-    /// client connection.
+    /// Be careful with this method. It does not discriminate between client and server connections.
+    /// If your WebSocket is only functioning as a server, then usage is simple, this method will
+    /// send a copy of the message to each connected client. However, if you have a WebSocket that
+    /// is listening for connections and is also connected to another WebSocket, this method will
+    /// broadcast a copy of the message to all the clients connected and to that WebSocket server.
     #[inline]
     pub fn broadcast<M>(&self, msg: M) -> Result<()>
         where M: Into<message::Message>

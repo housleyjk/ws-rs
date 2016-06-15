@@ -146,7 +146,7 @@ mod test {
     }
 
     #[test]
-    fn test_impl_factory() {
+    fn impl_factory() {
 
         struct X;
 
@@ -167,7 +167,7 @@ mod test {
     }
 
     #[test]
-    fn test_closure_factory() {
+    fn closure_factory() {
         let event_loop = mio::EventLoop::<S>::new().unwrap();
 
         let mut factory = |_| {

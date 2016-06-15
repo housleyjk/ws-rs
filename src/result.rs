@@ -40,7 +40,7 @@ pub enum Kind {
     /// Indicates a failure to parse an HTTP message.
     /// This kind of error should only occur during a WebSocket Handshake, and a HTTP 500 response
     /// will be generated.
-    Parse(httparse::Error),
+    Http(httparse::Error),
     /// Indicates a failure to send a command on the internal EventLoop channel. This means that
     /// the WebSocket is overloaded and the Connection will disconnect.
     Queue(mio::NotifyError<Command>),
@@ -110,7 +110,7 @@ impl StdError for Error {
             Kind::Protocol          => "WebSocket Protocol Error",
             Kind::Encoding(ref err) => err.description(),
             Kind::Io(ref err)       => err.description(),
-            Kind::Parse(_)          => "Unable to parse HTTP",
+            Kind::Http(_)          => "Unable to parse HTTP",
             #[cfg(feature="ssl")]
             Kind::Ssl(ref err)      => err.description(),
             Kind::Queue(_)          => "Unable to send signal on event loop",
@@ -150,7 +150,7 @@ impl From<httparse::Error> for Error {
             httparse::Error::Version => "Invalid byte in HTTP version.",
         };
 
-        Error::new(Kind::Parse(err), details)
+        Error::new(Kind::Http(err), details)
     }
 
 }
