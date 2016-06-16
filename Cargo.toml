@@ -10,21 +10,30 @@ repository = "https://github.com/housleyjk/ws-rs"
 version = "0.5.0"
 
 [dependencies]
-httparse = "*"
-log = "*"
-mio = "*"
-rand = "*"
-sha1 = "*"
-url = "*"
-openssl = { version = "*", optional = true }
-libz-sys = { version = "*", optional = true }
-libc = { version = "*", optional = true }
+httparse = "1.1.2"
+log = "0.3.6"
+mio = "0.5.1"
+rand = "0.3.14"
+sha1 = "0.1.1"
+url = "1.1.1"
+
+[dependencies.libc]
+optional = true
+version = "0.2.12"
+
+[dependencies.libz-sys]
+optional = true
+version = "1.0.4"
+
+[dependencies.openssl]
+optional = true
+version = "0.7.13"
 
 [dev-dependencies]
-clap = "*"
-env_logger = "*"
-term = "*"
-time = "*"
+clap = "2.6.0"
+env_logger = "0.3.3"
+term = "0.4.4"
+time = "0.1.35"
 
 [features]
 default = []
