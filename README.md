@@ -40,14 +40,14 @@ Features
 
 WS-RS provides a complete implementation of the WebSocket specification. There is also support for
 [ssl](https://ws-rs.org/guide/ssl) and
-[permessage-deflate](https://ws-rs.org/guide/permessage-deflate).
+[permessage-deflate](https://ws-rs.org/guide/deflate).
 
 Testing
 -------
 
-WS-RS is thoroughly tested and passes the [Autobahn Test Suite](http://autobahn.ws/testsuite/) for 
-WebSockets, including the tests for `permessage-deflate`. Visit 
-[ws-rs.org](https://ws-rs.org/testing/results) to view the results of the latest test run.
+WS-RS is thoroughly tested and passes the [Autobahn Test Suite](http://autobahn.ws/testsuite/) for
+WebSockets, including the tests for `permessage-deflate`. Visit
+[ws-rs.org](https://ws-rs.org/testing/autobahn/results) to view the results of the latest test run.
 
 Contributing
 ------------
