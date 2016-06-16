@@ -6,8 +6,12 @@ use std::rc::Rc;
 use std::cell::Cell;
 use ws::{connect, CloseCode, Message, Result};
 
+#[cfg(feature="permessage-deflate")]
+use ws::deflate::DeflateHandler;
+
 const AGENT: &'static str = "WS-RS";
 
+#[cfg(not(feature="permessage-deflate"))]
 fn main () {
 
     let total = get_case_count().unwrap();
@@ -22,6 +26,29 @@ fn main () {
             move |msg| {
                 out.send(msg)
             }
+        }).unwrap();
+
+        case_id += 1
+    }
+
+    update_reports().unwrap();
+}
+
+#[cfg(feature="permessage-deflate")]
+fn main () {
+
+    let total = get_case_count().unwrap();
+    let mut case_id = 1;
+
+
+    while case_id <= total {
+
+        let case_url = format!("ws://127.0.0.1:9001/runCase?case={}&agent={}", case_id, AGENT);
+
+        connect(case_url, |out| {
+            DeflateHandler::new(move |msg| {
+                out.send(msg)
+            })
         }).unwrap();
 
         case_id += 1

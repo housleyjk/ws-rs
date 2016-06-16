@@ -82,8 +82,8 @@ pub trait Handler {
     ///
     /// ```ignore
     /// let mut res = try!(Response::from_request(req));
-    /// if req.extensions.contains("myextension") {
-    ///     res.add_extension("myextension")
+    /// if try!(req.extensions()).iter().find(|&&ext| ext.contains("myextension-name")).is_some() {
+    ///     res.add_extension("myextension-name")
     /// }
     /// Ok(res)
     /// ```
@@ -230,6 +230,10 @@ pub trait Handler {
     /// that it will not be sent. You can use this approach to merge multiple frames into a single
     /// frame before sending the message.
     ///
+    /// For messages, this method will be called with a single complete, final frame before any
+    /// fragmentation is performed. Automatic fragmentation will be performed on the returned
+    /// frame, if any, based on the `fragment_size` setting.
+    ///
     /// By default this method simply ensures that no reserved bits are set.
     #[inline]
     fn on_send_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
@@ -308,7 +312,7 @@ mod test {
     }
 
     #[test]
-    fn test_handler() {
+    fn handler() {
         struct H;
 
         impl Handler for H {
@@ -344,7 +348,7 @@ mod test {
     }
 
     #[test]
-    fn test_closure_handler() {
+    fn closure_handler() {
         let mut close = |msg| {
             assert_eq!(msg, message::Message::Binary(vec![1, 2, 3]));
             Ok(())

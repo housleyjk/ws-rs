@@ -361,7 +361,7 @@ impl<H> Connection<H>
                             self.disconnect()
                         }
                     }
-                    Kind::Parse(_) => {
+                    Kind::Http(_) => {
                         // This may happen if some handler writes a bad response
                         self.handler.on_error(err);
                         error!("Disconnecting WebSocket.");
@@ -606,41 +606,33 @@ impl<H> Connection<H>
             // This is safe whether or not a frame is masked.
             frame.remove_mask();
 
-            if frame.is_final() {
-                match frame.opcode() {
-                    // singleton data frames
-                    OpCode::Text => {
-                        trace!("Received text frame {:?}", frame);
-                        if let Some(frame) = try!(self.handler.on_frame(frame)) {
+            if let Some(frame) = try!(self.handler.on_frame(frame)) {
+                if frame.is_final() {
+                    match frame.opcode() {
+                        // singleton data frames
+                        OpCode::Text => {
+                            trace!("Received text frame {:?}", frame);
                             // since we are going to handle this, there can't be an ongoing
                             // message
                             if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented text frame while processing fragmented message."))
                             }
-                            debug_assert!(frame.opcode() == OpCode::Text, "Handler passed back corrupted frame.");
                             let msg = Message::text(try!(String::from_utf8(frame.into_data()).map_err(|err| err.utf8_error())));
                             try!(self.handler.on_message(msg));
                         }
-                    }
-                    OpCode::Binary => {
-                        trace!("Received binary frame {:?}", frame);
-                        if let Some(frame) = try!(self.handler.on_frame(frame)) {
+                        OpCode::Binary => {
+                            trace!("Received binary frame {:?}", frame);
                             // since we are going to handle this, there can't be an ongoing
                             // message
                             if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented binary frame while processing fragmented message."))
                             }
-                            debug_assert!(frame.opcode() == OpCode::Binary, "Handler passed back corrupted frame.");
                             let data = frame.into_data();
                             try!(self.handler.on_message(Message::binary(data)));
                         }
-                    }
-                    // control frames
-                    OpCode::Close => {
-                        trace!("Received close frame {:?}", frame);
-                        if let Some(frame) = try!(self.handler.on_frame(frame)) {
-                            debug_assert!(frame.opcode() == OpCode::Close, "Handler passed back corrupted frame.");
-
+                        // control frames
+                        OpCode::Close => {
+                            trace!("Received close frame {:?}", frame);
                             // Closing handshake
                             if self.state.is_closing() {
 
@@ -717,34 +709,28 @@ impl<H> Connection<H>
                                 }
                             }
                         }
-                    }
-                    OpCode::Ping => {
-                        trace!("Received ping frame {:?}", frame);
-                        if let Some(frame) = try!(self.handler.on_frame(frame)) {
-                            debug_assert!(frame.opcode() == OpCode::Ping, "Handler passed back corrupted frame.");
+                        OpCode::Ping => {
+                            trace!("Received ping frame {:?}", frame);
                             try!(self.send_pong(frame.into_data()));
                         }
-                    }
-                    OpCode::Pong => {
-                        trace!("Received pong frame {:?}", frame);
-                        // no ping validation for now
-                        try!(self.handler.on_frame(frame));
-                    }
-                    // last fragment
-                    OpCode::Continue => {
-                        trace!("Received final fragment {:?}", frame);
-                        if let Some(last) = try!(self.handler.on_frame(frame)) {
+                        OpCode::Pong => {
+                            trace!("Received pong frame {:?}", frame);
+                            // no ping validation for now
+                        }
+                        // last fragment
+                        OpCode::Continue => {
+                            trace!("Received final fragment {:?}", frame);
                             if let Some(first) = self.fragments.pop_front() {
-                                let size = self.fragments.iter().fold(first.payload().len() + last.payload().len(), |len, frame| len + frame.payload().len());
+                                let size = self.fragments.iter().fold(first.payload().len() + frame.payload().len(), |len, frame| len + frame.payload().len());
                                 match first.opcode() {
                                     OpCode::Text => {
-                                        trace!("Constructing text message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), last);
+                                        trace!("Constructing text message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), frame);
                                         let mut data = Vec::with_capacity(size);
                                         data.extend(first.into_data());
                                         while let Some(frame) = self.fragments.pop_front() {
                                             data.extend(frame.into_data());
                                         }
-                                        data.extend(last.into_data());
+                                        data.extend(frame.into_data());
 
                                         let string = try!(String::from_utf8(data).map_err(|err| err.utf8_error()));
 
@@ -752,7 +738,7 @@ impl<H> Connection<H>
                                         try!(self.handler.on_message(Message::text(string)));
                                     }
                                     OpCode::Binary => {
-                                        trace!("Constructing text message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), last);
+                                        trace!("Constructing text message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), frame);
                                         let mut data = Vec::with_capacity(size);
                                         data.extend(first.into_data());
 
@@ -760,7 +746,7 @@ impl<H> Connection<H>
                                             data.extend(frame.into_data());
                                         }
 
-                                        data.extend(last.into_data());
+                                        data.extend(frame.into_data());
 
                                         trace!("Calling handler with constructed message: {:?}", data);
                                         try!(self.handler.on_message(Message::binary(data)));
@@ -773,19 +759,20 @@ impl<H> Connection<H>
                                 return Err(Error::new(Kind::Protocol, "Unable to reconstruct fragmented message. No first frame."))
                             }
                         }
+                        _ => return Err(Error::new(Kind::Protocol, "Encountered invalid opcode.")),
                     }
-                    _ => return Err(Error::new(Kind::Protocol, "Encountered invalid opcode.")),
-                }
-            } else {
-                match frame.opcode() {
-                    OpCode::Text | OpCode::Binary | OpCode::Continue => {
+                } else {
+                    if frame.is_control() {
+                        return Err(Error::new(Kind::Protocol, "Encounted fragmented control frame."))
+                    } else {
                         trace!("Received non-final fragment frame {:?}", frame);
-                        if let Some(frame) = try!(self.handler.on_frame(frame)) {
+                        if !self.settings.fragments_grow &&
+                            self.settings.fragments_capacity == self.fragments.len()
+                        {
+                            return Err(Error::new(Kind::Capacity, "Exceeded max fragments."))
+                        } else {
                             self.fragments.push_back(frame)
                         }
-                    }
-                    _ => {
-                        return Err(Error::new(Kind::Protocol, "Encounted fragmented control frame."))
                     }
                 }
             }
@@ -844,29 +831,40 @@ impl<H> Connection<H>
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
-        if data.len() > self.settings.fragment_size {
-            trace!("Chunking at {:?}.", self.settings.fragment_size);
-            // note this copies the data, so it's actually somewhat expensive to fragment
-            let mut chunks = data.chunks(self.settings.fragment_size).peekable();
-            let chunk = chunks.next().expect("Unable to get initial chunk!");
 
-            try!(self.buffer_frame(
-                Frame::message(Vec::from(chunk), opcode, false)));
+        if let Some(frame) = try!(self.handler.on_send_frame(Frame::message(data, opcode, true))) {
 
-            while let Some(chunk) = chunks.next() {
-                if let Some(_) = chunks.peek() {
-                    try!(self.buffer_frame(
-                        Frame::message(Vec::from(chunk), OpCode::Continue, false)));
-                } else {
-                    try!(self.buffer_frame(
-                        Frame::message(Vec::from(chunk), OpCode::Continue, true)));
+            if frame.payload().len() > self.settings.fragment_size {
+                trace!("Chunking at {:?}.", self.settings.fragment_size);
+                // note this copies the data, so it's actually somewhat expensive to fragment
+                let mut chunks = frame.payload().chunks(self.settings.fragment_size).peekable();
+                let chunk = chunks.next().expect("Unable to get initial chunk!");
+
+                let mut first = Frame::message(Vec::from(chunk), opcode, false);
+
+                // Match reserved bits from original to keep extension status intact
+                first.set_rsv1(frame.has_rsv1());
+                first.set_rsv2(frame.has_rsv2());
+                first.set_rsv3(frame.has_rsv3());
+
+                try!(self.buffer_frame(first));
+
+                while let Some(chunk) = chunks.next() {
+                    if let Some(_) = chunks.peek() {
+                        try!(self.buffer_frame(
+                            Frame::message(Vec::from(chunk), OpCode::Continue, false)));
+                    } else {
+                        try!(self.buffer_frame(
+                            Frame::message(Vec::from(chunk), OpCode::Continue, true)));
+                    }
                 }
+
+            } else {
+                trace!("Sending unfragmented message frame.");
+                // true means that the message is done
+                try!(self.buffer_frame(frame));
             }
 
-        } else {
-            trace!("Sending unfragmented message frame.");
-            // true means that the message is done
-            try!(self.buffer_frame(Frame::message(data, opcode, true)));
         }
         Ok(self.check_events())
     }
@@ -880,7 +878,10 @@ impl<H> Connection<H>
             return Ok(())
         }
         trace!("Sending ping to {}.", self.peer_addr());
-        try!(self.buffer_frame(Frame::ping(data)));
+
+        if let Some(frame) = try!(self.handler.on_send_frame(Frame::ping(data))) {
+            try!(self.buffer_frame(frame));
+        }
         Ok(self.check_events())
     }
 
@@ -893,7 +894,10 @@ impl<H> Connection<H>
             return Ok(())
         }
         trace!("Sending pong to {}.", self.peer_addr());
-        try!(self.buffer_frame(Frame::pong(data)));
+
+        if let Some(frame) = try!(self.handler.on_send_frame(Frame::pong(data))) {
+            try!(self.buffer_frame(frame));
+        }
         Ok(self.check_events())
     }
 
@@ -921,7 +925,10 @@ impl<H> Connection<H>
         }
 
         trace!("Sending close {:?} -- {:?} to {}.", code, reason.borrow(), self.peer_addr());
-        try!(self.buffer_frame(Frame::close(code, reason.borrow())));
+
+        if let Some(frame) = try!(self.handler.on_send_frame(Frame::close(code, reason.borrow()))) {
+            try!(self.buffer_frame(frame));
+        }
 
         trace!("Connection to {} is now closing.", self.peer_addr());
 
@@ -937,21 +944,19 @@ impl<H> Connection<H>
         }
     }
 
-    fn buffer_frame(&mut self, frame: Frame) -> Result<()> {
-        if let Some(mut frame) = try!(self.handler.on_send_frame(frame)) {
-            try!(self.check_buffer_out(&frame));
+    fn buffer_frame(&mut self, mut frame: Frame) -> Result<()> {
+        try!(self.check_buffer_out(&frame));
 
-            if self.is_client() {
-                frame.set_mask();
-            }
-
-            trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
-
-            let pos = self.out_buffer.position();
-            try!(self.out_buffer.seek(SeekFrom::End(0)));
-            try!(frame.format(&mut self.out_buffer));
-            try!(self.out_buffer.seek(SeekFrom::Start(pos)));
+        if self.is_client() {
+            frame.set_mask();
         }
+
+        trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
+
+        let pos = self.out_buffer.position();
+        try!(self.out_buffer.seek(SeekFrom::End(0)));
+        try!(frame.format(&mut self.out_buffer));
+        try!(self.out_buffer.seek(SeekFrom::Start(pos)));
         Ok(())
     }
 

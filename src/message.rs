@@ -12,9 +12,9 @@ use self::Message::*;
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message {
     /// A text WebSocket message
-	Text(String),
+    Text(String),
     /// A binary WebSocket message
-	Binary(Vec<u8>),
+    Binary(Vec<u8>),
 }
 
 impl Message {
@@ -138,7 +138,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_display() {
+    fn display() {
         let t = Message::text(format!("test"));
         assert_eq!(t.to_string(), "test".to_owned());
 
@@ -147,7 +147,7 @@ mod test {
     }
 
     #[test]
-    fn test_binary_convert() {
+    fn binary_convert() {
         let bin = [6u8, 7, 8, 9, 10, 241];
         let msg = Message::from(&bin[..]);
         assert!(msg.is_binary());
@@ -155,7 +155,7 @@ mod test {
     }
 
     #[test]
-    fn test_text_convert() {
+    fn text_convert() {
         let s = "kiwotsukete";
         let msg = Message::from(s);
         assert!(msg.is_text());

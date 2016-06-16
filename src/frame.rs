@@ -89,6 +89,12 @@ impl Frame {
         self.opcode
     }
 
+    /// Test whether this is a control frame.
+    #[inline]
+    pub fn is_control(&self) -> bool {
+        self.opcode.is_control()
+    }
+
     /// Get a reference to the frame's payload.
     #[inline]
     pub fn payload(&self) -> &Vec<u8> {
@@ -119,7 +125,6 @@ impl Frame {
     }
 
     /// Set the first reserved bit.
-    #[allow(dead_code)]
     #[inline]
     pub fn set_rsv1(&mut self, has_rsv1: bool) -> &mut Frame {
         self.rsv1 = has_rsv1;
@@ -127,7 +132,6 @@ impl Frame {
     }
 
     /// Set the second reserved bit.
-    #[allow(dead_code)]
     #[inline]
     pub fn set_rsv2(&mut self, has_rsv2: bool) -> &mut Frame {
         self.rsv2 = has_rsv2;
@@ -135,10 +139,9 @@ impl Frame {
     }
 
     /// Set the third reserved bit.
-    #[allow(dead_code)]
     #[inline]
     pub fn set_rsv3(&mut self, has_rsv3: bool) -> &mut Frame {
-        self.rsv1 = has_rsv3;
+        self.rsv3 = has_rsv3;
         self
     }
 
@@ -454,7 +457,6 @@ impl fmt::Display for Frame {
 final: {}
 reserved: {} {} {}
 opcode: {}
-mask: {}
 length: {}
 payload length: {}
 payload: 0x{}
@@ -464,7 +466,7 @@ payload: 0x{}
             self.rsv2,
             self.rsv3,
             self.opcode,
-            self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
+            // self.mask.map(|mask| format!("{:?}", mask)).unwrap_or("NONE".into()),
             self.len(),
             self.payload.len(),
             self.payload.iter().map(|byte| format!("{:x}", byte)).collect::<String>())
@@ -477,7 +479,7 @@ mod test {
     use protocol::OpCode;
 
     #[test]
-    fn test_display_frame() {
+    fn display_frame() {
         let f = Frame::message("hi there".into(), OpCode::Text, true);
         let view = format!("{}", f);
         view.contains("payload:");

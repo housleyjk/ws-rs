@@ -7,13 +7,12 @@ license = "MIT"
 name = "ws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
-version = "0.4.6"
+version = "0.5.1"
 
 [dependencies]
 httparse = "*"
 log = "*"
 mio = { version = "*", git = "https://github.com/carllerche/mio.git" }
-openssl = { version = "*", optional = true }
 rand = "*"
 sha1 = "*"
 url = "*"
@@ -25,6 +24,19 @@ env_logger = "*"
 term = "*"
 time = "*"
 
+[dependencies.libc]
+optional = true
+version = "*"
+
+[dependencies.libz-sys]
+optional = true
+version = "*"
+
+[dependencies.openssl]
+optional = true
+version = "*"
+
 [features]
 default = []
+permessage-deflate = ["libz-sys", "libc"]
 ssl = ["openssl"]

@@ -611,7 +611,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_remote_addr_x_forwarded_for() {
+    fn remote_addr_x_forwarded_for() {
         let mut buf = Vec::with_capacity(2048);
         write!(
             &mut buf,
@@ -634,7 +634,7 @@ mod test {
     }
 
     #[test]
-    fn test_remote_addr_forwarded() {
+    fn remote_addr_forwarded() {
         let mut buf = Vec::with_capacity(2048);
         write!(
             &mut buf,

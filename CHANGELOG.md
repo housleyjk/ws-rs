@@ -1,3 +1,13 @@
+<a name="v0.5.0"></a>
+### v0.5.0 (2016-06-16)
+
+* Added support for permessage-deflate as a feature
+
+<a name="v0.4.9"></a>
+### v0.4.9 (2016-05-28)
+
+* Updated dependencies, maintenance release
+
 <a name="v0.4.6"></a>
 ### v0.4.6 (2016-03-17)
 
