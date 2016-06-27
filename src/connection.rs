@@ -407,8 +407,8 @@ impl<H> Connection<H>
             match self.endpoint {
                 Server => {
                     let mut done = false;
-                    if let Some(len) = try!(self.socket.try_write_buf(res)) {
-                        if res.get_ref().len() == len {
+                    if let Some(_) = try!(self.socket.try_write_buf(res)) {
+                        if res.position() as usize == res.get_ref().len() {
                             done = true
                         }
                     }
@@ -417,8 +417,8 @@ impl<H> Connection<H>
                     }
                 }
                 Client =>  {
-                    if let Some(len) = try!(self.socket.try_write_buf(req)) {
-                        if req.get_ref().len() == len {
+                    if let Some(_) = try!(self.socket.try_write_buf(req)) {
+                        if req.position() as usize == req.get_ref().len() {
                             trace!("Finished writing handshake request to {}",
                                 self.socket
                                     .peer_addr()
