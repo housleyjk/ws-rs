@@ -441,6 +441,11 @@ impl Response {
       }
     }
 
+    /// Returns bytes length of the response body.
+    pub fn len(&self) -> usize {
+      self.body.as_bytes().len()
+    }
+
     /// Get the value of the first instance of an HTTP header.
     fn header(&self, header: &str) -> Option<&Vec<u8>> {
         self.headers
