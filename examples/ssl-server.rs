@@ -1,4 +1,3 @@
-#![cfg(feature="ssl")]
 /// WebSocket server to demonstrate ssl encryption within an a websocket server.
 ///
 /// The resulting executable takes three arguments:
@@ -9,18 +8,24 @@
 /// For more details concerning setting up the SSL context, see rust-openssl docs.
 extern crate ws;
 extern crate clap;
+#[cfg(feature="ssl")]
 extern crate openssl;
 extern crate env_logger;
 
+#[cfg(feature="ssl")]
 use std::rc::Rc;
+#[cfg(feature="ssl")]
 use openssl::ssl::{Ssl, SslContext, SslMethod};
+#[cfg(feature="ssl")]
 use openssl::x509::X509FileType;
 
+#[cfg(feature="ssl")]
 struct Server {
     out: ws::Sender,
     ssl: Rc<SslContext>,
 }
 
+#[cfg(feature="ssl")]
 impl ws::Handler for Server {
 
     fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
@@ -32,6 +37,7 @@ impl ws::Handler for Server {
     }
 }
 
+#[cfg(feature="ssl")]
 fn main () {
     // Setup logging
     env_logger::init().unwrap();
@@ -71,3 +77,6 @@ fn main () {
         }
     }).unwrap().listen(matches.value_of("ADDR").unwrap()).unwrap();
 }
+
+#[cfg(not(feature="ssl"))]
+fn main() {}
