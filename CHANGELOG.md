@@ -1,3 +1,17 @@
+<a name="v0.5.2"></a>
+### v0.5.1 (2016-07-21)
+
+#### Features
+
+*   Add queue_size setting and handle queue errors better ([26bcef09](26bcef09))
+
+#### Bug Fixes
+
+*   Build error with ssl-server example ([1b8e5c96](1b8e5c96))
+*   Links on readme ([38657a0a](38657a0a))
+
+
+
 <a name="v0.5.0"></a>
 ### v0.5.0 (2016-06-16)
 
