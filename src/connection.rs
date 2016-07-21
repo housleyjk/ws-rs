@@ -376,6 +376,12 @@ impl<H> Connection<H>
                         }
                         self.handler.on_error(err);
                     }
+                    Kind::Queue(_) => {
+                        if self.settings.panic_on_queue {
+                            panic!("Panicking on queue error -- {}", err);
+                        }
+                        self.handler.on_error(err);
+                    }
                     _ => {
                         if self.settings.panic_on_io {
                             panic!("Panicking on io error -- {}", err);

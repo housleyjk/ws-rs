@@ -126,6 +126,14 @@ pub struct Settings {
     /// this limit can be made until an old connection is dropped.
     /// Default: 100
     pub max_connections: usize,
+    /// The number of events anticipated per connection. The event loop queue size will
+    /// be `queue_size` * `max_connections`. In order to avoid an overflow error,
+    /// `queue_size` * `max_connections` must be less than or equal to `usize::max_value()`.
+    /// The queue is shared between connections, which means that a connection may schedule
+    /// more events than `queue_size` provided that another connection is using less than
+    /// `queue_size`. However, if the queue is maxed out a Queue error will occur.
+    /// Default: 5
+    pub queue_size: usize,
     /// Whether to panic when unable to establish a new TCP connection.
     /// Default: false
     pub panic_on_new_connection: bool,
@@ -172,6 +180,9 @@ pub struct Settings {
     /// Whether to panic when an Encoding error is encountered.
     /// Default: false
     pub panic_on_encoding: bool,
+    /// Whether to panic when a Queue error is encountered.
+    /// Default: false
+    pub panic_on_queue: bool,
     /// Whether to panic when an Io error is encountered.
     /// Default: false
     pub panic_on_io: bool,
@@ -212,6 +223,7 @@ impl Default for Settings {
     fn default() -> Settings {
         Settings {
             max_connections: 100,
+            queue_size: 5,
             panic_on_new_connection: false,
             panic_on_shutdown: false,
             fragments_capacity: 10,
@@ -225,6 +237,7 @@ impl Default for Settings {
             panic_on_capacity: false,
             panic_on_protocol: false,
             panic_on_encoding: false,
+            panic_on_queue: false,
             panic_on_io: false,
             panic_on_timeout: false,
             masking_strict: false,
@@ -251,7 +264,7 @@ impl<F> WebSocket<F>
     pub fn new(factory: F) -> Result<WebSocket<F>> {
         let settings = Settings::default();
         let mut config = EventLoopConfig::new();
-        config.notify_capacity(settings.max_connections * 5);  // every handler can do 5 things at once
+        config.notify_capacity(settings.max_connections * settings.queue_size);
         Ok(WebSocket {
             event_loop: try!(io::Loop::configured(config)),
             handler: io::Handler::new(factory, settings),
@@ -343,7 +356,7 @@ impl Builder {
             event_config = config.clone();
         } else {
             event_config = EventLoopConfig::new();
-            event_config.notify_capacity(self.settings.max_connections * 5);
+            event_config.notify_capacity(self.settings.max_connections * self.settings.queue_size);
         }
         Ok(WebSocket {
             event_loop: try!(io::Loop::configured(event_config)),
