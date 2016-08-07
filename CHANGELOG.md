@@ -1,4 +1,12 @@
 <a name="v0.5.2"></a>
+### v0.5.2 (2016-08-07)
+
+#### Features
+
+*   Implement From<Vec<u8>> for Message, #63([1a9d020](1a9d020))
+
+
+<a name="v0.5.1"></a>
 ### v0.5.1 (2016-07-21)
 
 #### Features
@@ -9,7 +17,6 @@
 
 *   Build error with ssl-server example ([1b8e5c96](1b8e5c96))
 *   Links on readme ([38657a0a](38657a0a))
-
 
 
 <a name="v0.5.0"></a>
