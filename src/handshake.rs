@@ -610,6 +610,12 @@ impl Response {
         Ok(res)
     }
 
+    /// Returns bytes length of the response body.
+    pub fn len(&self) -> usize {
+        self.body.as_bytes().len()
+    }
+ 
+
     /// Write a response out to a buffer
     pub fn format<W>(&self, w: &mut W) -> Result<()>
         where W: Write

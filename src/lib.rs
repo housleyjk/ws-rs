@@ -10,6 +10,9 @@ extern crate mio;
 extern crate sha1;
 extern crate rand;
 extern crate url;
+extern crate slab;
+extern crate bytes;
+
 #[cfg(feature="ssl")] extern crate openssl;
 #[macro_use] extern crate log;
 

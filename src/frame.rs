@@ -1,12 +1,11 @@
 use std::fmt;
 use std::mem::transmute;
-use std::io::{Cursor, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::default::Default;
 use std::iter::FromIterator;
 
 use rand;
-use mio::TryRead;
-
+use bytes::MutBuf;
 use result::{Result, Error, Kind};
 use protocol::{OpCode, CloseCode};
 
@@ -329,7 +328,7 @@ impl Frame {
 
         let mut data = Vec::with_capacity(length as usize);
         if length > 0 {
-            if let Some(read) = try!(cursor.try_read_buf(&mut data)) {
+            if let Some(read) = try!(try_read_buf(cursor, &mut data)) {
                 debug_assert!(read == length as usize, "Read incorrect payload length!");
             }
         }
@@ -471,6 +470,21 @@ payload: 0x{}
             self.payload.len(),
             self.payload.iter().map(|byte| format!("{:x}", byte)).collect::<String>())
     }
+}
+
+fn try_read_buf<B : MutBuf>(source: &mut Cursor<Vec<u8>>, buf: &mut B) -> io::Result<Option<usize>> {
+    // Reads the length of the slice supplied by buf.mut_bytes into the buffer
+    // This is not guaranteed to consume an entire datagram or segment.
+    // If your protocol is msg based (instead of continuous stream) you should
+    // ensure that your buffer is large enough to hold an entire segment (1532 bytes if not jumbo
+    // frames)
+    let res = source.read(unsafe { buf.mut_bytes() });
+
+    if let Ok(cnt) = res {
+        unsafe { buf.advance(cnt); }
+    }
+
+    res.map(Some)
 }
 
 mod test {

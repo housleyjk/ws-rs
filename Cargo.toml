@@ -12,10 +12,11 @@ version = "0.5.2"
 [dependencies]
 httparse = "1.1.2"
 log = "0.3.6"
-mio = { git = "https://github.com/ethcore/mio", branch = "v0.5.x" }
 rand = "0.3.14"
 sha1 = "0.2.0"
 url = "1.2.0"
+slab = { git = "https://github.com/carllerche/slab", rev = "5476efcafb"}
+bytes = { git = "https://github.com/carllerche/bytes" } 
 
 [dependencies.libc]
 optional = true

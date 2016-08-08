@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::str::from_utf8;
 
 use url;
-use mio::{Token, TryRead, TryWrite, EventSet, Timeout};
+use mio::{Token, EventSet, Timeout};
 use mio::tcp::TcpStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
