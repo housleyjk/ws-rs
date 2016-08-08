@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
 
@@ -9,12 +10,12 @@ use mio::{
     PollOpt,
 };
 use mio::tcp::{TcpListener, TcpStream};
-use mio::util::Slab;
 use url::Url;
 
 #[cfg(feature="ssl")]
 use openssl::ssl::error::SslError;
 
+use util::Slab;
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
@@ -493,14 +494,14 @@ impl<F> mio::Handler for Handler <F>
                     }
                     Signal::Shutdown => self.shutdown(eloop),
                     Signal::Timeout { delay, token: event } => {
-                        match eloop.timeout_ms(Timeout {
+                        match eloop.timeout(Timeout {
                                 connection: ALL,
                                 event: event,
-                            }, delay).map_err(Error::from)
+                            }, Duration::from_millis(delay)).map_err(Error::from)
                         {
                             Ok(timeout) => {
                                 for conn in self.connections.iter_mut() {
-                                    if let Err(err) = conn.new_timeout(event, timeout) {
+                                    if let Err(err) = conn.new_timeout(event, timeout.clone()) {
                                         conn.error(err)
                                     }
                                 }
@@ -515,7 +516,7 @@ impl<F> mio::Handler for Handler <F>
                         return
                     }
                     Signal::Cancel(timeout) => {
-                        eloop.clear_timeout(timeout);
+                        eloop.clear_timeout(&timeout);
                         return
                     }
                 }
@@ -583,10 +584,10 @@ impl<F> mio::Handler for Handler <F>
                     }
                     Signal::Shutdown => self.shutdown(eloop),
                     Signal::Timeout { delay, token: event } => {
-                        match eloop.timeout_ms(Timeout {
+                        match eloop.timeout(Timeout {
                                 connection: token,
                                 event: event,
-                            }, delay).map_err(Error::from)
+                            }, Duration::from_millis(delay)).map_err(Error::from)
                         {
                             Ok(timeout) => {
                                 if let Some(conn) = self.connections.get_mut(token) {
@@ -608,7 +609,7 @@ impl<F> mio::Handler for Handler <F>
                         return
                     }
                     Signal::Cancel(timeout) => {
-                        eloop.clear_timeout(timeout);
+                        eloop.clear_timeout(&timeout);
                         return
                     }
                 }
