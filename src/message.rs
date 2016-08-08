@@ -122,6 +122,13 @@ impl<'b> From<&'b [u8]> for Message {
     }
 }
 
+impl From<Vec<u8>> for Message {
+
+    fn from(data: Vec<u8>) -> Message {
+        Message::binary(data)
+    }
+}
+
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter) -> StdResult<(), fmt::Error> {
         if let Ok(string) = self.as_text() {
@@ -150,6 +157,15 @@ mod test {
     fn binary_convert() {
         let bin = [6u8, 7, 8, 9, 10, 241];
         let msg = Message::from(&bin[..]);
+        assert!(msg.is_binary());
+        assert!(msg.into_text().is_err());
+    }
+
+
+    #[test]
+    fn binary_convert_vec() {
+        let bin = vec![6u8, 7, 8, 9, 10, 241];
+        let msg = Message::from(bin);
         assert!(msg.is_binary());
         assert!(msg.into_text().is_err());
     }
