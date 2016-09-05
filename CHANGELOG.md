@@ -1,3 +1,31 @@
+<a name="v0.5.3"></a>
+### v0.5.3 (2016-09-05)
+
+#### Bug Fixes
+
+*   Prevent one connection from hogging the server, close #65 ([4a591a49](4a591a49))
+
+<a name="v0.5.2"></a>
+### v0.5.2 (2016-08-07)
+
+#### Features
+
+*   Implement From<Vec<u8>> for Message, #63([1a9d020](1a9d020))
+
+
+<a name="v0.5.1"></a>
+### v0.5.1 (2016-07-21)
+
+#### Features
+
+*   Add queue_size setting and handle queue errors better ([26bcef09](26bcef09))
+
+#### Bug Fixes
+
+*   Build error with ssl-server example ([1b8e5c96](1b8e5c96))
+*   Links on readme ([38657a0a](38657a0a))
+
+
 <a name="v0.5.0"></a>
 ### v0.5.0 (2016-06-16)
 

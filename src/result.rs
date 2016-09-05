@@ -41,8 +41,11 @@ pub enum Kind {
     /// This kind of error should only occur during a WebSocket Handshake, and a HTTP 500 response
     /// will be generated.
     Http(httparse::Error),
-    /// Indicates a failure to send a command on the internal EventLoop channel. This means that
-    /// the WebSocket is overloaded and the Connection will disconnect.
+    /// Indicates a failure to send a signal on the internal EventLoop channel. This means that
+    /// the WebSocket is overloaded. In order to avoid this error, it is important to set
+    /// `Settings::max_connections` and `Settings:queue_size` high enough to handle the load.
+    /// If encountered, retuning from a handler method and waiting for the EventLoop to consume
+    /// the queue may relieve the situation.
     Queue(mio::NotifyError<Command>),
     /// Indicates a failure to schedule a timeout on the EventLoop.
     Timer(mio::TimerError),

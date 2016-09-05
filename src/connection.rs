@@ -376,6 +376,12 @@ impl<H> Connection<H>
                         }
                         self.handler.on_error(err);
                     }
+                    Kind::Queue(_) => {
+                        if self.settings.panic_on_queue {
+                            panic!("Panicking on queue error -- {}", err);
+                        }
+                        self.handler.on_error(err);
+                    }
                     _ => {
                         if self.settings.panic_on_io {
                             panic!("Panicking on io error -- {}", err);
@@ -390,7 +396,7 @@ impl<H> Connection<H>
 
     pub fn disconnect(&mut self) {
         match self.state {
-            RespondingClose | FinishedClose | Connecting(_, _)=> (),
+            AwaitingClose | RespondingClose | FinishedClose | Connecting(_, _)=> (),
             _ => {
                 self.handler.on_close(CloseCode::Abnormal, "");
             }
@@ -562,9 +568,9 @@ impl<H> Connection<H>
                 self.read_handshake()
             } else {
                 trace!("Ready to read messages from {}.", self.peer_addr());
-                while let Some(_) = try!(self.buffer_in()) {
+                if let Some(_) = try!(self.buffer_in()) {
                     // consume the whole buffer if possible
-                    while let Err(err) = self.read_frames() {
+                    if let Err(err) = self.read_frames() {
                         // break on first IO error, other errors don't imply that the buffer is bad
                         if let Kind::Io(_) = err.kind {
                             return Err(err)
@@ -795,7 +801,7 @@ impl<H> Connection<H>
                 // Start out assuming that this write will clear the whole buffer
                 self.events.remove(EventSet::writable());
 
-                while let Some(len) = try!(self.socket.try_write_buf(&mut self.out_buffer)) {
+                if let Some(len) = try!(self.socket.try_write_buf(&mut self.out_buffer)) {
                     trace!("Wrote {} bytes to {}", len, self.peer_addr());
                     let finished = len == 0 || self.out_buffer.position() == self.out_buffer.get_ref().len() as u64;
                     if finished {
@@ -803,7 +809,7 @@ impl<H> Connection<H>
                             // we are are a server that is closing and just wrote out our confirming
                             // close frame, let's disconnect
                             FinishedClose if self.is_server()  => return Ok(self.events = EventSet::none()),
-                            _ => break,
+                            _ => (),
                         }
                     }
                 }
@@ -981,41 +987,32 @@ impl<H> Connection<H>
     fn buffer_in(&mut self) -> Result<Option<usize>> {
 
         trace!("Reading buffer for connection to {}.", self.peer_addr());
-        if let Some(mut len) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
-            if len == 0 {
-                trace!("Buffered {}.", len);
-                return Ok(None)
-            }
-            loop {
-                if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
-                    // extend
-                    let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
-                    new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
-                    if new.len() == new.capacity() {
-                        if self.settings.in_buffer_grow {
-                            new.reserve(self.settings.in_buffer_capacity);
-                        } else {
-                            return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
-                        }
-
-                        self.in_buffer = Cursor::new(new);
-                        // return now so that hopefully we will consume some of the buffer so this
-                        // won't happen next time
-                        trace!("Buffered {}.", len);
-                        return Ok(Some(len));
+        if let Some(len) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
+            trace!("Buffered {}.", len);
+            if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
+                // extend
+                let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
+                new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize ..]);
+                if new.len() == new.capacity() {
+                    if self.settings.in_buffer_grow {
+                        new.reserve(self.settings.in_buffer_capacity);
+                    } else {
+                        return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
                     }
+
                     self.in_buffer = Cursor::new(new);
-                }
-
-                if let Some(next) = try!(self.socket.try_read_buf(self.in_buffer.get_mut())) {
-                    if next == 0 {
-                        return Ok(Some(len))
-                    }
-                    len += next
-                } else {
+                    // return now so that hopefully we will consume some of the buffer so this
+                    // won't happen next time
                     trace!("Buffered {}.", len);
                     return Ok(Some(len))
                 }
+                self.in_buffer = Cursor::new(new);
+            }
+
+            if len == 0 {
+                Ok(None)
+            } else {
+                Ok(Some(len))
             }
         } else {
             Ok(None)

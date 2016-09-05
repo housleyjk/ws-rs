@@ -24,13 +24,11 @@ fn generate_key() -> String {
 
 pub fn hash_key(key: &[u8]) -> String {
     let mut hasher = sha1::Sha1::new();
-    let mut buf = [0u8; 20];
 
     hasher.update(key);
     hasher.update(WS_GUID.as_bytes());
-    hasher.output(&mut buf);
 
-    encode_base64(&buf)
+    encode_base64(&hasher.digest().bytes())
 }
 
 // This code is based on rustc_serialize base64 STANDARD
