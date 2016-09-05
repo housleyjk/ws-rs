@@ -1,3 +1,10 @@
+<a name="v0.5.3"></a>
+### v0.5.3 (2016-09-05)
+
+#### Bug Fixes
+
+*   Prevent one connection from hogging the server, close #65 ([4a591a49](4a591a49))
+
 <a name="v0.5.2"></a>
 ### v0.5.2 (2016-08-07)
 
