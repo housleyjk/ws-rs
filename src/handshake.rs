@@ -103,7 +103,7 @@ impl Handshake {
     pub fn remote_addr(&self) -> Result<Option<String>> {
         Ok(try!(self.request.client_addr()).map(String::from).or_else(|| {
             if let Some(addr) = self.peer_addr {
-                Some(addr.to_string())
+                Some(addr.ip().to_string())
             } else {
                 None
             }
@@ -606,7 +606,31 @@ impl fmt::Display for Response {
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
     use std::io::Write;
+    use std::net::SocketAddr;
+    use std::str::FromStr;
     use super::*;
+
+    #[test]
+    fn remote_addr() {
+        let mut buf = Vec::with_capacity(2048);
+        write!(
+            &mut buf,
+            "GET / HTTP/1.1\r\n\
+            Connection: Upgrade\r\n\
+            Upgrade: websocket\r\n\
+            Sec-WebSocket-Version: 13\r\n\
+            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+
+        let req = Request::parse(&buf).unwrap().unwrap();
+        let res = Response::from_request(&req).unwrap();
+        let shake = Handshake {
+            request: req,
+            response: res,
+            peer_addr: Some(SocketAddr::from_str("127.0.0.1:8888").unwrap()),
+            local_addr: None,
+        };
+        assert_eq!(shake.remote_addr().unwrap().unwrap(), "127.0.0.1");
+    }
 
     #[test]
     fn remote_addr_x_forwarded_for() {
