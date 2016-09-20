@@ -402,7 +402,7 @@ impl fmt::Display for Request {
 pub struct Response {
     status: u16,
     reason: String,
-    body: String,
+    body: Vec<u8>,
     headers: Vec<(String, Vec<u8>)>,
 }
 
@@ -410,11 +410,21 @@ impl Response {
     // TODO: resolve the overlap with Request
     
     /// Creates new response with 200 OK code.
+    pub fn ok_raw(data: Vec<u8>) -> Self {
+      Response {
+        status: 200,
+        reason: "OK".into(),
+        body: data,
+        headers: Vec::new(),
+      }
+    }
+
+    /// Creates new response with 200 OK code.
     pub fn ok(body: String) -> Self {
       Response {
         status: 200,
         reason: "OK".into(),
-        body: body,
+        body: body.into_bytes(),
         headers: Vec::new(),
       }
     }
@@ -424,7 +434,7 @@ impl Response {
       Response {
         status: 403,
         reason: "FORBIDDEN".into(),
-        body: body,
+        body: body.into_bytes(),
         headers: Vec::new(),
       }
     }
@@ -434,14 +444,14 @@ impl Response {
       Response {
         status: 404,
         reason: "NOT FOUND".into(),
-        body: body,
+        body: body.into_bytes(),
         headers: Vec::new(),
       }
     }
 
     /// Returns bytes length of the response body.
     pub fn len(&self) -> usize {
-      self.body.as_bytes().len()
+      self.body.len()
     }
 
     /// Get the value of the first instance of an HTTP header.
@@ -583,7 +593,7 @@ impl Response {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
-                body: String::new(),
+                body: vec![],
                 headers: res.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
             }))
         } else {
@@ -598,7 +608,7 @@ impl Response {
         let res = Response {
             status: 101,
             reason: "Switching Protocols".into(),
-            body: String::new(),
+            body: vec![],
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
                 ("Sec-WebSocket-Accept".into(), try!(req.hashed_key()).into()),
@@ -617,11 +627,11 @@ impl Response {
         try!(write!(w, "HTTP/1.1 {} {}\r\n", self.status, self.reason));
         for &(ref key, ref val) in self.headers.iter() {
             try!(write!(w, "{}: ", key));
-            try!(w.write(val));
+            try!(w.write_all(val));
             try!(write!(w, "\r\n"));
         }
         try!(write!(w, "\r\n"));
-        try!(w.write(self.body.as_bytes()));
+        try!(w.write_all(&self.body));
         Ok(())
     }
 }
