@@ -87,7 +87,6 @@ pub trait Handler {
     /// }
     /// Ok(res)
     /// ```
-    ///
     #[inline]
     fn on_request(&mut self, req: &Request) -> Result<Response> {
         debug!("Handler received request:\n{}", req);
@@ -115,6 +114,7 @@ pub trait Handler {
     /// token. To schedule a timeout with your specific token use the `Sender::timeout` method.
     ///
     /// # Examples
+    ///
     /// ```ignore
     /// const GRATI: Token = Token(1);
     ///
@@ -136,8 +136,6 @@ pub trait Handler {
     ///     }
     /// }
     /// ```
-    ///
-    ///
     #[inline]
     fn on_timeout(&mut self, event: Token) -> Result<()> {
         debug!("Handler received timeout token: {:?}", event);
