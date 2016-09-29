@@ -20,7 +20,8 @@ fn main () {
     listen("127.0.0.1:3012", |out| {
         Server {
             out: out,
-            timeout: None,
+            ping_timeout: None,
+            expire_timeout: None,
         }
     }).unwrap();
 
@@ -29,7 +30,8 @@ fn main () {
 // Server WebSocket handler
 struct Server {
     out: Sender,
-    timeout: Option<Timeout>,
+    ping_timeout: Option<Timeout>,
+    expire_timeout: Option<Timeout>,
 }
 
 impl Handler for Server {
@@ -48,6 +50,17 @@ impl Handler for Server {
 
     fn on_close(&mut self, code: CloseCode, reason: &str) {
         println!("WebSocket closing for ({:?}) {}", code, reason);
+
+        // NOTE: This code demonstrates cleaning up timeouts
+        // If we weren't shutting down the websocket, below, we would need this code to avoid
+        // leaking the timeouts and having the possibility of them triggered into later connections
+        if let Some(t) = self.ping_timeout.take() {
+            self.out.cancel(t).unwrap();
+        }
+        if let Some(t) = self.expire_timeout.take() {
+            self.out.cancel(t).unwrap();
+        }
+
         println!("Shutting down server after first connection closes.");
         self.out.shutdown().unwrap();
     }
@@ -63,6 +76,7 @@ impl Handler for Server {
             // PING timeout has occured, send a ping and reschedule
             PING => {
                 try!(self.out.ping(time::precise_time_ns().to_string().into()));
+                self.ping_timeout.take();
                 self.out.timeout(5_000, PING)
             }
             // EXPIRE timeout has occured, this means that the connection is inactive, let's close
@@ -73,13 +87,18 @@ impl Handler for Server {
     }
 
     fn on_new_timeout(&mut self, event: Token, timeout: Timeout) -> Result<()> {
-        // If the new scheduled timeout is an EXPIRE timeout,
-        // we cancel the old timeout and replace.
+        // Cancel the old timeout and replace.
         if event == EXPIRE {
-            if let Some(t) = self.timeout.take() {
+            if let Some(t) = self.expire_timeout.take() {
                 try!(self.out.cancel(t))
             }
-            self.timeout = Some(timeout)
+            self.expire_timeout = Some(timeout)
+        } else {
+            // This ensures there is only one ping timeout at a time
+            if let Some(t) = self.ping_timeout.take() {
+                try!(self.out.cancel(t))
+            }
+            self.ping_timeout = Some(timeout)
         }
 
         Ok(())

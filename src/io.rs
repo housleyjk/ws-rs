@@ -105,14 +105,22 @@ impl<F> Handler<F>
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
-            // note popping from the vector will most likely give us a tcpip v4 address
-            let addr = try!(addresses.pop().ok_or(
-                Error::new(
-                    Kind::Internal,
-                    format!("Unable to obtain any socket address for {}", url))));
-            addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
+            let sock;
+            loop {
+                if let Some(addr) = addresses.pop() {
+                    if let Ok(s) = TcpStream::connect(&addr) {
+                        sock = s;
+                        addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
+                        break
+                    }
+                } else {
+                    return Err(
+                        Error::new(
+                            Kind::Internal,
+                            format!("Unable to obtain any socket address for {}", url)))
+                }
+            }
 
-            let sock = try!(TcpStream::connect(&addr));
             let factory = &mut self.factory;
 
             try!(self.connections.insert_with(|tok| {
@@ -167,13 +175,20 @@ impl<F> Handler<F>
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
-            // note popping from the vector will most likely give us a tcpip v4 address
-            let addr = try!(addresses.pop().ok_or(
-                Error::new(
-                    Kind::Internal,
-                    format!("Unable to obtain any socket address for {}", url))));
-
-            let sock = try!(TcpStream::connect(&addr));
+            let sock;
+            loop {
+                if let Some(addr) = addresses.pop() {
+                    if let Ok(s) = TcpStream::connect(&addr) {
+                        sock = s;
+                        break
+                    }
+                } else {
+                    return Err(
+                        Error::new(
+                            Kind::Internal,
+                            format!("Unable to obtain any socket address for {}", url)))
+                }
+            }
             let factory = &mut self.factory;
 
             try!(self.connections.insert_with(|tok| {
