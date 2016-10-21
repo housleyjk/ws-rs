@@ -123,6 +123,11 @@ pub struct Request {
 
 impl Request {
 
+    /// Get HTTP verb for method of this request.
+    pub fn method(&self) -> &str {
+      &self.method
+    }
+
     /// Get the value of the first instance of an HTTP header.
     pub fn header(&self, header: &str) -> Option<&Vec<u8>> {
         self.headers
