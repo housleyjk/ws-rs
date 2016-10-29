@@ -315,6 +315,47 @@ impl<F> Handler<F>
         }
     }
 
+    #[inline]
+    fn check_active(&mut self, eloop: &mut Loop<F>, active: bool, token: Token) {
+
+        // NOTE: Closing state only applies after a ws connection was successfully
+        // established. It's possible that we may go inactive while in a connecting
+        // state if the handshake fails.
+        if !active {
+            if let Ok(addr) = self.connections[token].socket().peer_addr() {
+                debug!("WebSocket connection to {} disconnected.", addr);
+            } else {
+                trace!("WebSocket connection to token={:?} disconnected.", token);
+            }
+            let handler = self.connections.remove(token).unwrap().consume();
+            self.factory.connection_lost(handler);
+        } else {
+            self.schedule(eloop, &self.connections[token]).or_else(|err| {
+                // This will be an io error, so disconnect will already be called
+                self.connections[token].error(Error::from(err));
+                let handler = self.connections.remove(token).unwrap().consume();
+                self.factory.connection_lost(handler);
+                Ok::<(), Error>(())
+            }).unwrap()
+        }
+
+    }
+
+    #[inline]
+    fn check_count(&mut self, eloop: &mut Loop<F>) {
+        trace!("Active connections {:?}", self.connections.count());
+        if self.connections.count() == 0 {
+            if !self.state.is_active() {
+                debug!("Shutting down websocket server.");
+                eloop.shutdown();
+            } else if self.listener.is_none() {
+                debug!("Shutting down websocket client.");
+                self.factory.on_shutdown();
+                eloop.shutdown();
+            }
+        }
+    }
+
 }
 
 impl<F> mio::Handler for Handler <F>
@@ -418,40 +459,10 @@ impl<F> mio::Handler for Handler <F>
                         conn.events().is_readable() || conn.events().is_writable()
                     };
 
-                    // NOTE: Closing state only applies after a ws connection was successfully
-                    // established. It's possible that we may go inactive while in a connecting
-                    // state if the handshake fails.
-                    if !active {
-                        if let Ok(addr) = self.connections[token].socket().peer_addr() {
-                            debug!("WebSocket connection to {} disconnected.", addr);
-                        } else {
-                            trace!("WebSocket connection to token={:?} disconnected.", token);
-                        }
-                        let handler = self.connections.remove(token).unwrap().consume();
-                        self.factory.connection_lost(handler);
-                    } else {
-                        self.schedule(eloop, &self.connections[token]).or_else(|err| {
-                            // This will be an io error, so disconnect will already be called
-                            self.connections[token].error(Error::from(err));
-                            let handler = self.connections.remove(token).unwrap().consume();
-                            self.factory.connection_lost(handler);
-                            Ok::<(), Error>(())
-                        }).unwrap()
-                    }
-
+                    self.check_active(eloop, active, token)
                 }
 
-                trace!("Active connections {:?}", self.connections.count());
-                if self.connections.count() == 0 {
-                    if !self.state.is_active() {
-                        debug!("Shutting down websocket server.");
-                        eloop.shutdown();
-                    } else if self.listener.is_none() {
-                        debug!("Shutting down websocket client.");
-                        self.factory.on_shutdown();
-                        eloop.shutdown();
-                    }
-                }
+                self.check_count(eloop)
             }
         }
     }
@@ -637,14 +648,21 @@ impl<F> mio::Handler for Handler <F>
         }
     }
 
-    fn timeout(&mut self, _: &mut Loop<F>, Timeout { connection, event }: Timeout) {
-        if let Some(conn) = self.connections.get_mut(connection) {
-            if let Err(err) = conn.timeout_triggered(event) {
-                conn.error(err)
+    fn timeout(&mut self, eloop: &mut Loop<F>, Timeout { connection, event }: Timeout) {
+        let active = {
+            if let Some(conn) = self.connections.get_mut(connection) {
+                if let Err(err) = conn.timeout_triggered(event) {
+                    conn.error(err)
+                }
+
+                conn.events().is_readable() || conn.events().is_writable()
+            } else {
+                trace!("Connection disconnected while timeout was waiting.");
+                return
             }
-        } else {
-            trace!("Connection disconnected while timeout was waiting.")
-        }
+        };
+        self.check_active(eloop, active, connection);
+        self.check_count(eloop)
     }
 
     fn interrupted(&mut self, eloop: &mut Loop<F>) {
