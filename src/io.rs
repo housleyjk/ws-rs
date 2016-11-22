@@ -211,12 +211,14 @@ impl<F> Handler<F>
     }
 
     #[cfg(feature="ssl")]
-    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream, addr: SocketAddr) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+            let mut sender = Sender::new(tok, eloop.channel());
+            sender.set_addr(addr);
+            let handler = factory.server_connected(sender);
             Connection::new(tok, sock, handler, settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
@@ -243,12 +245,14 @@ impl<F> Handler<F>
     }
 
     #[cfg(not(feature="ssl"))]
-    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream, addr: SocketAddr) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+            let mut sender = Sender::new(tok, eloop.channel());
+            sender.set_addr(addr);
+            let handler = factory.server_connected(sender);
             Connection::new(tok, sock, handler, settings)
         }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
 
@@ -330,7 +334,7 @@ impl<F> mio::Handler for Handler <F>
                         }
                     {
                         info!("Accepted a new tcp connection from {}.", addr);
-                        if let Err(err) = self.accept(eloop, sock) {
+                        if let Err(err) = self.accept(eloop, sock, addr) {
                             error!("Unable to build WebSocket connection {:?}", err);
                             if self.settings.panic_on_new_connection {
                                 panic!("Unable to build WebSocket connection {:?}", err);
