@@ -396,7 +396,7 @@ impl<H> Connection<H>
 
     pub fn disconnect(&mut self) {
         match self.state {
-            AwaitingClose | RespondingClose | FinishedClose | Connecting(_, _)=> (),
+            RespondingClose | FinishedClose | Connecting(_, _)=> (),
             _ => {
                 self.handler.on_close(CloseCode::Abnormal, "");
             }

@@ -87,7 +87,6 @@ pub trait Handler {
     /// }
     /// Ok(res)
     /// ```
-    ///
     #[inline]
     fn on_request(&mut self, req: &Request) -> Result<Response> {
         debug!("Handler received request:\n{}", req);
@@ -115,6 +114,7 @@ pub trait Handler {
     /// token. To schedule a timeout with your specific token use the `Sender::timeout` method.
     ///
     /// # Examples
+    ///
     /// ```ignore
     /// const GRATI: Token = Token(1);
     ///
@@ -136,8 +136,6 @@ pub trait Handler {
     ///     }
     /// }
     /// ```
-    ///
-    ///
     #[inline]
     fn on_timeout(&mut self, event: Token) -> Result<()> {
         debug!("Handler received timeout token: {:?}", event);
@@ -150,6 +148,7 @@ pub trait Handler {
     /// timeout. This is a noop by default.
     ///
     /// # Examples
+    ///
     /// ```ignore
     /// const PING: Token = Token(1);
     /// const EXPIRE: Token = Token(2);
@@ -189,7 +188,7 @@ pub trait Handler {
     ///     try!(self.ws.timeout(30_000, EXPIRE));
     ///     Ok(Some(frame))
     /// }
-    ///```
+    /// ```
     #[inline]
     fn on_new_timeout(&mut self, _: Token, _: Timeout) -> Result<()> {
         // default implementation discards the timeout handle
