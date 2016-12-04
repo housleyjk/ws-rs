@@ -1,14 +1,15 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
 use std::time::Duration;
+use std::usize;
 
 use mio;
 use mio::{
     Token,
-    EventLoop,
-    EventSet,
+    Ready,
     PollOpt,
 };
+use mio::deprecated::EventLoop;
 use mio::tcp::{TcpListener, TcpStream};
 
 use url::Url;
@@ -23,13 +24,12 @@ use factory::Factory;
 use util::Slab;
 use super::Settings;
 
-pub const ALL: Token = Token(0);
-pub const SYSTEM: Token = Token(1);
-const CONN_START: Token = Token(2);
+pub const ALL: Token = Token(usize::MAX - 5);
+pub const SYSTEM: Token = Token(usize::MAX - 6);
 
 pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<<F as Factory>::Handler>;
-type Chan = mio::Sender<Command>;
+type Chan = mio::deprecated::Sender<Command>;
 
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
@@ -82,7 +82,7 @@ impl<F> Handler<F>
     pub fn new(factory: F, settings: Settings) -> Handler<F> {
         Handler {
             listener: None,
-            connections: Slab::new_starting_at(CONN_START, settings.max_connections),
+            connections: Slab::with_capacity(settings.max_connections),
             factory: factory,
             settings: settings,
             state: State::Active,
@@ -97,7 +97,7 @@ impl<F> Handler<F>
 
         let tcp = try!(TcpListener::bind(addr));
         // TODO: consider net2 in order to set reuse_addr
-        try!(eloop.register(&tcp, ALL, EventSet::readable(), PollOpt::level()));
+        try!(eloop.register(&tcp, ALL, Ready::readable(), PollOpt::level()));
         self.listener = Some(tcp);
         Ok(self)
     }
@@ -125,10 +125,14 @@ impl<F> Handler<F>
 
             let factory = &mut self.factory;
 
-            try!(self.connections.insert_with(|tok| {
+            if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
                 let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
-                Connection::new(tok, sock, handler, settings)
-            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")))
+                entry.insert(Connection::new(tok, sock, handler, settings));
+                tok
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            }
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
@@ -193,10 +197,14 @@ impl<F> Handler<F>
             }
             let factory = &mut self.factory;
 
-            try!(self.connections.insert_with(|tok| {
+            if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
                 let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
-                Connection::new(tok, sock, handler, settings)
-            }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")))
+                entry.insert(Connection::new(tok, sock, handler, settings));
+                tok
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            }
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
@@ -230,10 +238,16 @@ impl<F> Handler<F>
         let factory = &mut self.factory;
         let settings = self.settings;
 
-        let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
-            Connection::new(tok, sock, handler, settings)
-        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+        let tok = {
+            if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+                entry.insert(Connection::new(tok, sock, handler, settings));
+                tok
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            }
+        };
 
         let conn = &mut self.connections[tok];
 
@@ -262,10 +276,16 @@ impl<F> Handler<F>
         let factory = &mut self.factory;
         let settings = self.settings;
 
-        let tok = try!(self.connections.insert_with(|tok| {
-            let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
-            Connection::new(tok, sock, handler, settings)
-        }).ok_or(Error::new(Kind::Capacity, "Unable to add another connection to the event loop.")));
+        let tok = {
+            if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+                entry.insert(Connection::new(tok, sock, handler, settings));
+                tok
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            }
+        };
 
         let conn = &mut self.connections[tok];
 
@@ -309,7 +329,7 @@ impl<F> Handler<F>
         self.state = State::Inactive;
         // If the shutdown command is received after connections have disconnected,
         // we need to shutdown now because ready only fires on io events
-        if self.connections.count() == 0 {
+        if self.connections.len() == 0 {
             eloop.shutdown()
         }
         if self.settings.panic_on_shutdown {
@@ -345,8 +365,8 @@ impl<F> Handler<F>
 
     #[inline]
     fn check_count(&mut self, eloop: &mut Loop<F>) {
-        trace!("Active connections {:?}", self.connections.count());
-        if self.connections.count() == 0 {
+        trace!("Active connections {:?}", self.connections.len());
+        if self.connections.len() == 0 {
             if !self.state.is_active() {
                 debug!("Shutting down websocket server.");
                 eloop.shutdown();
@@ -360,13 +380,13 @@ impl<F> Handler<F>
 
 }
 
-impl<F> mio::Handler for Handler <F>
+impl<F> mio::deprecated::Handler for Handler <F>
     where F: Factory
 {
     type Timeout = Timeout;
     type Message = Command;
 
-    fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: EventSet) {
+    fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: Ready) {
 
         match token {
             SYSTEM => {
@@ -375,33 +395,27 @@ impl<F> mio::Handler for Handler <F>
             }
             ALL => {
                 if events.is_readable() {
-                    if let Some((sock, addr)) = {
-                            match self.listener.as_ref().expect("No listener provided for server websocket connections").accept() {
-                                Ok(inner) => inner,
-                                Err(err) => {
-                                    error!("Encountered an error {:?} while accepting tcp connection.", err);
-                                    None
+                    match self.listener.as_ref()
+                        .expect("No listener provided for server websocket connections")
+                        .accept()
+                    {
+                        Ok((sock, addr)) => {
+                            info!("Accepted a new tcp connection from {}.", addr);
+                            if let Err(err) = self.accept(eloop, sock) {
+                                error!("Unable to build WebSocket connection {:?}", err);
+                                if self.settings.panic_on_new_connection {
+                                    panic!("Unable to build WebSocket connection {:?}", err);
                                 }
                             }
                         }
-                    {
-                        info!("Accepted a new tcp connection from {}.", addr);
-                        if let Err(err) = self.accept(eloop, sock) {
-                            error!("Unable to build WebSocket connection {:?}", err);
-                            if self.settings.panic_on_new_connection {
-                                panic!("Unable to build WebSocket connection {:?}", err);
-                            }
-                        }
-
-                    } else {
-                        trace!("Blocked while accepting new tcp connection.")
+                        Err(err) => error!("Encountered an error {:?} while accepting tcp connection.", err),
                     }
                 }
             }
             _ => {
                 if events.is_error() {
                     trace!("Encountered error on tcp stream.");
-                    if let Err(err) = self.connections[token].socket().take_socket_error() {
+                    if let Err(err) = self.connections[token].socket().take_error() {
                         trace!("Error was {}", err);
                         if let Some(errno) = err.raw_os_error() {
                             if errno == 111 {
@@ -475,7 +489,7 @@ impl<F> mio::Handler for Handler <F>
                 // Scaffolding for system events such as internal timeouts
             }
             ALL => {
-                let mut dead = Vec::with_capacity(self.connections.count());
+                let mut dead = Vec::with_capacity(self.connections.len());
 
                 match cmd.into_signal() {
                     Signal::Message(msg) => {

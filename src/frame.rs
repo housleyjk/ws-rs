@@ -5,10 +5,10 @@ use std::default::Default;
 use std::iter::FromIterator;
 
 use rand;
-use mio::TryRead;
 
 use result::{Result, Error, Kind};
 use protocol::{OpCode, CloseCode};
+use stream::TryReadBuf;
 
 fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {
     let iter = buf.iter_mut().zip(mask.iter().cycle());

@@ -1,14 +1,51 @@
 use std::io;
 use std::net::SocketAddr;
 
-use mio::{TryRead, TryWrite};
+use mio::deprecated::{TryRead, TryWrite};
 use mio::tcp::TcpStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::error::Error as SslError;
+use bytes::{Buf, MutBuf};
 
 use result::{Result, Error, Kind};
+
+pub trait TryReadBuf: TryRead {
+    fn try_read_buf<B: MutBuf>(&mut self, buf: &mut B) -> io::Result<Option<usize>>
+        where Self : Sized
+    {
+        // Reads the length of the slice supplied by buf.mut_bytes into the buffer
+        // This is not guaranteed to consume an entire datagram or segment.
+        // If your protocol is msg based (instead of continuous stream) you should
+        // ensure that your buffer is large enough to hold an entire segment (1532 bytes if not jumbo
+        // frames)
+        let res = self.try_read(unsafe { buf.mut_bytes() });
+
+        if let Ok(Some(cnt)) = res {
+            unsafe { buf.advance(cnt); }
+        }
+
+        res
+    }
+}
+
+pub trait TryWriteBuf: TryWrite {
+    fn try_write_buf<B: Buf>(&mut self, buf: &mut B) -> io::Result<Option<usize>>
+        where Self : Sized
+    {
+        let res = self.try_write(buf.bytes());
+
+        if let Ok(Some(cnt)) = res {
+            buf.advance(cnt);
+        }
+
+        res
+    }
+}
+
+impl<T: TryRead> TryReadBuf for T {}
+impl<T: TryWrite> TryWriteBuf for T {}
 
 use self::Stream::*;
 pub enum Stream {

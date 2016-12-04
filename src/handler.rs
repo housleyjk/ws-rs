@@ -264,7 +264,7 @@ pub trait Handler {
     /// ```
     #[inline]
     fn build_request(&mut self, url: &url::Url) -> Result<Request> {
-        debug!("Handler is building request from {}.", url);
+        debug!("Handler is building request to {}.", url);
         Request::from_url(url)
     }
 

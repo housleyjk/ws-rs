@@ -22,7 +22,7 @@ pub enum Signal {
         delay: u64,
         token: Token,
     },
-    Cancel(mio::Timeout),
+    Cancel(mio::timer::Timeout),
 }
 
 #[derive(Clone)]
@@ -46,14 +46,14 @@ impl Command {
 #[derive(Debug, Clone)]
 pub struct Sender {
     token: Token,
-    channel: mio::Sender<Command>,
+    channel: mio::deprecated::Sender<Command>,
 }
 
 impl Sender {
 
     #[doc(hidden)]
     #[inline]
-    pub fn new(token: Token, channel: mio::Sender<Command>) -> Sender {
+    pub fn new(token: Token, channel: mio::deprecated::Sender<Command>) -> Sender {
         Sender {
             token: token,
             channel: channel,
@@ -169,7 +169,7 @@ impl Sender {
     /// possible to call this method after a timeout has already occured. It is still necessary to
     /// handle spurious timeouts.
     #[inline]
-    pub fn cancel(&self, timeout: mio::Timeout) -> Result<()> {
+    pub fn cancel(&self, timeout: mio::timer::Timeout) -> Result<()> {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Cancel(timeout),

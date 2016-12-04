@@ -7,7 +7,8 @@ use std::collections::VecDeque;
 use std::str::from_utf8;
 
 use url;
-use mio::{Token, TryRead, TryWrite, EventSet, Timeout};
+use mio::{Token, Ready};
+use mio::timer::Timeout;
 use mio::tcp::TcpStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
@@ -18,7 +19,7 @@ use frame::Frame;
 use protocol::{CloseCode, OpCode};
 use result::{Result, Error, Kind};
 use handler::Handler;
-use stream::Stream;
+use stream::{Stream, TryReadBuf, TryWriteBuf};
 
 use self::State::*;
 use self::Endpoint::*;
@@ -81,7 +82,7 @@ pub struct Connection<H>
     socket: Stream,
     state: State,
     endpoint: Endpoint,
-    events: EventSet,
+    events: Ready,
 
     fragments: VecDeque<Frame>,
 
@@ -107,7 +108,7 @@ impl<H> Connection<H>
                 Cursor::new(Vec::with_capacity(2048)),
             ),
             endpoint: Endpoint::Server,
-            events: EventSet::hup(),
+            events: Ready::hup(),
             fragments: VecDeque::with_capacity(settings.fragments_capacity),
             in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
             out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
@@ -118,13 +119,13 @@ impl<H> Connection<H>
     }
 
     pub fn as_server(&mut self) -> Result<()> {
-        Ok(self.events.insert(EventSet::readable()))
+        Ok(self.events.insert(Ready::readable()))
     }
 
     pub fn as_client(&mut self, url: &url::Url, addrs: Vec<SocketAddr>) -> Result<()> {
         if let Connecting(ref mut req, _) = self.state {
             self.addresses = addrs;
-            self.events.insert(EventSet::writable());
+            self.events.insert(Ready::writable());
             self.endpoint = Endpoint::Client;
             try!(self.handler.build_request(url)).format(req.get_mut())
         } else {
@@ -172,8 +173,8 @@ impl<H> Connection<H>
             if let Connecting(ref mut req, ref mut res) = self.state {
                 req.set_position(0);
                 res.set_position(0);
-                self.events.remove(EventSet::readable());
-                self.events.insert(EventSet::writable());
+                self.events.remove(Ready::readable());
+                self.events.insert(Ready::writable());
 
                 if let Some(ref addr) = self.addresses.pop() {
                     let sock = try!(TcpStream::connect(addr));
@@ -206,8 +207,8 @@ impl<H> Connection<H>
             if let Connecting(ref mut req, ref mut res) = self.state {
                 req.set_position(0);
                 res.set_position(0);
-                self.events.remove(EventSet::readable());
-                self.events.insert(EventSet::writable());
+                self.events.remove(Ready::readable());
+                self.events.insert(Ready::writable());
 
                 if let Some(ref addr) = self.addresses.pop() {
                     let sock = try!(TcpStream::connect(addr));
@@ -226,7 +227,7 @@ impl<H> Connection<H>
         }
     }
 
-    pub fn events(&self) -> EventSet {
+    pub fn events(&self) -> Ready {
         self.events
     }
 
@@ -269,7 +270,7 @@ impl<H> Connection<H>
                     #[cfg(feature="ssl")]
                     Kind::Ssl(_) | Kind::Io(_) => {
                         self.handler.on_error(err);
-                        self.events = EventSet::none();
+                        self.events = Ready::none();
                     }
                     Kind::Protocol => {
                         let msg = err.to_string();
@@ -281,13 +282,13 @@ impl<H> Connection<H>
                                     "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg)
                             {
                                 self.handler.on_error(Error::from(err));
-                                self.events = EventSet::none();
+                                self.events = Ready::none();
                             } else {
-                                self.events.remove(EventSet::readable());
-                                self.events.insert(EventSet::writable());
+                                self.events.remove(Ready::readable());
+                                self.events.insert(Ready::writable());
                             }
                         } else {
-                            self.events = EventSet::none();
+                            self.events = Ready::none();
                         }
                     }
                     _ => {
@@ -299,13 +300,13 @@ impl<H> Connection<H>
                                     res.get_mut(),
                                     "HTTP/1.1 500 Internal Server Error\r\n\r\n{}", msg) {
                                 self.handler.on_error(Error::from(err));
-                                self.events = EventSet::none();
+                                self.events = Ready::none();
                             } else {
-                                self.events.remove(EventSet::readable());
-                                self.events.insert(EventSet::writable());
+                                self.events.remove(Ready::readable());
+                                self.events.insert(Ready::writable());
                             }
                         } else {
-                            self.events = EventSet::none();
+                            self.events = Ready::none();
                         }
                     }
                 }
@@ -401,7 +402,7 @@ impl<H> Connection<H>
                 self.handler.on_close(CloseCode::Abnormal, "");
             }
         }
-        self.events = EventSet::none()
+        self.events = Ready::none()
     }
 
     pub fn consume(self) -> H {
@@ -430,8 +431,8 @@ impl<H> Connection<H>
                                     .peer_addr()
                                     .map(|addr| addr.to_string())
                                     .unwrap_or("UNKNOWN".into()));
-                            self.events.insert(EventSet::readable());
-                            self.events.remove(EventSet::writable());
+                            self.events.insert(Ready::readable());
+                            self.events.remove(Ready::writable());
                         }
                     }
                     return Ok(())
@@ -448,7 +449,7 @@ impl<H> Connection<H>
                     // An error should already have been sent for the first time it failed to
                     // parse. We don't call disconnect here because `on_open` hasn't been called yet.
                     self.state = FinishedClose;
-                    self.events = EventSet::none();
+                    self.events = Ready::none();
                     return Ok(())
                 }
             };
@@ -457,7 +458,7 @@ impl<H> Connection<H>
                 Error::new(Kind::Internal, "Failed to parse response after handshake is complete.")));
 
             if response.status() != 101 {
-                self.events = EventSet::none();
+                self.events = Ready::none();
                 return Ok(())
             } else {
                 try!(self.handler.on_open(Handshake {
@@ -467,7 +468,7 @@ impl<H> Connection<H>
                     local_addr: self.socket.local_addr().ok(),
                 }));
                 debug!("Connection to {} is now open.", self.peer_addr());
-                self.events.insert(EventSet::readable());
+                self.events.insert(Ready::readable());
                 return Ok(self.check_events())
             }
         } else {
@@ -484,8 +485,8 @@ impl<H> Connection<H>
                             trace!("Handshake request received: \n{}", request);
                             let response = try!(self.handler.on_request(request));
                             try!(response.format(res.get_mut()));
-                            self.events.remove(EventSet::readable());
-                            self.events.insert(EventSet::writable());
+                            self.events.remove(Ready::readable());
+                            self.events.insert(Ready::writable());
                         }
                     }
                     return Ok(())
@@ -582,8 +583,8 @@ impl<H> Connection<H>
             };
 
             if self.socket.is_negotiating() && res.is_ok() {
-                self.events.remove(EventSet::readable());
-                self.events.insert(EventSet::writable());
+                self.events.remove(Ready::readable());
+                self.events.insert(Ready::writable());
             }
             res
         }
@@ -644,7 +645,7 @@ impl<H> Connection<H>
 
                                 if self.is_server() {
                                     // Finished handshake, disconnect server side
-                                    self.events = EventSet::none()
+                                    self.events = Ready::none()
                                 } else {
                                     // We are a client, so we wait for the server to close the
                                     // connection
@@ -799,7 +800,7 @@ impl<H> Connection<H>
                 trace!("Ready to write messages to {}.", self.peer_addr());
 
                 // Start out assuming that this write will clear the whole buffer
-                self.events.remove(EventSet::writable());
+                self.events.remove(Ready::writable());
 
                 if let Some(len) = try!(self.socket.try_write_buf(&mut self.out_buffer)) {
                     trace!("Wrote {} bytes to {}", len, self.peer_addr());
@@ -808,7 +809,7 @@ impl<H> Connection<H>
                         match self.state {
                             // we are are a server that is closing and just wrote out our confirming
                             // close frame, let's disconnect
-                            FinishedClose if self.is_server()  => return Ok(self.events = EventSet::none()),
+                            FinishedClose if self.is_server()  => return Ok(self.events = Ready::none()),
                             _ => (),
                         }
                     }
@@ -819,8 +820,8 @@ impl<H> Connection<H>
             };
 
             if self.socket.is_negotiating() && res.is_ok() {
-                self.events.remove(EventSet::writable());
-                self.events.insert(EventSet::readable());
+                self.events.remove(Ready::writable());
+                self.events.insert(Ready::readable());
             }
             res
         }
@@ -943,9 +944,9 @@ impl<H> Connection<H>
 
     fn check_events(&mut self) {
         if !self.state.is_connecting() {
-            self.events.insert(EventSet::readable());
+            self.events.insert(Ready::readable());
             if self.out_buffer.position() < self.out_buffer.get_ref().len() as u64 {
-                self.events.insert(EventSet::writable());
+                self.events.insert(Ready::writable());
             }
         }
     }

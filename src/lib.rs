@@ -11,6 +11,7 @@ extern crate sha1;
 extern crate rand;
 extern crate url;
 extern crate slab;
+extern crate bytes;
 #[cfg(feature="ssl")] extern crate openssl;
 #[macro_use] extern crate log;
 
@@ -45,7 +46,7 @@ pub use handshake::{Handshake, Request, Response};
 use std::fmt;
 use std::default::Default;
 use std::net::ToSocketAddrs;
-use mio::EventLoopBuilder;
+use mio::deprecated::EventLoopBuilder;
 use std::borrow::Borrow;
 
 /// A utility function for setting up a WebSocket server.
@@ -268,7 +269,7 @@ impl<F> WebSocket<F>
     /// Create a new WebSocket using the given Factory to create handlers.
     pub fn new(factory: F) -> Result<WebSocket<F>> {
         let settings = Settings::default();
-        let mut config = EventLoopConfig::new();
+        let mut config = EventLoopBuilder::new();
         config.notify_capacity(settings.max_connections * settings.queue_size);
         Ok(WebSocket {
             event_loop: try!(config.build()),

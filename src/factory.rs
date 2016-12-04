@@ -128,7 +128,7 @@ mod test {
 
     struct S;
 
-    impl mio::Handler for S {
+    impl mio::deprecated::Handler for S {
         type Message = Command;
         type Timeout = ();
     }
@@ -157,7 +157,7 @@ mod test {
             }
         }
 
-        let event_loop = mio::EventLoop::<S>::new().unwrap();
+        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
 
         let mut x = X;
         let m = x.connection_made(
@@ -168,7 +168,7 @@ mod test {
 
     #[test]
     fn closure_factory() {
-        let event_loop = mio::EventLoop::<S>::new().unwrap();
+        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
 
         let mut factory = |_| {
             |_| {Ok(())}
@@ -193,7 +193,7 @@ mod test {
             }
         }
 
-        let event_loop = mio::EventLoop::<S>::new().unwrap();
+        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
 
         let mut x = X;
         let m = x.connection_made(
