@@ -10,7 +10,7 @@ use result::{Result, Error};
 use protocol::CloseCode;
 use io::ALL;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Signal {
     Message(message::Message),
     Close(CloseCode, Cow<'static, str>),
@@ -25,7 +25,7 @@ pub enum Signal {
     Cancel(mio::timer::Timeout),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Command {
     token: Token,
     signal: Signal,
@@ -43,17 +43,17 @@ impl Command {
 
 /// A representation of the output of the WebSocket connection. Use this to send messages to the
 /// other endpoint.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Sender {
     token: Token,
-    channel: mio::deprecated::Sender<Command>,
+    channel: mio::channel::SyncSender<Command>,
 }
 
 impl Sender {
 
     #[doc(hidden)]
     #[inline]
-    pub fn new(token: Token, channel: mio::deprecated::Sender<Command>) -> Sender {
+    pub fn new(token: Token, channel: mio::channel::SyncSender<Command>) -> Sender {
         Sender {
             token: token,
             channel: channel,

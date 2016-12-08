@@ -2,14 +2,15 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
 use std::time::Duration;
 use std::usize;
+use std::io::ErrorKind;
 
 use mio;
 use mio::{
     Token,
     Ready,
+    Poll,
     PollOpt,
 };
-use mio::deprecated::EventLoop;
 use mio::tcp::{TcpListener, TcpStream};
 
 use url::Url;
@@ -24,12 +25,18 @@ use factory::Factory;
 use util::Slab;
 use super::Settings;
 
+const QUEUE: Token = Token(usize::MAX - 3);
+const TIMER: Token = Token(usize::MAX - 4);
 pub const ALL: Token = Token(usize::MAX - 5);
-pub const SYSTEM: Token = Token(usize::MAX - 6);
+const SYSTEM: Token = Token(usize::MAX - 6);
 
-pub type Loop<F> = EventLoop<Handler<F>>;
 type Conn<F> = Connection<<F as Factory>::Handler>;
-type Chan = mio::deprecated::Sender<Command>;
+
+const MAX_EVENTS: usize = 1024;
+const MESSAGES_PER_TICK: usize = 256;
+const TIMER_TICK_MILLIS: u64 = 100;
+const TIMER_WHEEL_SIZE: usize = 1024;
+const TIMER_CAPACITY: usize = 65_536;
 
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
@@ -74,22 +81,39 @@ pub struct Handler<F>
     factory: F,
     settings: Settings,
     state: State,
+    queue_tx: mio::channel::SyncSender<Command>,
+    queue_rx: mio::channel::Receiver<Command>,
+    timer: mio::timer::Timer<Timeout>,
 }
+
 
 impl<F> Handler<F>
     where F: Factory
 {
     pub fn new(factory: F, settings: Settings) -> Handler<F> {
+        let (tx, rx) = mio::channel::sync_channel(settings.max_connections * settings.queue_size);
+        let timer = mio::timer::Builder::default()
+            .tick_duration(Duration::from_millis(TIMER_TICK_MILLIS))
+            .num_slots(TIMER_WHEEL_SIZE)
+            .capacity(TIMER_CAPACITY)
+            .build();
         Handler {
             listener: None,
             connections: Slab::with_capacity(settings.max_connections),
             factory: factory,
             settings: settings,
-            state: State::Active,
+            state: State::Inactive,
+            queue_tx: tx,
+            queue_rx: rx,
+            timer: timer,
         }
     }
 
-    pub fn listen(&mut self, eloop: &mut Loop<F>, addr: &SocketAddr) -> Result<&mut Handler<F>> {
+    pub fn sender(&self ) -> Sender {
+        Sender::new(ALL, self.queue_tx.clone())
+    }
+
+    pub fn listen(&mut self, poll: &mut Poll, addr: &SocketAddr) -> Result<&mut Handler<F>> {
 
         debug_assert!(
             self.listener.is_none(),
@@ -97,13 +121,13 @@ impl<F> Handler<F>
 
         let tcp = try!(TcpListener::bind(addr));
         // TODO: consider net2 in order to set reuse_addr
-        try!(eloop.register(&tcp, ALL, Ready::readable(), PollOpt::level()));
+        try!(poll.register(&tcp, ALL, Ready::readable(), PollOpt::level()));
         self.listener = Some(tcp);
         Ok(self)
     }
 
     #[cfg(feature="ssl")]
-    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
@@ -127,7 +151,7 @@ impl<F> Handler<F>
 
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
                 entry.insert(Connection::new(tok, sock, handler, settings));
                 tok
             } else {
@@ -163,7 +187,7 @@ impl<F> Handler<F>
             }
         }
 
-        eloop.register(
+        poll.register(
             self.connections[tok].socket(),
             self.connections[tok].token(),
             self.connections[tok].events(),
@@ -177,7 +201,7 @@ impl<F> Handler<F>
     }
 
     #[cfg(not(feature="ssl"))]
-    pub fn connect(&mut self, eloop: &mut Loop<F>, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
         let mut addresses = try!(url_to_addrs(url));
         let tok = {
@@ -199,7 +223,7 @@ impl<F> Handler<F>
 
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, eloop.channel()));
+                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
                 entry.insert(Connection::new(tok, sock, handler, settings));
                 tok
             } else {
@@ -220,7 +244,7 @@ impl<F> Handler<F>
             return Err(error)
         }
 
-        eloop.register(
+        poll.register(
             self.connections[tok].socket(),
             self.connections[tok].token(),
             self.connections[tok].events(),
@@ -234,14 +258,14 @@ impl<F> Handler<F>
     }
 
     #[cfg(feature="ssl")]
-    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         let tok = {
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
-                let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+                let handler = factory.server_connected(Sender::new(tok, self.queue_tx.clone()));
                 entry.insert(Connection::new(tok, sock, handler, settings));
                 tok
             } else {
@@ -256,7 +280,7 @@ impl<F> Handler<F>
             try!(conn.encrypt())
         }
 
-        eloop.register(
+        poll.register(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -272,14 +296,14 @@ impl<F> Handler<F>
     }
 
     #[cfg(not(feature="ssl"))]
-    pub fn accept(&mut self, eloop: &mut Loop<F>, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         let tok = {
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
-                let handler = factory.server_connected(Sender::new(tok, eloop.channel()));
+                let handler = factory.server_connected(Sender::new(tok, self.queue_tx.clone()));
                 entry.insert(Connection::new(tok, sock, handler, settings));
                 tok
             } else {
@@ -294,7 +318,7 @@ impl<F> Handler<F>
             return Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."))
         }
 
-        eloop.register(
+        poll.register(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -309,10 +333,57 @@ impl<F> Handler<F>
         })
     }
 
+    pub fn run(&mut self, poll: &mut Poll) -> Result<()> {
+        trace!("Running event loop");
+        try!(poll.register(&self.queue_rx, QUEUE, Ready::readable(), PollOpt::edge() | PollOpt::oneshot()));
+        try!(poll.register(&self.timer, TIMER, Ready::readable(), PollOpt::edge()));
+
+        self.state = State::Active;
+        let result = self.event_loop(poll);
+        self.state = State::Inactive;
+
+        result
+            .and(poll.deregister(&self.timer).map_err(|e| Error::from(e)))
+            .and(poll.deregister(&self.queue_rx).map_err(|e| Error::from(e)))
+    }
+
     #[inline]
-    fn schedule(&self, eloop: &mut Loop<F>, conn: &Conn<F>) -> Result<()> {
+    fn event_loop(&mut self, poll: &mut Poll) -> Result<()> {
+        let mut events = mio::Events::with_capacity(MAX_EVENTS);
+        while self.state.is_active() {
+            trace!("Waiting for event");
+            let nevents = match poll.poll(&mut events, None) {
+                Ok(nevents) => nevents,
+                Err(err) => {
+                    if err.kind() == ErrorKind::Interrupted {
+                        if self.settings.shutdown_on_interrupt {
+                            error!("Websocket shutting down for interrupt.");
+                            self.state = State::Inactive;
+                        } else {
+                            error!("Websocket received interupt.");
+                        }
+                        0
+                    } else {
+                        return Err(Error::from(err));
+                    }
+                }
+            };
+            trace!("Processing {} events", nevents);
+
+            for i in 0..nevents {
+                let evt = events.get(i).unwrap();
+                self.handle_event(poll, evt.token(), evt.kind());
+            }
+
+            self.check_count();
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn schedule(&self, poll: &mut Poll, conn: &Conn<F>) -> Result<()> {
         trace!("Scheduling connection to {} as {:?}", conn.socket().peer_addr().map(|addr| addr.to_string()).unwrap_or("UNKNOWN".into()), conn.events());
-        Ok(try!(eloop.reregister(
+        Ok(try!(poll.reregister(
             conn.socket(),
             conn.token(),
             conn.events(),
@@ -320,25 +391,20 @@ impl<F> Handler<F>
         )))
     }
 
-    fn shutdown(&mut self, eloop: &mut Loop<F>) {
+    fn shutdown(&mut self) {
         debug!("Received shutdown signal. WebSocket is attempting to shut down.");
         for conn in self.connections.iter_mut() {
             conn.shutdown();
         }
         self.factory.on_shutdown();
         self.state = State::Inactive;
-        // If the shutdown command is received after connections have disconnected,
-        // we need to shutdown now because ready only fires on io events
-        if self.connections.len() == 0 {
-            eloop.shutdown()
-        }
         if self.settings.panic_on_shutdown {
             panic!("Panicking on shutdown as per setting.")
         }
     }
 
     #[inline]
-    fn check_active(&mut self, eloop: &mut Loop<F>, active: bool, token: Token) {
+    fn check_active(&mut self, poll: &mut Poll, active: bool, token: Token) {
 
         // NOTE: Closing state only applies after a ws connection was successfully
         // established. It's possible that we may go inactive while in a connecting
@@ -352,7 +418,7 @@ impl<F> Handler<F>
             let handler = self.connections.remove(token).unwrap().consume();
             self.factory.connection_lost(handler);
         } else {
-            self.schedule(eloop, &self.connections[token]).or_else(|err| {
+            self.schedule(poll, &self.connections[token]).or_else(|err| {
                 // This will be an io error, so disconnect will already be called
                 self.connections[token].error(Error::from(err));
                 let handler = self.connections.remove(token).unwrap().consume();
@@ -364,34 +430,29 @@ impl<F> Handler<F>
     }
 
     #[inline]
-    fn check_count(&mut self, eloop: &mut Loop<F>) {
+    fn is_client(&self) -> bool {
+        self.listener.is_none()
+    }
+
+    #[inline]
+    fn check_count(&mut self) {
         trace!("Active connections {:?}", self.connections.len());
         if self.connections.len() == 0 {
             if !self.state.is_active() {
                 debug!("Shutting down websocket server.");
-                eloop.shutdown();
-            } else if self.listener.is_none() {
+            } else if self.is_client() {
                 debug!("Shutting down websocket client.");
                 self.factory.on_shutdown();
-                eloop.shutdown();
+                self.state = State::Inactive;
             }
         }
     }
 
-}
-
-impl<F> mio::deprecated::Handler for Handler <F>
-    where F: Factory
-{
-    type Timeout = Timeout;
-    type Message = Command;
-
-    fn ready(&mut self, eloop: &mut Loop<F>, token: Token, events: Ready) {
-
+    fn handle_event(&mut self, poll: &mut Poll, token: Token, events: Ready) {
         match token {
             SYSTEM => {
                 debug_assert!(false, "System token used for io event. This is a bug!");
-                error!("System token used for io event. This is a bug!")
+                error!("System token used for io event. This is a bug!");
             }
             ALL => {
                 if events.is_readable() {
@@ -401,7 +462,7 @@ impl<F> mio::deprecated::Handler for Handler <F>
                     {
                         Ok((sock, addr)) => {
                             info!("Accepted a new tcp connection from {}.", addr);
-                            if let Err(err) = self.accept(eloop, sock) {
+                            if let Err(err) = self.accept(poll, sock) {
                                 error!("Unable to build WebSocket connection {:?}", err);
                                 if self.settings.panic_on_new_connection {
                                     panic!("Unable to build WebSocket connection {:?}", err);
@@ -412,6 +473,20 @@ impl<F> mio::deprecated::Handler for Handler <F>
                     }
                 }
             }
+            TIMER => {
+                while let Some(t) = self.timer.poll() {
+                    self.handle_timeout(poll, t);
+                }
+            }
+            QUEUE => {
+                for _ in 0..MESSAGES_PER_TICK {
+                    match self.queue_rx.try_recv() {
+                        Ok(cmd) => self.handle_queue(poll, cmd),
+                        _ => break
+                    }
+                }
+                let _ = poll.reregister(&self.queue_rx, QUEUE, Ready::readable(), PollOpt::edge() | PollOpt::oneshot());
+            }
             _ => {
                 if events.is_error() {
                     trace!("Encountered error on tcp stream.");
@@ -421,7 +496,7 @@ impl<F> mio::deprecated::Handler for Handler <F>
                             if errno == 111 {
                                 match self.connections[token].reset() {
                                     Ok(_) => {
-                                        eloop.register(
+                                        poll.register(
                                             self.connections[token].socket(),
                                             self.connections[token].token(),
                                             self.connections[token].events(),
@@ -475,15 +550,13 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         conn.events().is_readable() || conn.events().is_writable()
                     };
 
-                    self.check_active(eloop, active, token)
+                    self.check_active(poll, active, token)
                 }
-
-                self.check_count(eloop)
             }
         }
     }
 
-    fn notify(&mut self, eloop: &mut Loop<F>, cmd: Command) {
+    fn handle_queue(&mut self, poll: &mut Poll, cmd: Command) {
         match cmd.token() {
             SYSTEM => {
                 // Scaffolding for system events such as internal timeouts
@@ -525,7 +598,7 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         }
                     }
                     Signal::Connect(ref url) => {
-                        if let Err(err) = self.connect(eloop, url) {
+                        if let Err(err) = self.connect(poll, url) {
                             if self.settings.panic_on_new_connection {
                                 panic!("Unable to establish connection to {}: {:?}", url, err);
                             }
@@ -533,12 +606,13 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         }
                         return
                     }
-                    Signal::Shutdown => self.shutdown(eloop),
+                    Signal::Shutdown => self.shutdown(),
                     Signal::Timeout { delay, token: event } => {
-                        match eloop.timeout(Timeout {
+                        match self.timer.set_timeout(Duration::from_millis(delay),
+                            Timeout {
                                 connection: ALL,
                                 event: event,
-                            }, Duration::from_millis(delay)).map_err(Error::from)
+                            }).map_err(Error::from)
                         {
                             Ok(timeout) => {
                                 for conn in self.connections.iter_mut() {
@@ -557,13 +631,13 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         return
                     }
                     Signal::Cancel(timeout) => {
-                        eloop.clear_timeout(&timeout);
+                        self.timer.cancel_timeout(&timeout);
                         return
                     }
                 }
 
                 for conn in self.connections.iter() {
-                    if let Err(err) = self.schedule(eloop, conn) {
+                    if let Err(err) = self.schedule(poll, conn) {
                         dead.push((conn.token(), err))
                     }
                 }
@@ -611,7 +685,7 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         }
                     }
                     Signal::Connect(ref url) => {
-                        if let Err(err) = self.connect(eloop, url) {
+                        if let Err(err) = self.connect(poll, url) {
                             if let Some(conn) = self.connections.get_mut(token) {
                                 conn.error(err)
                             } else {
@@ -623,12 +697,13 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         }
                         return
                     }
-                    Signal::Shutdown => self.shutdown(eloop),
+                    Signal::Shutdown => self.shutdown(),
                     Signal::Timeout { delay, token: event } => {
-                        match eloop.timeout(Timeout {
+                        match self.timer.set_timeout(Duration::from_millis(delay),
+                            Timeout {
                                 connection: token,
                                 event: event,
-                            }, Duration::from_millis(delay)).map_err(Error::from)
+                            }).map_err(Error::from)
                         {
                             Ok(timeout) => {
                                 if let Some(conn) = self.connections.get_mut(token) {
@@ -650,13 +725,13 @@ impl<F> mio::deprecated::Handler for Handler <F>
                         return
                     }
                     Signal::Cancel(timeout) => {
-                        eloop.clear_timeout(&timeout);
+                        self.timer.cancel_timeout(&timeout);
                         return
                     }
                 }
 
                 if let Some(_) = self.connections.get(token) {
-                    if let Err(err) = self.schedule(eloop, &self.connections[token]) {
+                    if let Err(err) = self.schedule(poll, &self.connections[token]) {
                         self.connections[token].error(err)
                     }
                 }
@@ -664,7 +739,8 @@ impl<F> mio::deprecated::Handler for Handler <F>
         }
     }
 
-    fn timeout(&mut self, eloop: &mut Loop<F>, Timeout { connection, event }: Timeout) {
+
+    fn handle_timeout(&mut self, poll: &mut Poll, Timeout { connection, event }: Timeout) {
         let active = {
             if let Some(conn) = self.connections.get_mut(connection) {
                 if let Err(err) = conn.timeout_triggered(event) {
@@ -677,17 +753,7 @@ impl<F> mio::deprecated::Handler for Handler <F>
                 return
             }
         };
-        self.check_active(eloop, active, connection);
-        self.check_count(eloop)
-    }
-
-    fn interrupted(&mut self, eloop: &mut Loop<F>) {
-        if self.settings.shutdown_on_interrupt {
-            error!("Websocket shutting down for interrupt.");
-            eloop.shutdown()
-        } else {
-            error!("Websocket received interupt.");
-        }
+        self.check_active(poll, active, connection);
     }
 }
 
