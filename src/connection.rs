@@ -38,10 +38,10 @@ pub enum State {
 }
 
 /// A little more semantic than a boolean
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Endpoint {
     /// Will mask outgoing frames
-    Client,
+    Client(url::Url),
     /// Won't mask outgoing frames
     Server,
 }
@@ -126,7 +126,7 @@ impl<H> Connection<H>
         if let Connecting(ref mut req, _) = self.state {
             self.addresses = addrs;
             self.events.insert(Ready::writable());
-            self.endpoint = Endpoint::Client;
+            self.endpoint = Endpoint::Client(url.clone());
             try!(self.handler.build_request(url)).format(req.get_mut())
         } else {
             Err(Error::new(
@@ -142,7 +142,7 @@ impl<H> Connection<H>
                 try!(self.handler.build_ssl()),
                 try!(self.socket().try_clone()))),
 
-            Client => try!(SslStream::connect(
+            Client(_) => try!(SslStream::connect(
                 try!(self.handler.build_ssl()),
                 try!(self.socket().try_clone()))),
         };
@@ -233,14 +233,14 @@ impl<H> Connection<H>
 
     pub fn is_client(&self) -> bool {
         match self.endpoint {
-            Client => true,
+            Client(_) => true,
             Server => false,
         }
     }
 
     pub fn is_server(&self) -> bool {
         match self.endpoint {
-            Client => false,
+            Client(_) => false,
             Server => true,
         }
     }
@@ -423,7 +423,7 @@ impl<H> Connection<H>
                         return Ok(())
                     }
                 }
-                Client =>  {
+                Client(_) =>  {
                     if let Some(_) = try!(self.socket.try_write_buf(req)) {
                         if req.position() as usize == req.get_ref().len() {
                             trace!("Finished writing handshake request to {}",
@@ -491,7 +491,7 @@ impl<H> Connection<H>
                     }
                     return Ok(())
                 }
-                Client => {
+                Client(_) => {
                     if let Some(_) = try!(self.socket.try_read_buf(res.get_mut())) {
 
                         // TODO: see if this can be optimized with drain
