@@ -15,7 +15,7 @@ use mio::tcp::{TcpListener, TcpStream};
 use url::Url;
 
 #[cfg(feature="ssl")]
-use openssl::ssl::error::SslError;
+use openssl::ssl::Error as SslError;
 
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
@@ -144,7 +144,7 @@ impl<F> Handler<F>
         if url.scheme() == "wss" {
             while let Err(ssl_error) = self.connections[tok].encrypt() {
                 match ssl_error.kind {
-                    Kind::Ssl(SslError::StreamError(ref io_error)) => {
+                    Kind::Ssl(SslError::Stream(ref io_error)) => {
                         if let Some(errno) = io_error.raw_os_error() {
                             if errno == 111 {
                                 if let Err(reset_error) = self.connections[tok].reset() {

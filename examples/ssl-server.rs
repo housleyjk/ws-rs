@@ -13,16 +13,20 @@ extern crate openssl;
 extern crate env_logger;
 
 #[cfg(feature="ssl")]
-use std::rc::Rc;
+use std::io::Read;
 #[cfg(feature="ssl")]
-use openssl::ssl::{Ssl, SslContext, SslMethod};
+use std::fs::File;
 #[cfg(feature="ssl")]
-use openssl::x509::X509FileType;
+use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslMethod};
+#[cfg(feature="ssl")]
+use openssl::pkey::PKey;
+#[cfg(feature="ssl")]
+use openssl::x509::{X509, X509Ref};
 
 #[cfg(feature="ssl")]
 struct Server {
     out: ws::Sender,
-    ssl: Rc<SslContext>,
+    ssl: SslAcceptor,
 }
 
 #[cfg(feature="ssl")]
@@ -32,9 +36,17 @@ impl ws::Handler for Server {
         self.out.send(msg) // simple echo
     }
 
-    fn build_ssl(&mut self) -> ws::Result<Ssl> {
-        Ssl::new(&self.ssl).map_err(ws::Error::from)
+    fn build_ssl_server(&mut self) -> ws::Result<SslAcceptor> {
+        Ok(self.ssl.clone())
     }
+}
+
+#[cfg(feature="ssl")]
+fn read_file(name: &str) -> std::io::Result<Vec<u8>> {
+    let mut file = try!(File::open(name));
+    let mut buf = Vec::new();
+    try!(file.read_to_end(&mut buf));
+    Ok(buf)
 }
 
 #[cfg(feature="ssl")]
@@ -61,11 +73,18 @@ fn main () {
              .index(3))
         .get_matches();
 
-    let mut context = SslContext::new(SslMethod::Tlsv1).unwrap();
-    context.set_certificate_file(matches.value_of("CERT").unwrap(), X509FileType::PEM).unwrap();
-    context.set_private_key_file(matches.value_of("KEY").unwrap(), X509FileType::PEM).unwrap();
+    let cert = {
+        let data = read_file(matches.value_of("CERT").unwrap()).unwrap();
+        X509::from_pem(data.as_ref()).unwrap()
+    };
 
-    let context_rc = Rc::new(context);
+    let pkey = {
+        let data = read_file(matches.value_of("KEY").unwrap()).unwrap();
+        PKey::private_key_from_pem(data.as_ref()).unwrap()
+    };
+
+    let context = SslAcceptorBuilder::mozilla_intermediate(SslMethod::tls(),
+        &pkey, &cert, std::iter::empty::<X509Ref>()).unwrap().build();
 
     ws::Builder::new().with_settings(ws::Settings {
         encrypt_server: true,
@@ -73,7 +92,7 @@ fn main () {
     }).build(|out: ws::Sender| {
         Server {
             out: out,
-            ssl: context_rc.clone(),
+            ssl: context.clone(),
         }
     }).unwrap().listen(matches.value_of("ADDR").unwrap()).unwrap();
 }

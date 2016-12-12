@@ -1,7 +1,7 @@
 use std::mem::replace;
 
 #[cfg(feature="ssl")]
-use openssl::ssl::Ssl;
+use openssl::ssl::{SslConnector, SslAcceptor};
 use url;
 
 use handler::Handler;
@@ -515,8 +515,13 @@ impl<H: Handler> Handler for DeflateHandler<H> {
 
     #[inline]
     #[cfg(all(not(windows), feature="ssl"))]
-    fn build_ssl(&mut self) -> Result<Ssl> {
-        self.inner.build_ssl()
+    fn build_ssl_client(&mut self) -> Result<SslConnector> {
+        self.inner.build_ssl_client()
     }
 
+    #[inline]
+    #[cfg(all(not(windows), feature="ssl"))]
+    fn build_ssl_server(&mut self) -> Result<SslAcceptor> {
+        self.inner.build_ssl_server()
+    }
 }

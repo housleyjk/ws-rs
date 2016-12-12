@@ -1,7 +1,7 @@
 use url;
 use log::LogLevel::Error as ErrorLevel;
 #[cfg(feature="ssl")]
-use openssl::ssl::{Ssl, SslContext, SslMethod};
+use openssl::ssl::{SslConnector, SslConnectorBuilder, SslAcceptor, SslMethod};
 
 use message::Message;
 use frame::Frame;
@@ -268,14 +268,23 @@ pub trait Handler {
         Request::from_url(url)
     }
 
-    /// A method for obtaining an Ssl object for use in wss connections.
+    /// A method for obtaining an Ssl object for use in wss client connections.
     ///
     /// Override this method to customize the Ssl object used to encrypt the connection.
     #[inline]
     #[cfg(feature="ssl")]
-    fn build_ssl(&mut self) -> Result<Ssl> {
-        let context = try!(SslContext::new(SslMethod::Tlsv1));
-        Ssl::new(&context).map_err(Error::from)
+    fn build_ssl_client(&mut self) -> Result<SslConnector> {
+        let builder = try!(SslConnectorBuilder::new(SslMethod::tls()));
+        Ok(builder.build())
+    }
+
+    /// A method for obtaining an Ssl object for use in wss server connections.
+    ///
+    /// Override this method to customize the Ssl object used to encrypt the connection.
+    #[inline]
+    #[cfg(feature="ssl")]
+    fn build_ssl_server(&mut self) -> Result<SslAcceptor> {
+        unimplemented!();
     }
 }
 
