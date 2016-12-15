@@ -126,13 +126,6 @@ mod test {
     use handler::Handler;
     use result::Result;
 
-    struct S;
-
-    impl mio::deprecated::Handler for S {
-        type Message = Command;
-        type Timeout = ();
-    }
-
     #[derive(Debug, Eq, PartialEq)]
     struct M;
     impl Handler for M {
@@ -157,25 +150,25 @@ mod test {
             }
         }
 
-        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
+        let (chn, _) = mio::channel::sync_channel(42);
 
         let mut x = X;
         let m = x.connection_made(
-            Sender::new(mio::Token(0), event_loop.channel())
+            Sender::new(mio::Token(0), chn)
         );
         assert_eq!(m, M);
     }
 
     #[test]
     fn closure_factory() {
-        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
+        let (chn, _) = mio::channel::sync_channel(42);
 
         let mut factory = |_| {
             |_| {Ok(())}
         };
 
         factory.connection_made(
-            Sender::new(mio::Token(0), event_loop.channel())
+            Sender::new(mio::Token(0), chn)
         );
     }
 
@@ -193,11 +186,11 @@ mod test {
             }
         }
 
-        let event_loop = mio::deprecated::EventLoop::<S>::new().unwrap();
+        let (chn, _) = mio::channel::sync_channel(42);
 
         let mut x = X;
         let m = x.connection_made(
-            Sender::new(mio::Token(0), event_loop.channel())
+            Sender::new(mio::Token(0), chn)
         );
         x.connection_lost(m);
     }

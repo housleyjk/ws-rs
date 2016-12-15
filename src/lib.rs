@@ -46,14 +46,15 @@ pub use handshake::{Handshake, Request, Response};
 use std::fmt;
 use std::default::Default;
 use std::net::ToSocketAddrs;
-use mio::deprecated::EventLoopBuilder;
 use std::borrow::Borrow;
+
+use mio::Poll;
 
 /// A utility function for setting up a WebSocket server.
 ///
 /// # Safety
 ///
-/// This function blocks until the EventLoop finishes running. Avoid calling this method within
+/// This function blocks until the event loop finishes running. Avoid calling this method within
 /// another WebSocket handler.
 ///
 /// # Examples
@@ -83,7 +84,7 @@ pub fn listen<A, F, H>(addr: A, factory: F) -> Result<()>
 ///
 /// # Safety
 ///
-/// This function blocks until the EventLoop finishes running. Avoid calling this method within
+/// This function blocks until the event loop finishes running. Avoid calling this method within
 /// another WebSocket handler. If you need to establish a connection from inside of a handler,
 /// use the `connect` method on the Sender.
 ///
@@ -259,7 +260,7 @@ impl Default for Settings {
 pub struct WebSocket<F>
     where F: Factory
 {
-    event_loop: io::Loop<F>,
+    poll: Poll,
     handler: io::Handler<F>,
 }
 
@@ -268,23 +269,7 @@ impl<F> WebSocket<F>
 {
     /// Create a new WebSocket using the given Factory to create handlers.
     pub fn new(factory: F) -> Result<WebSocket<F>> {
-        let settings = Settings::default();
-        let mut config = EventLoopBuilder::new();
-        config.notify_capacity(settings.max_connections * settings.queue_size);
-        Ok(WebSocket {
-            event_loop: try!(config.build()),
-            handler: io::Handler::new(factory, settings),
-        })
-    }
-
-    /// Create a new WebSocket with a Factory and use the event loop config to
-    /// configure the event loop.
-    pub fn with_config(factory: F, config: EventLoopBuilder) -> Result<WebSocket<F>> {
-        warn!("The with_config method is deprecated and will be removed in a future version.");
-        Ok(WebSocket {
-            event_loop: try!(config.build()),
-            handler: io::Handler::new(factory, Settings::default()),
-        })
+        Builder::new().build(factory)
     }
 
     /// Consume the WebSocket and listen for new connections on the specified address.
@@ -298,7 +283,7 @@ impl<F> WebSocket<F>
         let mut result = Err(Error::new(ErrorKind::Internal, format!("Unable to listen on {:?}", addr_spec)));
 
         for addr in try!(addr_spec.to_socket_addrs()) {
-            result = self.handler.listen(&mut self.event_loop, &addr).map(|_| ());
+            result = self.handler.listen(&mut self.poll, &addr).map(|_| ());
             if result.is_ok() {
                 info!("Listening for new connections on {}.", addr);
                 return self.run()
@@ -311,7 +296,7 @@ impl<F> WebSocket<F>
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,
     /// but the actuall connections will not be established until after `run` is called.
     pub fn connect(&mut self, url: url::Url) -> Result<&mut WebSocket<F>> {
-        let sender = Sender::new(io::ALL, self.event_loop.channel());
+        let sender = self.handler.sender();
         info!("Queuing connection to {}", url);
         try!(sender.connect(url));
         Ok(self)
@@ -320,7 +305,7 @@ impl<F> WebSocket<F>
     /// Run the WebSocket. This will run the encapsulated event loop blocking until the WebSocket
     /// is shutdown.
     pub fn run(mut self) -> Result<WebSocket<F>> {
-        try!(self.event_loop.run(&mut self.handler));
+        try!(self.handler.run(&mut self.poll));
         Ok(self)
     }
 
@@ -330,14 +315,13 @@ impl<F> WebSocket<F>
     /// been established.
     #[inline]
     pub fn broadcaster(&self) -> Sender {
-        Sender::new(io::ALL, self.event_loop.channel())
+        self.handler.sender()
     }
 }
 
 /// Utility for constructing a WebSocket from various settings.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Builder {
-    event_builder: Option<EventLoopBuilder>,
     settings: Settings,
 }
 
@@ -346,7 +330,6 @@ impl Builder {
     /// Create a new Builder with default settings.
     pub fn new() -> Builder {
         Builder {
-            event_builder: None,
             settings: Settings::default(),
         }
     }
@@ -356,25 +339,10 @@ impl Builder {
     pub fn build<F>(&self, factory: F) -> Result<WebSocket<F>>
         where F: Factory
     {
-        let mut event_builder: EventLoopBuilder;
-
-        if let Some(ref config) = self.event_builder {
-            event_builder = config.clone();
-        } else {
-            event_builder = EventLoopBuilder::default();
-            event_builder.notify_capacity(self.settings.max_connections * self.settings.queue_size);
-        }
         Ok(WebSocket {
-            event_loop: try!(event_builder.build()),
+            poll: try!(Poll::new()),
             handler: io::Handler::new(factory, self.settings),
         })
-    }
-
-    /// Set the EventLoopBuilder to use with this WebSocket. If this is not set
-    /// the builder will use a default EventLoopBuilder based on other settings.
-    pub fn with_builder(&mut self, builder: EventLoopBuilder) -> &mut Builder {
-        self.event_builder = Some(builder);
-        self
     }
 
     /// Set the WebSocket settings to use.

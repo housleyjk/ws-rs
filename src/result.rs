@@ -46,7 +46,7 @@ pub enum Kind {
     /// `Settings::max_connections` and `Settings:queue_size` high enough to handle the load.
     /// If encountered, retuning from a handler method and waiting for the EventLoop to consume
     /// the queue may relieve the situation.
-    Queue(mio::deprecated::NotifyError<Command>),
+    Queue(mio::channel::SendError<Command>),
     /// Indicates a failure to schedule a timeout on the EventLoop.
     Timer(mio::timer::TimerError),
     /// Indicates a failure to perform SSL encryption.
@@ -158,11 +158,11 @@ impl From<httparse::Error> for Error {
 
 }
 
-impl From<mio::deprecated::NotifyError<Command>> for Error {
+impl From<mio::channel::SendError<Command>> for Error {
 
-    fn from(err: mio::deprecated::NotifyError<Command>) -> Error {
+    fn from(err: mio::channel::SendError<Command>) -> Error {
         match err {
-            mio::deprecated::NotifyError::Io(err) => Error::from(err),
+            mio::channel::SendError::Io(err) => Error::from(err),
             _ => Error::new(Kind::Queue(err), "")
         }
     }
