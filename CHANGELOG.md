@@ -1,3 +1,8 @@
+<a name="v0.5.4"></a>
+### v0.5.4 (2017-02-17)
+* Update dependencies and track latest rust
+
+
 <a name="v0.5.3"></a>
 ### v0.5.3 (2016-09-05)
 
