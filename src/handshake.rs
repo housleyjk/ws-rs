@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::mem::transmute;
 use std::str::from_utf8;
 use std::net::SocketAddr;
 
@@ -16,9 +15,7 @@ static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu
 const MAX_HEADERS: usize = 124;
 
 fn generate_key() -> String {
-    let key: [u8; 16] = unsafe {
-        transmute(rand::random::<(u64, u64)>())
-    };
+    let key: [u8; 16] = rand::random();
     encode_base64(&key)
 }
 
