@@ -2,7 +2,6 @@ use std::fmt;
 use std::mem::transmute;
 use std::io::{Cursor, Read, Write};
 use std::default::Default;
-use std::iter::FromIterator;
 
 use rand;
 
@@ -231,10 +230,7 @@ impl Frame {
         let payload = if let CloseCode::Empty = code {
             Vec::new()
         } else {
-            Vec::from_iter(
-                raw[..].iter()
-                       .chain(reason.as_bytes().iter())
-                       .map(|&b| b))
+            [&raw[..], reason.as_bytes()].concat()
         };
 
         Frame {
