@@ -222,15 +222,12 @@ impl Frame {
     /// Create a new Close control frame.
     #[inline]
     pub fn close(code: CloseCode, reason: &str) -> Frame {
-        let raw: [u8; 2] = unsafe {
-            let u: u16 = code.into();
-            transmute(u.to_be())
-        };
-
         let payload = if let CloseCode::Empty = code {
             Vec::new()
         } else {
-            [&raw[..], reason.as_bytes()].concat()
+            let u: u16 = code.into();
+            let raw = [(u >> 8) as u8, u as u8];
+            [&raw, reason.as_bytes()].concat()
         };
 
         Frame {
