@@ -7,7 +7,7 @@ use mio::tcp::TcpStream;
 use openssl::ssl::SslStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::error::Error as SslError;
-use bytes::{Buf, MutBuf};
+use bytes::{Buf, BufMut};
 
 use result::{Result, Error, Kind};
 
@@ -25,7 +25,7 @@ fn map_non_block<T>(res: io::Result<T>) -> io::Result<Option<T>> {
 }
 
 pub trait TryReadBuf: io::Read {
-    fn try_read_buf<B: MutBuf>(&mut self, buf: &mut B) -> io::Result<Option<usize>>
+    fn try_read_buf<B: BufMut>(&mut self, buf: &mut B) -> io::Result<Option<usize>>
         where Self : Sized
     {
         // Reads the length of the slice supplied by buf.mut_bytes into the buffer
@@ -33,10 +33,10 @@ pub trait TryReadBuf: io::Read {
         // If your protocol is msg based (instead of continuous stream) you should
         // ensure that your buffer is large enough to hold an entire segment (1532 bytes if not jumbo
         // frames)
-        let res = map_non_block(self.read(unsafe { buf.mut_bytes() }));
+        let res = map_non_block(self.read(unsafe { buf.bytes_mut() }));
 
         if let Ok(Some(cnt)) = res {
-            unsafe { buf.advance(cnt); }
+            unsafe { buf.advance_mut(cnt); }
         }
 
         res
