@@ -17,11 +17,6 @@ fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {
     }
 }
 
-#[inline]
-fn generate_mask() -> [u8; 4] {
-    unsafe { transmute(rand::random::<u32>()) }
-}
-
 /// A struct representing a WebSocket frame.
 #[derive(Debug, Clone)]
 pub struct Frame {
@@ -168,7 +163,7 @@ impl Frame {
     #[doc(hidden)]
     #[inline]
     pub fn set_mask(&mut self) -> &mut Frame {
-        self.mask = Some(generate_mask());
+        self.mask = Some(rand::random());
         self
     }
 
