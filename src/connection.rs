@@ -155,7 +155,7 @@ impl<H> Connection<H>
     }
 
     pub fn socket(&self) -> &TcpStream {
-        &self.socket.evented()
+        self.socket.evented()
     }
 
     fn peer_addr(&self) -> String {
