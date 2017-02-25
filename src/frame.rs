@@ -1,10 +1,9 @@
 use std::fmt;
-use std::mem::transmute;
 use std::io::{Cursor, Read, Write, ErrorKind};
 use std::default::Default;
 
 use rand;
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use result::{Result, Error, Kind};
 use protocol::{OpCode, CloseCode};
@@ -370,42 +369,29 @@ impl Frame {
         one |= code;
 
         let mut two = 0u8;
-
         if self.is_masked() {
             two |= 0x80;
         }
 
-        if self.payload.len() < 126 {
-            two |= self.payload.len() as u8;
-            let headers = [one, two];
-            try!(w.write(&headers));
-        } else if self.payload.len() <= 65535 {
-            two |= 126;
-            let length_bytes: [u8; 2] = unsafe {
-                let short = self.payload.len() as u16;
-                transmute(short.to_be())
-            };
-            let headers = [one, two, length_bytes[0], length_bytes[1]];
-            try!(w.write(&headers));
-        } else {
-            two |= 127;
-            let length_bytes: [u8; 8] = unsafe {
-                let long = self.payload.len() as u64;
-                transmute(long.to_be())
-            };
-            let headers = [
-                one,
-                two,
-                length_bytes[0],
-                length_bytes[1],
-                length_bytes[2],
-                length_bytes[3],
-                length_bytes[4],
-                length_bytes[5],
-                length_bytes[6],
-                length_bytes[7],
-            ];
-            try!(w.write(&headers));
+        match self.payload.len() {
+            len if len < 126 => {
+                two |= len as u8;
+            }
+            len if len <= 65535 => {
+                two |= 126;
+            }
+            _ => {
+                two |= 127;
+            }
+        }
+        try!(w.write(&[one, two]));
+
+        if let Some(length_bytes) = match self.payload.len() {
+            len if len < 126 => None,
+            len if len <= 65535 => Some(2),
+            _ => Some(8),
+        } {
+            try!(w.write_uint::<BigEndian>(self.payload.len() as u64, length_bytes));
         }
 
         if self.is_masked() {
