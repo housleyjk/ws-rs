@@ -272,12 +272,10 @@ impl<F> WebSocket<F>
         Builder::new().build(factory)
     }
 
-    /// Consume the WebSocket and listen for new connections on the specified address.
-    ///
-    /// # Safety
-    ///
-    /// This method will block until the event loop finishes running.
-    pub fn listen<A>(mut self, addr_spec: A) -> Result<WebSocket<F>>
+    /// Consume the WebSocket and binds to the specified address.
+    /// After the server is succesfully bound you should start it
+    /// using `run()`
+    pub fn bind<A>(mut self, addr_spec: A) -> Result<WebSocket<F>>
         where A: ToSocketAddrs + fmt::Debug
     {
         let mut result = Err(Error::new(ErrorKind::Internal, format!("Unable to listen on {:?}", addr_spec)));
@@ -286,11 +284,21 @@ impl<F> WebSocket<F>
             result = self.handler.listen(&mut self.poll, &addr).map(|_| ());
             if result.is_ok() {
                 info!("Listening for new connections on {}.", addr);
-                return self.run()
             }
         }
 
         result.map(|_| self)
+    }
+
+    /// Consume the WebSocket and listen for new connections on the specified address.
+    ///
+    /// # Safety
+    ///
+    /// This method will block until the event loop finishes running.
+    pub fn listen<A>(self, addr_spec: A) -> Result<WebSocket<F>>
+        where A: ToSocketAddrs + fmt::Debug
+    {
+        self.bind(addr_spec).and_then(|server| server.run())
     }
 
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,
