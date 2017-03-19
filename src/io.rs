@@ -129,17 +129,32 @@ impl<F> Handler<F>
     #[cfg(feature="ssl")]
     pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
-        let mut addresses = try!(url_to_addrs(url));
-        let tok = {
-            let sock;
+
+        let (tok, addresses) = {
+            let (tok, entry, handler) = if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                (tok, entry, self.factory.client_connected(Sender::new(tok, self.queue_tx.clone())))
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            };
+
+            let mut addresses = match url_to_addrs(url) {
+                Ok(addresses) => addresses,
+                Err(err) => {
+                    self.factory.connection_lost(handler);
+                    return Err(err);
+                }
+            };
+
             loop {
                 if let Some(addr) = addresses.pop() {
-                    if let Ok(s) = TcpStream::connect(&addr) {
-                        sock = s;
+                    if let Ok(sock) = TcpStream::connect(&addr) {
                         addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
+                        entry.insert(Connection::new(tok, sock, handler, settings));
                         break
                     }
                 } else {
+                    self.factory.connection_lost(handler);
                     return Err(
                         Error::new(
                             Kind::Internal,
@@ -147,16 +162,7 @@ impl<F> Handler<F>
                 }
             }
 
-            let factory = &mut self.factory;
-
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
-                entry.insert(Connection::new(tok, sock, handler, settings));
-                tok
-            } else {
-                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
-            }
+            (tok, addresses)
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
@@ -203,32 +209,39 @@ impl<F> Handler<F>
     #[cfg(not(feature="ssl"))]
     pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
-        let mut addresses = try!(url_to_addrs(url));
-        let tok = {
-            let sock;
+
+        let (tok, addresses) = {
+            let (tok, entry, handler) = if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                (tok, entry, self.factory.client_connected(Sender::new(tok, self.queue_tx.clone())))
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            };
+
+            let mut addresses = match url_to_addrs(url) {
+                Ok(addresses) => addresses,
+                Err(err) => {
+                    self.factory.connection_lost(handler);
+                    return Err(err);
+                }
+            };
+
             loop {
                 if let Some(addr) = addresses.pop() {
-                    if let Ok(s) = TcpStream::connect(&addr) {
-                        sock = s;
+                    if let Ok(sock) = TcpStream::connect(&addr) {
+                        entry.insert(Connection::new(tok, sock, handler, settings));
                         break
                     }
                 } else {
+                    self.factory.connection_lost(handler);
                     return Err(
                         Error::new(
                             Kind::Internal,
                             format!("Unable to obtain any socket address for {}", url)))
                 }
             }
-            let factory = &mut self.factory;
 
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
-                entry.insert(Connection::new(tok, sock, handler, settings));
-                tok
-            } else {
-                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
-            }
+            (tok, addresses)
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
