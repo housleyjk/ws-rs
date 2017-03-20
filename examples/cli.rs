@@ -1,3 +1,7 @@
+/// Run this cli like this:
+/// cargo run --example server
+/// cargo run --example cli -- ws://127.0.0.1:3012
+
 extern crate ws;
 extern crate clap;
 extern crate term;
