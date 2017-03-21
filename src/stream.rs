@@ -6,7 +6,7 @@ use mio::tcp::TcpStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
 #[cfg(feature="ssl")]
-use openssl::ssl::error::Error as SslError;
+use openssl::ssl::Error as SslError;
 use bytes::{Buf, MutBuf};
 
 use result::{Result, Error, Kind};

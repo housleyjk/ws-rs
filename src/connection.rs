@@ -10,8 +10,6 @@ use url;
 use mio::{Token, Ready};
 use mio::timer::Timeout;
 use mio::tcp::TcpStream;
-#[cfg(feature="ssl")]
-use openssl::ssl::SslStream;
 
 use message::Message;
 use handshake::{Handshake, Request, Response};
@@ -38,10 +36,10 @@ pub enum State {
 }
 
 /// A little more semantic than a boolean
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Endpoint {
     /// Will mask outgoing frames
-    Client,
+    Client(url::Url),
     /// Won't mask outgoing frames
     Server,
 }
@@ -126,7 +124,7 @@ impl<H> Connection<H>
         if let Connecting(ref mut req, _) = self.state {
             self.addresses = addrs;
             self.events.insert(Ready::writable());
-            self.endpoint = Endpoint::Client;
+            self.endpoint = Endpoint::Client(url.clone());
             try!(self.handler.build_request(url)).format(req.get_mut())
         } else {
             Err(Error::new(
@@ -137,14 +135,17 @@ impl<H> Connection<H>
 
     #[cfg(feature="ssl")]
     pub fn encrypt(&mut self) -> Result<()> {
+        let socket = try!(self.socket().try_clone());
         let ssl_stream = match self.endpoint {
-            Server => try!(SslStream::accept(
-                try!(self.handler.build_ssl()),
-                try!(self.socket().try_clone()))),
-
-            Client => try!(SslStream::connect(
-                try!(self.handler.build_ssl()),
-                try!(self.socket().try_clone()))),
+            Server => {
+                let acceptor = try!(self.handler.build_ssl_server());
+                try!(acceptor.accept(socket))
+            }
+            Client(ref url) => {
+                let domain = try!(url.domain().ok_or(Error::new(Kind::NoDomain, "No domain name for TLS encryption")));
+                let connector = try!(self.handler.build_ssl_client());
+                try!(connector.connect(domain, socket))
+            }
         };
 
         Ok(self.socket = Stream::tls(ssl_stream))
@@ -169,7 +170,7 @@ impl<H> Connection<H>
     // Resetting may be necessary in order to try all possible addresses for a server
     #[cfg(feature="ssl")]
     pub fn reset(&mut self) -> Result<()> {
-        if self.is_client() {
+        if let Client(ref url) = self.endpoint {
             if let Connecting(ref mut req, ref mut res) = self.state {
                 req.set_position(0);
                 res.set_position(0);
@@ -179,11 +180,11 @@ impl<H> Connection<H>
                 if let Some(ref addr) = self.addresses.pop() {
                     let sock = try!(TcpStream::connect(addr));
                     if self.socket.is_tls() {
-                        Ok(self.socket = Stream::tls(
-                                try!(SslStream::connect(
-                                    try!(self.handler.build_ssl()),
-                                    sock))))
-
+                        Ok(self.socket = Stream::tls({
+                            let domain = try!(url.domain().ok_or(Error::new(Kind::NoDomain, "No domain name for TLS encryption")));
+                            let connector = try!(self.handler.build_ssl_client());
+                            try!(connector.connect(domain, sock))
+                        }))
                     } else {
                         Ok(self.socket = Stream::tcp(sock))
                     }
@@ -233,14 +234,14 @@ impl<H> Connection<H>
 
     pub fn is_client(&self) -> bool {
         match self.endpoint {
-            Client => true,
+            Client(_) => true,
             Server => false,
         }
     }
 
     pub fn is_server(&self) -> bool {
         match self.endpoint {
-            Client => false,
+            Client(_) => false,
             Server => true,
         }
     }
@@ -423,7 +424,7 @@ impl<H> Connection<H>
                         return Ok(())
                     }
                 }
-                Client =>  {
+                Client(_) =>  {
                     if let Some(_) = try!(self.socket.try_write_buf(req)) {
                         if req.position() as usize == req.get_ref().len() {
                             trace!("Finished writing handshake request to {}",
@@ -491,7 +492,7 @@ impl<H> Connection<H>
                     }
                     return Ok(())
                 }
-                Client => {
+                Client(_) => {
                     if let Some(_) = try!(self.socket.try_read_buf(res.get_mut())) {
 
                         // TODO: see if this can be optimized with drain
