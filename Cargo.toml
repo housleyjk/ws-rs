@@ -17,7 +17,8 @@ rand = "0.3.10"
 sha1 = "0.2"
 url = "1.0"
 slab = "0.3"
-bytes = "0.3"
+bytes = "0.4"
+byteorder = "1.0"
 
 [dev-dependencies]
 clap = "2.0"

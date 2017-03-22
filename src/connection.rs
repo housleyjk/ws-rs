@@ -1,5 +1,4 @@
 use std::mem::replace;
-use std::mem::transmute;
 use std::borrow::Borrow;
 use std::io::{Write, Read, Cursor, Seek, SeekFrom};
 use std::net::SocketAddr;
@@ -155,7 +154,7 @@ impl<H> Connection<H>
     }
 
     pub fn socket(&self) -> &TcpStream {
-        &self.socket.evented()
+        self.socket.evented()
     }
 
     fn peer_addr(&self) -> String {
@@ -661,9 +660,9 @@ impl<H> Connection<H>
                             let mut close_code = [0u8; 2];
                             let mut data = Cursor::new(frame.into_data());
                             if let 2 = try!(data.read(&mut close_code)) {
-                                let code_be: u16 = unsafe {transmute(close_code) };
-                                trace!("Connection to {} received raw close code: {:?}, {:b}", self.peer_addr(), code_be, code_be);
-                                let named = CloseCode::from(u16::from_be(code_be));
+                                let raw_code: u16 = (close_code[0] as u16) << 8 | (close_code[1] as u16);
+                                trace!("Connection to {} received raw close code: {:?}, {:?}", self.peer_addr(), raw_code, close_code);
+                                let named = CloseCode::from(raw_code);
                                 if let CloseCode::Other(code) = named {
                                     if
                                             code < 1000 ||
