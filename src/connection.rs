@@ -708,8 +708,10 @@ impl<H> Connection<H>
                                 }
                             } else {
                                 // This is not an error. It is allowed behavior in the
-                                // protocol, so we don't trigger an error
-                                self.handler.on_close(CloseCode::Status, "Unable to read close code. Sending empty close frame.");
+                                // protocol, so we don't trigger an error.
+                                // "If there is no such data in the Close control frame,
+                                // _The WebSocket Connection Close Reason_ is the empty string."
+                                self.handler.on_close(CloseCode::Status, "");
                                 if !self.state.is_closing() {
                                     try!(self.send_close(CloseCode::Empty, ""));
                                 }
