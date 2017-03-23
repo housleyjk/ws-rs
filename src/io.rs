@@ -38,6 +38,11 @@ const TIMER_TICK_MILLIS: u64 = 100;
 const TIMER_WHEEL_SIZE: usize = 1024;
 const TIMER_CAPACITY: usize = 65_536;
 
+#[cfg(not(windows))]
+const CONNECTION_REFUSED: i32 = 111;
+#[cfg(windows)]
+const CONNECTION_REFUSED: i32 = 61;
+
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
     let host = url.host_str();
@@ -129,17 +134,32 @@ impl<F> Handler<F>
     #[cfg(feature="ssl")]
     pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
-        let mut addresses = try!(url_to_addrs(url));
-        let tok = {
-            let sock;
+
+        let (tok, addresses) = {
+            let (tok, entry, handler) = if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                (tok, entry, self.factory.client_connected(Sender::new(tok, self.queue_tx.clone())))
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            };
+
+            let mut addresses = match url_to_addrs(url) {
+                Ok(addresses) => addresses,
+                Err(err) => {
+                    self.factory.connection_lost(handler);
+                    return Err(err);
+                }
+            };
+
             loop {
                 if let Some(addr) = addresses.pop() {
-                    if let Ok(s) = TcpStream::connect(&addr) {
-                        sock = s;
+                    if let Ok(sock) = TcpStream::connect(&addr) {
                         addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
+                        entry.insert(Connection::new(tok, sock, handler, settings));
                         break
                     }
                 } else {
+                    self.factory.connection_lost(handler);
                     return Err(
                         Error::new(
                             Kind::Internal,
@@ -147,16 +167,7 @@ impl<F> Handler<F>
                 }
             }
 
-            let factory = &mut self.factory;
-
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
-                entry.insert(Connection::new(tok, sock, handler, settings));
-                tok
-            } else {
-                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
-            }
+            (tok, addresses)
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
@@ -203,32 +214,39 @@ impl<F> Handler<F>
     #[cfg(not(feature="ssl"))]
     pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
         let settings = self.settings;
-        let mut addresses = try!(url_to_addrs(url));
-        let tok = {
-            let sock;
+
+        let (tok, addresses) = {
+            let (tok, entry, handler) = if let Some(entry) = self.connections.vacant_entry() {
+                let tok = entry.index();
+                (tok, entry, self.factory.client_connected(Sender::new(tok, self.queue_tx.clone())))
+            } else {
+                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
+            };
+
+            let mut addresses = match url_to_addrs(url) {
+                Ok(addresses) => addresses,
+                Err(err) => {
+                    self.factory.connection_lost(handler);
+                    return Err(err);
+                }
+            };
+
             loop {
                 if let Some(addr) = addresses.pop() {
-                    if let Ok(s) = TcpStream::connect(&addr) {
-                        sock = s;
+                    if let Ok(sock) = TcpStream::connect(&addr) {
+                        entry.insert(Connection::new(tok, sock, handler, settings));
                         break
                     }
                 } else {
+                    self.factory.connection_lost(handler);
                     return Err(
                         Error::new(
                             Kind::Internal,
                             format!("Unable to obtain any socket address for {}", url)))
                 }
             }
-            let factory = &mut self.factory;
 
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
-                let handler = factory.client_connected(Sender::new(tok, self.queue_tx.clone()));
-                entry.insert(Connection::new(tok, sock, handler, settings));
-                tok
-            } else {
-                return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
-            }
+            (tok, addresses)
         };
 
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
@@ -488,70 +506,81 @@ impl<F> Handler<F>
                 let _ = poll.reregister(&self.queue_rx, QUEUE, Ready::readable(), PollOpt::edge() | PollOpt::oneshot());
             }
             _ => {
-                if events.is_error() {
-                    trace!("Encountered error on tcp stream.");
-                    if let Err(err) = self.connections[token].socket().take_error() {
-                        trace!("Error was {}", err);
-                        if let Some(errno) = err.raw_os_error() {
-                            if errno == 111 {
-                                match self.connections[token].reset() {
-                                    Ok(_) => {
-                                        poll.register(
-                                            self.connections[token].socket(),
-                                            self.connections[token].token(),
-                                            self.connections[token].events(),
-                                            PollOpt::edge() | PollOpt::oneshot(),
-                                        ).or_else(|err| {
-                                            self.connections[token].error(Error::from(err));
-                                            let handler = self.connections.remove(token).unwrap().consume();
-                                            self.factory.connection_lost(handler);
-                                            Ok::<(), Error>(())
-                                        }).unwrap();
-                                        return
-                                    },
-                                    Err(err) => {
-                                        trace!("Encountered error while trying to reset connection: {:?}", err);
+                let active = {
+                    let conn_events = self.connections[token].events();
+                    
+                    if (events & conn_events).is_readable() {
+                        if let Err(err) = self.connections[token].read() {
+                            trace!("Encountered error while reading: {}", err);
+                            if let Kind::Io(ref err) = err.kind {
+                                if let Some(errno) = err.raw_os_error() {
+                                    if errno == CONNECTION_REFUSED {
+                                        match self.connections[token].reset() {
+                                            Ok(_) => {
+                                                poll.register(
+                                                    self.connections[token].socket(),
+                                                    self.connections[token].token(),
+                                                    self.connections[token].events(),
+                                                    PollOpt::edge() | PollOpt::oneshot(),
+                                                ).or_else(|err| {
+                                                    self.connections[token].error(Error::from(err));
+                                                    let handler = self.connections.remove(token).unwrap().consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                }).unwrap();
+                                                return
+                                            },
+                                            Err(err) => {
+                                                trace!("Encountered error while trying to reset connection: {:?}", err);
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            // This will trigger disconnect if the connection is open
+                            self.connections[token].error(err)
                         }
-                        // This will trigger disconnect if the connection is open
-                        self.connections[token].error(Error::from(err));
-                    } else {
-                        self.connections[token].disconnect();
                     }
-                    trace!("Dropping connection token={:?}.", token);
-                    let handler = self.connections.remove(token).unwrap().consume();
-                    self.factory.connection_lost(handler);
-                } else if events.is_hup() {
-                    trace!("Connection token={:?} hung up.", token);
-                    self.connections[token].disconnect();
-                    let handler = self.connections.remove(token).unwrap().consume();
-                    self.factory.connection_lost(handler);
-                } else {
 
-                    let active = {
-                        let conn = &mut self.connections[token];
-                        let conn_events = conn.events();
-
-                        if (events & conn_events).is_readable() {
-                            if let Err(err) = conn.read() {
-                                conn.error(err)
+                    if (events & conn_events).is_writable() {
+                        if let Err(err) = self.connections[token].write() {
+                            trace!("Encountered error while writing: {}", err);
+                            if let Kind::Io(ref err) = err.kind {
+                                if let Some(errno) = err.raw_os_error() {
+                                    if errno == CONNECTION_REFUSED {
+                                        match self.connections[token].reset() {
+                                            Ok(_) => {
+                                                poll.register(
+                                                    self.connections[token].socket(),
+                                                    self.connections[token].token(),
+                                                    self.connections[token].events(),
+                                                    PollOpt::edge() | PollOpt::oneshot(),
+                                                ).or_else(|err| {
+                                                    self.connections[token].error(Error::from(err));
+                                                    let handler = self.connections.remove(token).unwrap().consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                }).unwrap();
+                                                return
+                                            },
+                                            Err(err) => {
+                                                trace!("Encountered error while trying to reset connection: {:?}", err);
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                            // This will trigger disconnect if the connection is open
+                            self.connections[token].error(err)
                         }
+                    }
 
-                        if (events & conn_events).is_writable() {
-                            if let Err(err) = conn.write() {
-                                conn.error(err)
-                            }
-                        }
+                    // connection events may have changed
+                    self.connections[token].events().is_readable() ||
+                        self.connections[token].events().is_writable()
+                };
 
-                        // connection events may have changed
-                        conn.events().is_readable() || conn.events().is_writable()
-                    };
-
-                    self.check_active(poll, active, token)
-                }
+                self.check_active(poll, active, token)
             }
         }
     }

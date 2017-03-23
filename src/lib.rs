@@ -12,6 +12,7 @@ extern crate rand;
 extern crate url;
 extern crate slab;
 extern crate bytes;
+extern crate byteorder;
 #[cfg(feature="ssl")] extern crate openssl;
 #[macro_use] extern crate log;
 

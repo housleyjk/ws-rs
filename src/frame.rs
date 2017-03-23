@@ -1,10 +1,9 @@
 use std::fmt;
-use std::mem::transmute;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Write, ErrorKind};
 use std::default::Default;
-use std::iter::FromIterator;
 
 use rand;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use result::{Result, Error, Kind};
 use protocol::{OpCode, CloseCode};
@@ -15,11 +14,6 @@ fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {
     for (byte, &key) in iter {
         *byte ^= key
     }
-}
-
-#[inline]
-fn generate_mask() -> [u8; 4] {
-    unsafe { transmute(rand::random::<u32>()) }
 }
 
 /// A struct representing a WebSocket frame.
@@ -168,7 +162,7 @@ impl Frame {
     #[doc(hidden)]
     #[inline]
     pub fn set_mask(&mut self) -> &mut Frame {
-        self.mask = Some(generate_mask());
+        self.mask = Some(rand::random());
         self
     }
 
@@ -228,18 +222,12 @@ impl Frame {
     /// Create a new Close control frame.
     #[inline]
     pub fn close(code: CloseCode, reason: &str) -> Frame {
-        let raw: [u8; 2] = unsafe {
-            let u: u16 = code.into();
-            transmute(u.to_be())
-        };
-
         let payload = if let CloseCode::Empty = code {
             Vec::new()
         } else {
-            Vec::from_iter(
-                raw[..].iter()
-                       .chain(reason.as_bytes().iter())
-                       .map(|&b| b))
+            let u: u16 = code.into();
+            let raw = [(u >> 8) as u8, u as u8];
+            [&raw, reason.as_bytes()].concat()
         };
 
         Frame {
@@ -283,29 +271,24 @@ impl Frame {
 
         let mut length = (second & 0x7F) as u64;
 
-        if length == 126 {
-            let mut length_bytes = [0u8; 2];
-            if try!(cursor.read(&mut length_bytes)) != 2 {
-                cursor.set_position(initial);
-                return Ok(None)
-            }
-
-            length = unsafe {
-                let mut wide: u16 = transmute(length_bytes);
-                wide = u16::from_be(wide);
-                wide
-            } as u64;
-            header_length += 2;
-        } else if length == 127 {
-            let mut length_bytes = [0u8; 8];
-            if try!(cursor.read(&mut length_bytes)) != 8 {
-                cursor.set_position(initial);
-                return Ok(None)
-            }
-
-            unsafe { length = transmute(length_bytes); }
-            length = u64::from_be(length);
-            header_length += 8;
+        if let Some(length_nbytes) = match length {
+            126 => Some(2),
+            127 => Some(8),
+            _ => None,
+        } {
+            match cursor.read_uint::<BigEndian>(length_nbytes) {
+                Err(ref err) if err.kind() == ErrorKind::UnexpectedEof => {
+                    cursor.set_position(initial);
+                    return Ok(None);
+                }
+                Err(err) => {
+                    return Err(Error::from(err));
+                }
+                Ok(read) => {
+                    length = read;
+                }
+            };
+            header_length += length_nbytes as u64;
         }
         trace!("Payload length: {}", length);
 
@@ -386,42 +369,29 @@ impl Frame {
         one |= code;
 
         let mut two = 0u8;
-
         if self.is_masked() {
             two |= 0x80;
         }
 
-        if self.payload.len() < 126 {
-            two |= self.payload.len() as u8;
-            let headers = [one, two];
-            try!(w.write(&headers));
-        } else if self.payload.len() <= 65535 {
-            two |= 126;
-            let length_bytes: [u8; 2] = unsafe {
-                let short = self.payload.len() as u16;
-                transmute(short.to_be())
-            };
-            let headers = [one, two, length_bytes[0], length_bytes[1]];
-            try!(w.write(&headers));
-        } else {
-            two |= 127;
-            let length_bytes: [u8; 8] = unsafe {
-                let long = self.payload.len() as u64;
-                transmute(long.to_be())
-            };
-            let headers = [
-                one,
-                two,
-                length_bytes[0],
-                length_bytes[1],
-                length_bytes[2],
-                length_bytes[3],
-                length_bytes[4],
-                length_bytes[5],
-                length_bytes[6],
-                length_bytes[7],
-            ];
-            try!(w.write(&headers));
+        match self.payload.len() {
+            len if len < 126 => {
+                two |= len as u8;
+            }
+            len if len <= 65535 => {
+                two |= 126;
+            }
+            _ => {
+                two |= 127;
+            }
+        }
+        try!(w.write(&[one, two]));
+
+        if let Some(length_bytes) = match self.payload.len() {
+            len if len < 126 => None,
+            len if len <= 65535 => Some(2),
+            _ => Some(8),
+        } {
+            try!(w.write_uint::<BigEndian>(self.payload.len() as u64, length_bytes));
         }
 
         if self.is_masked() {
