@@ -1,3 +1,15 @@
+<a name="v0.6.1"></a>
+### v0.6.2 (2017-03-23)
+
+#### Features
+
+*   Call connection_lost() on url failure to obtain address from URL
+
+#### Bug Fixes
+
+*  Fix issue with errors not being logged due to change Mio readiness semantics
+
+
 <a name="v0.6.0"></a>
 ### v0.6.0 (2017-02-17)
 * Update dependencies and track latest rust
