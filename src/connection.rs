@@ -568,7 +568,7 @@ impl<H> Connection<H>
                 self.read_handshake()
             } else {
                 trace!("Ready to read messages from {}.", self.peer_addr());
-                if let Some(len) = try!(self.buffer_in()) {
+                if let Some(_) = try!(self.buffer_in()) {
                     // consume the whole buffer if possible
                     if let Err(err) = self.read_frames() {
                         // break on first IO error, other errors don't imply that the buffer is bad
