@@ -107,7 +107,7 @@ impl<H> Connection<H>
                 Cursor::new(Vec::with_capacity(2048)),
             ),
             endpoint: Endpoint::Server,
-            events: Ready::hup(),
+            events: Ready::empty(),
             fragments: VecDeque::with_capacity(settings.fragments_capacity),
             in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
             out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
@@ -568,7 +568,7 @@ impl<H> Connection<H>
                 self.read_handshake()
             } else {
                 trace!("Ready to read messages from {}.", self.peer_addr());
-                if let Some(_) = try!(self.buffer_in()) {
+                if let Some(len) = try!(self.buffer_in()) {
                     // consume the whole buffer if possible
                     if let Err(err) = self.read_frames() {
                         // break on first IO error, other errors don't imply that the buffer is bad
@@ -577,6 +577,8 @@ impl<H> Connection<H>
                         }
                         self.error(err)
                     }
+                } else {
+                    self.events.remove(Ready::readable());
                 }
                 Ok(())
             };

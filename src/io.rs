@@ -38,6 +38,11 @@ const TIMER_TICK_MILLIS: u64 = 100;
 const TIMER_WHEEL_SIZE: usize = 1024;
 const TIMER_CAPACITY: usize = 65_536;
 
+#[cfg(not(windows))]
+const CONNECTION_REFUSED: i32 = 111;
+#[cfg(windows)]
+const CONNECTION_REFUSED: i32 = 61;
+
 fn url_to_addrs(url: &Url) -> Result<Vec<SocketAddr>> {
 
     let host = url.host_str();
@@ -501,70 +506,81 @@ impl<F> Handler<F>
                 let _ = poll.reregister(&self.queue_rx, QUEUE, Ready::readable(), PollOpt::edge() | PollOpt::oneshot());
             }
             _ => {
-                if events.is_error() {
-                    trace!("Encountered error on tcp stream.");
-                    if let Err(err) = self.connections[token].socket().take_error() {
-                        trace!("Error was {}", err);
-                        if let Some(errno) = err.raw_os_error() {
-                            if errno == 111 {
-                                match self.connections[token].reset() {
-                                    Ok(_) => {
-                                        poll.register(
-                                            self.connections[token].socket(),
-                                            self.connections[token].token(),
-                                            self.connections[token].events(),
-                                            PollOpt::edge() | PollOpt::oneshot(),
-                                        ).or_else(|err| {
-                                            self.connections[token].error(Error::from(err));
-                                            let handler = self.connections.remove(token).unwrap().consume();
-                                            self.factory.connection_lost(handler);
-                                            Ok::<(), Error>(())
-                                        }).unwrap();
-                                        return
-                                    },
-                                    Err(err) => {
-                                        trace!("Encountered error while trying to reset connection: {:?}", err);
+                let active = {
+                    let conn_events = self.connections[token].events();
+                    
+                    if (events & conn_events).is_readable() {
+                        if let Err(err) = self.connections[token].read() {
+                            trace!("Encountered error while reading: {}", err);
+                            if let Kind::Io(ref err) = err.kind {
+                                if let Some(errno) = err.raw_os_error() {
+                                    if errno == CONNECTION_REFUSED {
+                                        match self.connections[token].reset() {
+                                            Ok(_) => {
+                                                poll.register(
+                                                    self.connections[token].socket(),
+                                                    self.connections[token].token(),
+                                                    self.connections[token].events(),
+                                                    PollOpt::edge() | PollOpt::oneshot(),
+                                                ).or_else(|err| {
+                                                    self.connections[token].error(Error::from(err));
+                                                    let handler = self.connections.remove(token).unwrap().consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                }).unwrap();
+                                                return
+                                            },
+                                            Err(err) => {
+                                                trace!("Encountered error while trying to reset connection: {:?}", err);
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            // This will trigger disconnect if the connection is open
+                            self.connections[token].error(err)
                         }
-                        // This will trigger disconnect if the connection is open
-                        self.connections[token].error(Error::from(err));
-                    } else {
-                        self.connections[token].disconnect();
                     }
-                    trace!("Dropping connection token={:?}.", token);
-                    let handler = self.connections.remove(token).unwrap().consume();
-                    self.factory.connection_lost(handler);
-                } else if events.is_hup() {
-                    trace!("Connection token={:?} hung up.", token);
-                    self.connections[token].disconnect();
-                    let handler = self.connections.remove(token).unwrap().consume();
-                    self.factory.connection_lost(handler);
-                } else {
 
-                    let active = {
-                        let conn = &mut self.connections[token];
-                        let conn_events = conn.events();
-
-                        if (events & conn_events).is_readable() {
-                            if let Err(err) = conn.read() {
-                                conn.error(err)
+                    if (events & conn_events).is_writable() {
+                        if let Err(err) = self.connections[token].write() {
+                            trace!("Encountered error while writing: {}", err);
+                            if let Kind::Io(ref err) = err.kind {
+                                if let Some(errno) = err.raw_os_error() {
+                                    if errno == CONNECTION_REFUSED {
+                                        match self.connections[token].reset() {
+                                            Ok(_) => {
+                                                poll.register(
+                                                    self.connections[token].socket(),
+                                                    self.connections[token].token(),
+                                                    self.connections[token].events(),
+                                                    PollOpt::edge() | PollOpt::oneshot(),
+                                                ).or_else(|err| {
+                                                    self.connections[token].error(Error::from(err));
+                                                    let handler = self.connections.remove(token).unwrap().consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                }).unwrap();
+                                                return
+                                            },
+                                            Err(err) => {
+                                                trace!("Encountered error while trying to reset connection: {:?}", err);
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                            // This will trigger disconnect if the connection is open
+                            self.connections[token].error(err)
                         }
+                    }
 
-                        if (events & conn_events).is_writable() {
-                            if let Err(err) = conn.write() {
-                                conn.error(err)
-                            }
-                        }
+                    // connection events may have changed
+                    self.connections[token].events().is_readable() ||
+                        self.connections[token].events().is_writable()
+                };
 
-                        // connection events may have changed
-                        conn.events().is_readable() || conn.events().is_writable()
-                    };
-
-                    self.check_active(poll, active, token)
-                }
+                self.check_active(poll, active, token)
             }
         }
     }
