@@ -295,7 +295,7 @@ impl<F> WebSocket<F>
     }
 
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,
-    /// but the actuall connections will not be established until after `run` is called.
+    /// but the actual connections will not be established until after `run` is called.
     pub fn connect(&mut self, url: url::Url) -> Result<&mut WebSocket<F>> {
         let sender = self.handler.sender();
         info!("Queuing connection to {}", url);
