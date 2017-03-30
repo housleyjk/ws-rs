@@ -217,7 +217,7 @@ pub struct Settings {
     /// Indicate whether server connections should use ssl encryption when accepting connections.
     /// Setting this to true means that clients should use the `wss` scheme to connect to this
     /// server. Note that using this flag will in general necessitate overriding the
-    /// `Handler::build_ssl` method in order to provide the details of the ssl context. It may be
+    /// `Handler::upgrade_ssl_server` method in order to provide the details of the ssl context. It may be
     /// simpler for most users to use a reverse proxy such as nginx to provide server side
     /// encryption.
     ///
@@ -295,7 +295,7 @@ impl<F> WebSocket<F>
     }
 
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,
-    /// but the actuall connections will not be established until after `run` is called.
+    /// but the actual connections will not be established until after `run` is called.
     pub fn connect(&mut self, url: url::Url) -> Result<&mut WebSocket<F>> {
         let sender = self.handler.sender();
         info!("Queuing connection to {}", url);

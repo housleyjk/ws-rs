@@ -9,8 +9,9 @@ use url;
 use mio::{Token, Ready};
 use mio::timer::Timeout;
 use mio::tcp::TcpStream;
+
 #[cfg(feature="ssl")]
-use openssl::ssl::SslStream;
+use openssl::ssl::HandshakeError;
 
 use message::Message;
 use handshake::{Handshake, Request, Response};
@@ -37,10 +38,10 @@ pub enum State {
 }
 
 /// A little more semantic than a boolean
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Endpoint {
     /// Will mask outgoing frames
-    Client,
+    Client(url::Url),
     /// Won't mask outgoing frames
     Server,
 }
@@ -121,12 +122,13 @@ impl<H> Connection<H>
         Ok(self.events.insert(Ready::readable()))
     }
 
-    pub fn as_client(&mut self, url: &url::Url, addrs: Vec<SocketAddr>) -> Result<()> {
-        if let Connecting(ref mut req, _) = self.state {
+    pub fn as_client(&mut self, url: url::Url, addrs: Vec<SocketAddr>) -> Result<()> {
+        if let Connecting(ref mut req_buf, _) = self.state {
+            let req = self.handler.build_request(&url)?;
             self.addresses = addrs;
             self.events.insert(Ready::writable());
-            self.endpoint = Endpoint::Client;
-            try!(self.handler.build_request(url)).format(req.get_mut())
+            self.endpoint = Endpoint::Client(url);
+            req.format(req_buf.get_mut())
         } else {
             Err(Error::new(
                 Kind::Internal,
@@ -136,17 +138,25 @@ impl<H> Connection<H>
 
     #[cfg(feature="ssl")]
     pub fn encrypt(&mut self) -> Result<()> {
+        let sock = try!(self.socket().try_clone());
         let ssl_stream = match self.endpoint {
-            Server => try!(SslStream::accept(
-                try!(self.handler.build_ssl()),
-                try!(self.socket().try_clone()))),
-
-            Client => try!(SslStream::connect(
-                try!(self.handler.build_ssl()),
-                try!(self.socket().try_clone()))),
+            Server => self.handler.upgrade_ssl_server(sock),
+            Client(ref url) => self.handler.upgrade_ssl_client(sock, url),
         };
 
-        Ok(self.socket = Stream::tls(ssl_stream))
+        match ssl_stream {
+            Ok(stream) => Ok(self.socket = Stream::tls_live(stream)),
+            Err(Error { kind: Kind::SslHandshake(handshake_err), details }) => {
+                match handshake_err {
+                    HandshakeError::SetupFailure(_) => Err(Error::new(
+                        Kind::SslHandshake(handshake_err),
+                        details)),
+                    HandshakeError::Failure(mid) |
+                    HandshakeError::Interrupted(mid) => Ok(self.socket = Stream::tls(mid)),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub fn token(&self) -> Token {
@@ -168,7 +178,8 @@ impl<H> Connection<H>
     // Resetting may be necessary in order to try all possible addresses for a server
     #[cfg(feature="ssl")]
     pub fn reset(&mut self) -> Result<()> {
-        if self.is_client() {
+        // if self.is_client() {
+        if let Client(ref url) = self.endpoint {
             if let Connecting(ref mut req, ref mut res) = self.state {
                 req.set_position(0);
                 res.set_position(0);
@@ -178,11 +189,20 @@ impl<H> Connection<H>
                 if let Some(ref addr) = self.addresses.pop() {
                     let sock = try!(TcpStream::connect(addr));
                     if self.socket.is_tls() {
-                        Ok(self.socket = Stream::tls(
-                                try!(SslStream::connect(
-                                    try!(self.handler.build_ssl()),
-                                    sock))))
-
+                        let ssl_stream = self.handler.upgrade_ssl_client(sock, url);
+                        match ssl_stream {
+                            Ok(stream) => Ok(self.socket = Stream::tls_live(stream)),
+                            Err(Error { kind: Kind::SslHandshake(handshake_err), details }) => {
+                                match handshake_err {
+                                    HandshakeError::SetupFailure(_) => Err(Error::new(
+                                        Kind::SslHandshake(handshake_err),
+                                        details)),
+                                    HandshakeError::Failure(mid) |
+                                    HandshakeError::Interrupted(mid) => Ok(self.socket = Stream::tls(mid)),
+                                }
+                            }
+                            Err(e) => Err(e),
+                        }
                     } else {
                         Ok(self.socket = Stream::tcp(sock))
                     }
@@ -232,14 +252,14 @@ impl<H> Connection<H>
 
     pub fn is_client(&self) -> bool {
         match self.endpoint {
-            Client => true,
+            Client(_) => true,
             Server => false,
         }
     }
 
     pub fn is_server(&self) -> bool {
         match self.endpoint {
-            Client => false,
+            Client(_) => false,
             Server => true,
         }
     }
@@ -269,7 +289,7 @@ impl<H> Connection<H>
                     #[cfg(feature="ssl")]
                     Kind::Ssl(_) | Kind::Io(_) => {
                         self.handler.on_error(err);
-                        self.events = Ready::none();
+                        self.events = Ready::empty();
                     }
                     Kind::Protocol => {
                         let msg = err.to_string();
@@ -281,13 +301,13 @@ impl<H> Connection<H>
                                     "HTTP/1.1 400 Bad Request\r\n\r\n{}", msg)
                             {
                                 self.handler.on_error(Error::from(err));
-                                self.events = Ready::none();
+                                self.events = Ready::empty();
                             } else {
                                 self.events.remove(Ready::readable());
                                 self.events.insert(Ready::writable());
                             }
                         } else {
-                            self.events = Ready::none();
+                            self.events = Ready::empty();
                         }
                     }
                     _ => {
@@ -299,13 +319,13 @@ impl<H> Connection<H>
                                     res.get_mut(),
                                     "HTTP/1.1 500 Internal Server Error\r\n\r\n{}", msg) {
                                 self.handler.on_error(Error::from(err));
-                                self.events = Ready::none();
+                                self.events = Ready::empty();
                             } else {
                                 self.events.remove(Ready::readable());
                                 self.events.insert(Ready::writable());
                             }
                         } else {
-                            self.events = Ready::none();
+                            self.events = Ready::empty();
                         }
                     }
                 }
@@ -401,7 +421,7 @@ impl<H> Connection<H>
                 self.handler.on_close(CloseCode::Abnormal, "");
             }
         }
-        self.events = Ready::none()
+        self.events = Ready::empty()
     }
 
     pub fn consume(self) -> H {
@@ -422,7 +442,7 @@ impl<H> Connection<H>
                         return Ok(())
                     }
                 }
-                Client =>  {
+                Client(_) =>  {
                     if let Some(_) = try!(self.socket.try_write_buf(req)) {
                         if req.position() as usize == req.get_ref().len() {
                             trace!("Finished writing handshake request to {}",
@@ -448,7 +468,7 @@ impl<H> Connection<H>
                     // An error should already have been sent for the first time it failed to
                     // parse. We don't call disconnect here because `on_open` hasn't been called yet.
                     self.state = FinishedClose;
-                    self.events = Ready::none();
+                    self.events = Ready::empty();
                     return Ok(())
                 }
             };
@@ -457,7 +477,7 @@ impl<H> Connection<H>
                 Error::new(Kind::Internal, "Failed to parse response after handshake is complete.")));
 
             if response.status() != 101 {
-                self.events = Ready::none();
+                self.events = Ready::empty();
                 return Ok(())
             } else {
                 try!(self.handler.on_open(Handshake {
@@ -490,7 +510,7 @@ impl<H> Connection<H>
                     }
                     return Ok(())
                 }
-                Client => {
+                Client(_) => {
                     if let Some(_) = try!(self.socket.try_read_buf(res.get_mut())) {
 
                         // TODO: see if this can be optimized with drain
@@ -646,7 +666,7 @@ impl<H> Connection<H>
 
                                 if self.is_server() {
                                     // Finished handshake, disconnect server side
-                                    self.events = Ready::none()
+                                    self.events = Ready::empty()
                                 } else {
                                     // We are a client, so we wait for the server to close the
                                     // connection
@@ -710,8 +730,10 @@ impl<H> Connection<H>
                                 }
                             } else {
                                 // This is not an error. It is allowed behavior in the
-                                // protocol, so we don't trigger an error
-                                self.handler.on_close(CloseCode::Status, "Unable to read close code. Sending empty close frame.");
+                                // protocol, so we don't trigger an error.
+                                // "If there is no such data in the Close control frame,
+                                // _The WebSocket Connection Close Reason_ is the empty string."
+                                self.handler.on_close(CloseCode::Status, "");
                                 if !self.state.is_closing() {
                                     try!(self.send_close(CloseCode::Empty, ""));
                                 }
@@ -810,7 +832,7 @@ impl<H> Connection<H>
                         match self.state {
                             // we are are a server that is closing and just wrote out our confirming
                             // close frame, let's disconnect
-                            FinishedClose if self.is_server()  => return Ok(self.events = Ready::none()),
+                            FinishedClose if self.is_server()  => return Ok(self.events = Ready::empty()),
                             _ => (),
                         }
                     }

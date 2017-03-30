@@ -36,7 +36,7 @@ version = "1.0.13"
 
 [dependencies.openssl]
 optional = true
-version = "0.7.14"
+version = "0.9"
 
 [features]
 default = []
