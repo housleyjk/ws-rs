@@ -1,3 +1,12 @@
+<a name="v0.7.0"></a>
+### v0.7.0 (2017-03-30)
+
+
+#### Features
+
+*   Upgrade to rust-openssl 0.9 ([d8bfdfa7](d8bfdfa7))
+
+
 <a name="v0.6.1"></a>
 ### v0.6.2 (2017-03-23)
 
