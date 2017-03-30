@@ -7,3 +7,6 @@ pub use mio::Token;
 pub use mio::timer::Timeout;
 /// A Slab allocator for associating tokens to data.
 pub type Slab<T> = slab::Slab<T, Token>;
+#[cfg(feature="ssl")]
+/// TcpStream underlying the WebSocket
+pub use mio::tcp::TcpStream;

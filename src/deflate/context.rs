@@ -75,7 +75,7 @@ impl Compresser {
                 ZLIB_VERSION.as_ptr() as *const c_char,
                 mem::size_of::<ffi::z_stream>() as c_int,
             );
-            debug_assert!(
+            assert!(
                  result == ffi::Z_OK,
                 "Failed to initialize compresser.");
             Compresser { stream: stream }
@@ -149,7 +149,7 @@ impl Decompresser {
                 ZLIB_VERSION.as_ptr() as *const c_char,
                 mem::size_of::<ffi::z_stream>() as c_int,
             );
-            debug_assert!(
+            assert!(
                  result == ffi::Z_OK,
                 "Failed to initialize decompresser.");
             Decompresser { stream: stream }

@@ -16,7 +16,7 @@ use mio::tcp::{TcpListener, TcpStream};
 use url::Url;
 
 #[cfg(feature="ssl")]
-use openssl::ssl::error::SslError;
+use openssl::ssl::Error as SslError;
 
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
@@ -132,7 +132,7 @@ impl<F> Handler<F>
     }
 
     #[cfg(feature="ssl")]
-    pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, poll: &mut Poll, url: Url) -> Result<()> {
         let settings = self.settings;
 
         let (tok, addresses) = {
@@ -143,7 +143,7 @@ impl<F> Handler<F>
                 return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
             };
 
-            let mut addresses = match url_to_addrs(url) {
+            let mut addresses = match url_to_addrs(&url) {
                 Ok(addresses) => addresses,
                 Err(err) => {
                     self.factory.connection_lost(handler);
@@ -170,18 +170,20 @@ impl<F> Handler<F>
             (tok, addresses)
         };
 
+        let will_encrypt = url.scheme() == "wss";
+
         if let Err(error) = self.connections[tok].as_client(url, addresses) {
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);
             return Err(error)
         }
 
-        if url.scheme() == "wss" {
+        if will_encrypt {
             while let Err(ssl_error) = self.connections[tok].encrypt() {
                 match ssl_error.kind {
-                    Kind::Ssl(SslError::StreamError(ref io_error)) => {
+                    Kind::Ssl(SslError::Stream(ref io_error)) => {
                         if let Some(errno) = io_error.raw_os_error() {
-                            if errno == 111 {
+                            if errno == CONNECTION_REFUSED {
                                 if let Err(reset_error) = self.connections[tok].reset() {
                                     trace!("Encountered error while trying to reset connection: {:?}", reset_error);
                                 } else {
@@ -212,7 +214,7 @@ impl<F> Handler<F>
     }
 
     #[cfg(not(feature="ssl"))]
-    pub fn connect(&mut self, poll: &mut Poll, url: &Url) -> Result<()> {
+    pub fn connect(&mut self, poll: &mut Poll, url: Url) -> Result<()> {
         let settings = self.settings;
 
         let (tok, addresses) = {
@@ -223,7 +225,7 @@ impl<F> Handler<F>
                 return Err(Error::new(Kind::Capacity, "Unable to add another connection to the event loop."));
             };
 
-            let mut addresses = match url_to_addrs(url) {
+            let mut addresses = match url_to_addrs(&url) {
                 Ok(addresses) => addresses,
                 Err(err) => {
                     self.factory.connection_lost(handler);
@@ -249,14 +251,14 @@ impl<F> Handler<F>
             (tok, addresses)
         };
 
-        if let Err(error) = self.connections[tok].as_client(url, addresses) {
+        if url.scheme() == "wss" {
+            let error = Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls.");
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);
             return Err(error)
         }
 
-        if url.scheme() == "wss" {
-            let error = Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls.");
+        if let Err(error) = self.connections[tok].as_client(url, addresses) {
             let handler = self.connections.remove(tok).unwrap().consume();
             self.factory.connection_lost(handler);
             return Err(error)
@@ -508,7 +510,7 @@ impl<F> Handler<F>
             _ => {
                 let active = {
                     let conn_events = self.connections[token].events();
-                    
+
                     if (events & conn_events).is_readable() {
                         if let Err(err) = self.connections[token].read() {
                             trace!("Encountered error while reading: {}", err);
@@ -626,8 +628,8 @@ impl<F> Handler<F>
                             }
                         }
                     }
-                    Signal::Connect(ref url) => {
-                        if let Err(err) = self.connect(poll, url) {
+                    Signal::Connect(url) => {
+                        if let Err(err) = self.connect(poll, url.clone()) {
                             if self.settings.panic_on_new_connection {
                                 panic!("Unable to establish connection to {}: {:?}", url, err);
                             }
@@ -713,8 +715,8 @@ impl<F> Handler<F>
                             trace!("Connection disconnected while pong signal was waiting in the queue.")
                         }
                     }
-                    Signal::Connect(ref url) => {
-                        if let Err(err) = self.connect(poll, url) {
+                    Signal::Connect(url) => {
+                        if let Err(err) = self.connect(poll, url.clone()) {
                             if let Some(conn) = self.connections.get_mut(token) {
                                 conn.error(err)
                             } else {

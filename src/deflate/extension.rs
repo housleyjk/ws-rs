@@ -1,7 +1,8 @@
 use std::mem::replace;
+use std::io::{Read, Write};
 
 #[cfg(feature="ssl")]
-use openssl::ssl::Ssl;
+use openssl::ssl::SslStream;
 use url;
 
 use handler::Handler;
@@ -11,6 +12,8 @@ use protocol::{CloseCode, OpCode};
 use handshake::{Handshake, Request, Response};
 use result::{Result, Error, Kind};
 use util::{Token, Timeout};
+#[cfg(feature="ssl")]
+use util::TcpStream;
 
 use super::context::{Compresser, Decompresser};
 
@@ -514,9 +517,15 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     }
 
     #[inline]
-    #[cfg(all(not(windows), feature="ssl"))]
-    fn build_ssl(&mut self) -> Result<Ssl> {
-        self.inner.build_ssl()
+    #[cfg(feature="ssl")]
+    fn upgrade_ssl_client(&mut self, stream: TcpStream, url: &url::Url) -> Result<SslStream<TcpStream>> {
+        self.inner.upgrade_ssl_client(stream, url)
+    }
+
+    #[inline]
+    #[cfg(feature="ssl")]
+    fn upgrade_ssl_server(&mut self, stream: TcpStream) -> Result<SslStream<TcpStream>> {
+        self.inner.upgrade_ssl_server(stream)
     }
 
 }
