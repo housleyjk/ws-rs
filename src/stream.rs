@@ -142,11 +142,13 @@ impl io::Read for Stream {
             Tls(TlsStream::Live(ref mut sock)) => sock.read(buf),
             #[cfg(feature="ssl")]
             Tls(ref mut tls_stream) => {
+                trace!("Attempting to read ssl handshake.");
                 match replace(tls_stream, TlsStream::Upgrading) {
                     TlsStream::Live(_) | TlsStream::Upgrading => unreachable!(),
                     TlsStream::Handshake {sock, mut negotiating } => {
                         match sock.handshake() {
                             Ok(mut sock) => {
+                                trace!("Completed SSL Handshake");
                                 let res = sock.read(buf);
                                 *tls_stream = TlsStream::Live(sock);
                                 res
@@ -190,6 +192,7 @@ impl io::Write for Stream {
             Tls(TlsStream::Live(ref mut sock)) => sock.write(buf),
             #[cfg(feature="ssl")]
             Tls(ref mut tls_stream) => {
+                trace!("Attempting to write ssl handshake.");
                 match replace(tls_stream, TlsStream::Upgrading) {
                     TlsStream::Live(_) | TlsStream::Upgrading => unreachable!(),
                     TlsStream::Handshake {sock, mut negotiating } => {
@@ -198,6 +201,7 @@ impl io::Write for Stream {
 
                         match sock.handshake() {
                             Ok(mut sock) => {
+                                trace!("Completed SSL Handshake");
                                 let res = sock.write(buf);
                                 *tls_stream = TlsStream::Live(sock);
                                 res

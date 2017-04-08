@@ -588,17 +588,12 @@ impl<H> Connection<H>
                 self.read_handshake()
             } else {
                 trace!("Ready to read messages from {}.", self.peer_addr());
-                if let Some(_) = try!(self.buffer_in()) {
-                    // consume the whole buffer if possible
-                    if let Err(err) = self.read_frames() {
-                        // break on first IO error, other errors don't imply that the buffer is bad
-                        if let Kind::Io(_) = err.kind {
-                            return Err(err)
-                        }
-                        self.error(err)
+                while let Some(len) = try!(self.buffer_in()) {
+                    try!(self.read_frames());
+                    if len == 0 {
+                        self.events.remove(Ready::readable());
+                        break;
                     }
-                } else {
-                    self.events.remove(Ready::readable());
                 }
                 Ok(())
             };
@@ -1023,21 +1018,10 @@ impl<H> Connection<H>
                     } else {
                         return Err(Error::new(Kind::Capacity, "Maxed out input buffer for connection."))
                     }
-
-                    self.in_buffer = Cursor::new(new);
-                    // return now so that hopefully we will consume some of the buffer so this
-                    // won't happen next time
-                    trace!("Buffered {}.", len);
-                    return Ok(Some(len))
                 }
                 self.in_buffer = Cursor::new(new);
             }
-
-            if len == 0 {
-                Ok(None)
-            } else {
-                Ok(Some(len))
-            }
+            Ok(Some(len))
         } else {
             Ok(None)
         }

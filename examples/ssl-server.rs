@@ -88,7 +88,7 @@ fn main () {
         std::iter::empty::<X509Ref>(),
     ).unwrap().build());
 
-    let mut ws = ws::Builder::new().with_settings(ws::Settings {
+    ws::Builder::new().with_settings(ws::Settings {
         encrypt_server: true,
         ..ws::Settings::default()
     }).build(|out: ws::Sender| {
@@ -96,10 +96,7 @@ fn main () {
             out: out,
             ssl: acceptor.clone(),
         }
-    }).unwrap();
-    let addr = matches.value_of("ADDR").unwrap();
-    println!("{:?}", addr);
-    ws.listen(addr).unwrap();
+    }).unwrap().listen(matches.value_of("ADDR").unwrap()).unwrap();
 }
 
 #[cfg(feature="ssl")]
