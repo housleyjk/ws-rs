@@ -1,6 +1,15 @@
+<a name="v0.7.1"></a>
+### v0.7.1 (2017-04-08)
+
+
+#### Bug Fixes
+
+*   Issue with openssl buffering causing autobahn test failure with ssl ([d3d6b8be](d3d6b8be))
+
+
+
 <a name="v0.7.0"></a>
 ### v0.7.0 (2017-03-30)
-
 
 #### Features
 
