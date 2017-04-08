@@ -223,6 +223,12 @@ pub struct Settings {
     ///
     /// Default: false
     pub encrypt_server: bool,
+    /// Disables Nagle's algorithm.
+    /// Usually tcp socket tries to accumulate packets to send them all together (every 200ms).
+    /// When enabled socket will try to send packet as fast as possible.
+    ///
+    /// Default: false
+    pub tcp_nodelay: bool
 }
 
 impl Default for Settings {
@@ -252,6 +258,7 @@ impl Default for Settings {
             key_strict: false,
             method_strict: false,
             encrypt_server: false,
+            tcp_nodelay: false
         }
     }
 }
