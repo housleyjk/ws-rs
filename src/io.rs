@@ -154,6 +154,9 @@ impl<F> Handler<F>
             loop {
                 if let Some(addr) = addresses.pop() {
                     if let Ok(sock) = TcpStream::connect(&addr) {
+                        if settings.tcp_nodelay {
+                            try!(sock.set_nodelay(true))
+                        }
                         addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
                         entry.insert(Connection::new(tok, sock, handler, settings));
                         break
@@ -236,6 +239,9 @@ impl<F> Handler<F>
             loop {
                 if let Some(addr) = addresses.pop() {
                     if let Ok(sock) = TcpStream::connect(&addr) {
+                        if settings.tcp_nodelay {
+                            try!(sock.set_nodelay(true))
+                        }
                         entry.insert(Connection::new(tok, sock, handler, settings));
                         break
                     }
@@ -282,6 +288,10 @@ impl<F> Handler<F>
         let factory = &mut self.factory;
         let settings = self.settings;
 
+        if settings.tcp_nodelay {
+            try!(sock.set_nodelay(true))
+        }
+
         let tok = {
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
@@ -299,6 +309,7 @@ impl<F> Handler<F>
         if settings.encrypt_server {
             try!(conn.encrypt())
         }
+
 
         poll.register(
             conn.socket(),
@@ -320,6 +331,10 @@ impl<F> Handler<F>
         let factory = &mut self.factory;
         let settings = self.settings;
 
+        if settings.tcp_nodelay {
+            try!(sock.set_nodelay(true))
+        }
+
         let tok = {
             if let Some(entry) = self.connections.vacant_entry() {
                 let tok = entry.index();
@@ -337,6 +352,7 @@ impl<F> Handler<F>
         if settings.encrypt_server {
             return Err(Error::new(Kind::Protocol, "The ssl feature is not enabled. Please enable it to use wss urls."))
         }
+
 
         poll.register(
             conn.socket(),
