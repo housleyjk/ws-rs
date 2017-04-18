@@ -184,6 +184,12 @@ impl Request {
         }
     }
 
+    /// Get the request method.
+    #[inline]
+    pub fn method(&self) -> &str {
+      &self.method
+    }
+
     /// Get the path of the request.
     #[allow(dead_code)]
     #[inline]
@@ -428,9 +434,9 @@ impl Response {
 
     /// Set the response body.
     #[inline]
-    pub fn set_body(&mut self, body: &[u8]) {
-        self.body = body.to_vec();
-        let len = format!("{}", body.len()).as_bytes().to_vec();
+    pub fn set_body<T: Into<Vec<u8>>>(&mut self, body: T) {
+        self.body = body.into();
+        let len = format!("{}", self.body.len()).as_bytes().to_vec();
 
         if let Some(header) = self.header_mut("content-length") {
             *header = len;
