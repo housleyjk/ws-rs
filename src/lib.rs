@@ -46,7 +46,7 @@ pub use handshake::{Handshake, Request, Response};
 
 use std::fmt;
 use std::default::Default;
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
 
 use mio::Poll;
@@ -292,6 +292,7 @@ impl<F> WebSocket<F>
 
         for addr in try!(addr_spec.to_socket_addrs()) {
             result = self.handler.listen(&mut self.poll, &addr).map(|_| ());
+            let addr = self.handler.local_addr().unwrap_or(addr);
             if result.is_ok() {
                 info!("Listening for new connections on {}.", addr);
                 return self.run()
@@ -324,6 +325,13 @@ impl<F> WebSocket<F>
     #[inline]
     pub fn broadcaster(&self) -> Sender {
         self.handler.sender()
+    }
+
+    /// Get the local socket address this socket is bound to. Will return an error
+    /// if the backend returns an error. Will return a `NotFound` error if
+    /// this WebSocket is not a listening socket.
+    pub fn local_addr(&self) -> ::std::io::Result<SocketAddr> {
+        self.handler.local_addr()
     }
 }
 
