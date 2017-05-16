@@ -433,14 +433,14 @@ impl Response {
     #[inline]
     pub fn set_body<T: Into<Vec<u8>>>(&mut self, body: T) {
         self.body = body.into();
-        let len = format!("{}", self.body.len()).as_bytes().to_vec();
 
-        if let Some(header) = self.header_mut("content-length") {
+        let len_header = "Content-Length".to_owned();
+        let len = format!("{}", self.body.len()).as_bytes().to_vec();
+        if let Some(header) = self.header_mut(&len_header) {
             *header = len;
             return;
         }
-
-        self.headers.push(("Content-Length".into(), len));
+        self.headers.push((len_header, len));
     }
 
     /// Get the value of the first instance of an HTTP header.
