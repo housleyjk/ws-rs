@@ -280,23 +280,28 @@ impl<F> WebSocket<F>
         Builder::new().build(factory)
     }
 
-    /// Consume the WebSocket and binds to the specified address.
-    /// After the server is succesfully bound you should start it
-    /// using `run()`
+    /// Consume the WebSocket and bind to the specified address.
+    /// If the `addr_spec` yields multiple addresses this will return after the
+    /// first successful bind. `local_addr` can be called to determine which
+    /// address it ended up binding to.
+    /// After the server is succesfully bound you should start it using `run`.
     pub fn bind<A>(mut self, addr_spec: A) -> Result<WebSocket<F>>
-        where A: ToSocketAddrs + fmt::Debug
+        where A: ToSocketAddrs
     {
-        let mut result = Err(Error::new(ErrorKind::Internal, format!("Unable to listen on {:?}", addr_spec)));
+        let mut last_error = Error::new(ErrorKind::Internal, "No address given");
 
         for addr in try!(addr_spec.to_socket_addrs()) {
-            result = self.handler.listen(&mut self.poll, &addr).map(|_| ());
-            let addr = self.handler.local_addr().unwrap_or(addr);
-            if result.is_ok() {
-                info!("Listening for new connections on {}.", addr);
+            if let Err(e) = self.handler.listen(&mut self.poll, &addr) {
+                error!("Unable to listen on {}", addr);
+                last_error = e;
+            } else {
+                let actual_addr = self.handler.local_addr().unwrap_or(addr);
+                info!("Listening for new connections on {}.", actual_addr);
+                return Ok(self);
             }
         }
 
-        result.map(|_| self)
+        Err(last_error)
     }
 
     /// Consume the WebSocket and listen for new connections on the specified address.
@@ -305,7 +310,7 @@ impl<F> WebSocket<F>
     ///
     /// This method will block until the event loop finishes running.
     pub fn listen<A>(self, addr_spec: A) -> Result<WebSocket<F>>
-        where A: ToSocketAddrs + fmt::Debug
+        where A: ToSocketAddrs
     {
         self.bind(addr_spec).and_then(|server| server.run())
     }
