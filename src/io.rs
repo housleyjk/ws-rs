@@ -2,7 +2,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
 use std::time::Duration;
 use std::usize;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Error as IoError};
 
 use mio;
 use mio::{
@@ -129,6 +129,14 @@ impl<F> Handler<F>
         try!(poll.register(&tcp, ALL, Ready::readable(), PollOpt::level()));
         self.listener = Some(tcp);
         Ok(self)
+    }
+
+    pub fn local_addr(&self) -> ::std::io::Result<SocketAddr> {
+        if let Some(ref listener) = self.listener {
+            listener.local_addr()
+        } else {
+            Err(IoError::new(ErrorKind::NotFound, "Not a listening socket"))
+        }
     }
 
     #[cfg(feature="ssl")]
