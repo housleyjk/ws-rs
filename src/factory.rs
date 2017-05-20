@@ -154,7 +154,7 @@ mod test {
 
         let mut x = X;
         let m = x.connection_made(
-            Sender::new(mio::Token(0), chn)
+            Sender::new(mio::Token(0), chn, 0)
         );
         assert_eq!(m, M);
     }
@@ -168,7 +168,7 @@ mod test {
         };
 
         factory.connection_made(
-            Sender::new(mio::Token(0), chn)
+            Sender::new(mio::Token(0), chn, 0)
         );
     }
 
@@ -190,7 +190,7 @@ mod test {
 
         let mut x = X;
         let m = x.connection_made(
-            Sender::new(mio::Token(0), chn)
+            Sender::new(mio::Token(0), chn, 0)
         );
         x.connection_lost(m);
     }

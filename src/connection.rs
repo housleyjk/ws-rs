@@ -94,12 +94,13 @@ pub struct Connection<H>
     addresses: Vec<SocketAddr>,
 
     settings: Settings,
+    connection_id: u32,
 }
 
 impl<H> Connection<H>
     where H: Handler
 {
-    pub fn new(tok: Token, sock: TcpStream, handler: H, settings: Settings) -> Connection<H> {
+    pub fn new(tok: Token, sock: TcpStream, handler: H, settings: Settings, connection_id: u32) -> Connection<H> {
         Connection {
             token: tok,
             socket: Stream::tcp(sock),
@@ -115,6 +116,7 @@ impl<H> Connection<H>
             handler: handler,
             addresses: Vec::new(),
             settings: settings,
+            connection_id: connection_id
         }
     }
 
@@ -165,6 +167,10 @@ impl<H> Connection<H>
 
     pub fn socket(&self) -> &TcpStream {
         self.socket.evented()
+    }
+
+    pub fn connection_id(&self) -> u32 {
+        self.connection_id
     }
 
     fn peer_addr(&self) -> String {

@@ -29,6 +29,7 @@ pub enum Signal {
 pub struct Command {
     token: Token,
     signal: Signal,
+    connection_id: u32,
 }
 
 impl Command {
@@ -39,6 +40,10 @@ impl Command {
     pub fn into_signal(self) -> Signal {
         self.signal
     }
+
+    pub fn connection_id(&self) -> u32 {
+        self.connection_id
+    }
 }
 
 /// A representation of the output of the WebSocket connection. Use this to send messages to the
@@ -47,16 +52,18 @@ impl Command {
 pub struct Sender {
     token: Token,
     channel: mio::channel::SyncSender<Command>,
+    connection_id: u32,
 }
 
 impl Sender {
 
     #[doc(hidden)]
     #[inline]
-    pub fn new(token: Token, channel: mio::channel::SyncSender<Command>) -> Sender {
+    pub fn new(token: Token, channel: mio::channel::SyncSender<Command>, connection_id: u32) -> Sender {
         Sender {
             token: token,
             channel: channel,
+            connection_id: connection_id
         }
     }
 
@@ -74,6 +81,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Message(msg.into()),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -91,6 +99,7 @@ impl Sender {
         self.channel.send(Command {
             token: ALL,
             signal: Signal::Message(msg.into()),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -100,6 +109,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Close(code, "".into()),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -111,6 +121,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Close(code, reason.into()),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -120,6 +131,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Ping(data),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -129,6 +141,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Pong(data),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -138,6 +151,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Connect(url),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -147,6 +161,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Shutdown,
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -160,6 +175,7 @@ impl Sender {
                 delay: ms,
                 token: token,
             },
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 
@@ -173,6 +189,7 @@ impl Sender {
         self.channel.send(Command {
             token: self.token,
             signal: Signal::Cancel(timeout),
+            connection_id: self.connection_id,
         }).map_err(Error::from)
     }
 

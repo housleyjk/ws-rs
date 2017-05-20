@@ -1,6 +1,7 @@
 use std::io;
 use std::io::ErrorKind::WouldBlock;
 use std::net::SocketAddr;
+#[cfg(feature="ssl")]
 use std::mem::replace;
 
 use mio::tcp::TcpStream;

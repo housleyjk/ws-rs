@@ -1,4 +1,5 @@
 //! Lightweight, event-driven WebSockets for Rust.
+#![allow(deprecated)]
 #![deny(
     missing_copy_implementations,
     trivial_casts, trivial_numeric_casts,

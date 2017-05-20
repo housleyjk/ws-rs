@@ -1,5 +1,3 @@
-use std::io::{Read, Write};
-
 use url;
 use log::LogLevel::Error as ErrorLevel;
 #[cfg(feature="ssl")]
