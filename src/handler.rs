@@ -1,7 +1,9 @@
+use std::io::{Read, Write};
+
 use url;
 use log::LogLevel::Error as ErrorLevel;
 #[cfg(feature="ssl")]
-use openssl::ssl::{Ssl, SslContext, SslMethod};
+use openssl::ssl::{SslMethod, SslStream, SslConnectorBuilder};
 
 use message::Message;
 use frame::Frame;
@@ -9,6 +11,9 @@ use protocol::CloseCode;
 use handshake::{Handshake, Request, Response};
 use result::{Result, Error, Kind};
 use util::{Token, Timeout};
+
+#[cfg(feature="ssl")]
+use util::TcpStream;
 
 
 /// The core trait of this library.
@@ -268,14 +273,32 @@ pub trait Handler {
         Request::from_url(url)
     }
 
-    /// A method for obtaining an Ssl object for use in wss connections.
+    /// A method for wrapping a client TcpStream with Ssl Authentication machinery
     ///
-    /// Override this method to customize the Ssl object used to encrypt the connection.
+    /// Override this method to customize how the connection is encrypted. By default
+    /// this will use the Server Name Indication extension in conformance with RFC6455.
     #[inline]
     #[cfg(feature="ssl")]
-    fn build_ssl(&mut self) -> Result<Ssl> {
-        let context = try!(SslContext::new(SslMethod::Tlsv1));
-        Ssl::new(&context).map_err(Error::from)
+    fn upgrade_ssl_client(&mut self, stream: TcpStream, url: &url::Url) -> Result<SslStream<TcpStream>>
+    {
+        let domain = try!(url.domain().ok_or(Error::new(
+            Kind::Protocol,
+            format!("Unable to parse domain from {}. Needed for SSL.", url))));
+        let connector = try!(SslConnectorBuilder::new(SslMethod::tls()).map_err(|e| {
+            Error::new(Kind::Internal, format!("Failed to upgrade client to SSL: {}", e))
+        })).build();
+        connector.connect(domain, stream).map_err(Error::from)
+    }
+
+    /// A method for wrapping a server TcpStream with Ssl Authentication machinery
+    ///
+    /// Override this method to customize how the connection is encrypted. By default
+    /// this method is not implemented.
+    #[inline]
+    #[cfg(feature="ssl")]
+    fn upgrade_ssl_server(&mut self, _: TcpStream) -> Result<SslStream<TcpStream>>
+    {
+        unimplemented!()
     }
 }
 

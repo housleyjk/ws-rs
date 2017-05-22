@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::mem::transmute;
 use std::str::from_utf8;
 use std::net::SocketAddr;
 
@@ -16,9 +15,7 @@ static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu
 const MAX_HEADERS: usize = 124;
 
 fn generate_key() -> String {
-    let key: [u8; 16] = unsafe {
-        transmute(rand::random::<(u64, u64)>())
-    };
+    let key: [u8; 16] = rand::random();
     encode_base64(&key)
 }
 
@@ -436,14 +433,13 @@ impl Response {
     #[inline]
     pub fn set_body<T: Into<Vec<u8>>>(&mut self, body: T) {
         self.body = body.into();
+        let len_header = "Content-Length".to_owned();
         let len = format!("{}", self.body.len()).as_bytes().to_vec();
-
-        if let Some(header) = self.header_mut("content-length") {
+        if let Some(header) = self.header_mut(&len_header) {
             *header = len;
             return;
         }
-
-        self.headers.push(("Content-Length".into(), len));
+        self.headers.push((len_header, len));
     }
 
     /// Get the value of the first instance of an HTTP header.

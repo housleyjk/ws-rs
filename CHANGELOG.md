@@ -1,3 +1,38 @@
+<a name="v0.7.1"></a>
+### v0.7.1 (2017-04-08)
+
+
+#### Bug Fixes
+
+*   Issue with openssl buffering causing autobahn test failure with ssl ([d3d6b8be](d3d6b8be))
+
+
+
+<a name="v0.7.0"></a>
+### v0.7.0 (2017-03-30)
+
+#### Features
+
+*   Upgrade to rust-openssl 0.9 ([d8bfdfa7](d8bfdfa7))
+
+
+<a name="v0.6.1"></a>
+### v0.6.2 (2017-03-23)
+
+#### Features
+
+*   Call connection_lost() on url failure to obtain address from URL
+
+#### Bug Fixes
+
+*  Fix issue with errors not being logged due to change Mio readiness semantics
+
+
+<a name="v0.6.0"></a>
+### v0.6.0 (2017-02-17)
+* Update dependencies and track latest rust
+
+
 <a name="v0.5.3"></a>
 ### v0.5.3 (2016-09-05)
 
