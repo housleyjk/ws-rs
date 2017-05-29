@@ -24,7 +24,8 @@ use connection::Connection;
 use factory::Factory;
 use util::Slab;
 use super::Settings;
-use CloseCode;
+use protocol::CloseCode;
+use handler::Handler as HandlerT;
 
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
@@ -460,7 +461,6 @@ impl<F> Handler<F>
 
     #[inline]
     fn check_active(&mut self, poll: &mut Poll, active: bool, token: Token) {
-        use Handler;
         // NOTE: Closing state only applies after a ws connection was successfully
         // established. It's possible that we may go inactive while in a connecting
         // state if the handshake fails.
