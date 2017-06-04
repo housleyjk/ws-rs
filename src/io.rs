@@ -579,7 +579,9 @@ impl<F> Handler<F>
                             self.connections[token].error(err)
                         }
                     }
-
+                    
+                    let conn_events = self.connections[token].events();
+                    
                     if (events & conn_events).is_writable() {
                         if let Err(err) = self.connections[token].write() {
                             trace!("Encountered error while writing: {}", err);
