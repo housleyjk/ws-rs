@@ -156,7 +156,16 @@ mod test {
     #[test]
     fn binary_convert() {
         let bin = [6u8, 7, 8, 9, 10, 241];
-        let msg = Message::from(&bin[..]);
+        let msg = Message::from(&bin);
+        assert!(msg.is_binary());
+        assert!(msg.into_text().is_err());
+    }
+
+
+    #[test]
+    fn binary_convert_vec() {
+        let bin = vec![6u8, 7, 8, 9, 10, 241];
+        let msg = Message::from(bin);
         assert!(msg.is_binary());
         assert!(msg.into_text().is_err());
     }
