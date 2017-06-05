@@ -52,8 +52,6 @@ impl Handler for Server {
         println!("WebSocket closing for ({:?}) {}", code, reason);
 
         // NOTE: This code demonstrates cleaning up timeouts
-        // If we weren't shutting down the websocket, below, we would need this code to avoid
-        // leaking the timeouts and having the possibility of them triggered into later connections
         if let Some(t) = self.ping_timeout.take() {
             self.out.cancel(t).unwrap();
         }
