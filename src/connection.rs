@@ -597,8 +597,12 @@ impl<H> Connection<H>
                 while let Some(len) = try!(self.buffer_in()) {
                     try!(self.read_frames());
                     if len == 0 {
-                        self.events.remove(Ready::readable());
-                        break;
+                        if self.events.is_writable() {
+                            self.events.remove(Ready::readable());
+                        } else {
+                            self.disconnect()
+                        }
+                        break
                     }
                 }
                 Ok(())

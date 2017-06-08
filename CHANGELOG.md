@@ -1,3 +1,12 @@
+<a name="v0.7.3"></a>
+### v0.7.3 (2017-06-07)
+
+
+#### Bug Fixes
+
+*   Issue with `on_close` called twice
+
+
 <a name="v0.7.2"></a>
 ### v0.7.2 (2017-06-04)
 

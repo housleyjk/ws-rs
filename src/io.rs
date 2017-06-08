@@ -24,8 +24,6 @@ use connection::Connection;
 use factory::Factory;
 use util::Slab;
 use super::Settings;
-use protocol::CloseCode;
-use handler::Handler as HandlerT;
 
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
@@ -470,8 +468,7 @@ impl<F> Handler<F>
             } else {
                 trace!("WebSocket connection to token={:?} disconnected.", token);
             }
-            let mut handler = self.connections.remove(token).unwrap().consume();
-            handler.on_close(CloseCode::Abnormal, "");
+            let handler = self.connections.remove(token).unwrap().consume();
             self.factory.connection_lost(handler);
         } else {
             self.schedule(poll, &self.connections[token]).or_else(|err| {
@@ -579,9 +576,9 @@ impl<F> Handler<F>
                             self.connections[token].error(err)
                         }
                     }
-                    
+
                     let conn_events = self.connections[token].events();
-                    
+
                     if (events & conn_events).is_writable() {
                         if let Err(err) = self.connections[token].write() {
                             trace!("Encountered error while writing: {}", err);
