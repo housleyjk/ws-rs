@@ -135,7 +135,7 @@ pub trait Handler {
     ///         // reschedule the timeout
     ///         self.ws.timeout(5_000, GRATI)
     ///     } else {
-    ///         Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
+    ///         Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!"))
     ///     }
     /// }
     /// ```
