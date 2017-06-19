@@ -334,7 +334,7 @@ impl<F> WebSocket<F>
 
     /// Get a Sender that can be used to send messages on all connections.
     /// Calling `send` on this Sender is equivalent to calling `broadcast`.
-    /// Calling `shutdown` on this Sender will shudown the WebSocket even if no connections have
+    /// Calling `shutdown` on this Sender will shutdown the WebSocket even if no connections have
     /// been established.
     #[inline]
     pub fn broadcaster(&self) -> Sender {
