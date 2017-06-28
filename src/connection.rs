@@ -731,6 +731,8 @@ impl<H> Connection<H>
                                         } else {
                                             try!(self.send_close(CloseCode::Invalid, ""));
                                         }
+                                    } else {
+                                        self.state = FinishedClose;
                                     }
                                 }
                             } else {
@@ -741,6 +743,8 @@ impl<H> Connection<H>
                                 self.handler.on_close(CloseCode::Status, "");
                                 if !self.state.is_closing() {
                                     try!(self.send_close(CloseCode::Empty, ""));
+                                } else {
+                                    self.state = FinishedClose;
                                 }
                             }
                         }
