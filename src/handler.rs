@@ -135,7 +135,7 @@ pub trait Handler {
     ///         // reschedule the timeout
     ///         self.ws.timeout(5_000, GRATI)
     ///     } else {
-    ///         Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
+    ///         Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!"))
     ///     }
     /// }
     /// ```
@@ -239,7 +239,7 @@ pub trait Handler {
     /// By default this method simply ensures that no reserved bits are set.
     #[inline]
     fn on_send_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
-        debug!("Handler will send: {}", frame);
+        trace!("Handler will send: {}", frame);
         // default implementation doesn't allow for reserved bits to be set
         if frame.has_rsv1() || frame.has_rsv2() || frame.has_rsv3() {
             Err(Error::new(Kind::Protocol, "Encountered frame with reserved bits set."))
@@ -267,7 +267,7 @@ pub trait Handler {
     /// ```
     #[inline]
     fn build_request(&mut self, url: &url::Url) -> Result<Request> {
-        debug!("Handler is building request to {}.", url);
+        trace!("Handler is building request to {}.", url);
         Request::from_url(url)
     }
 
