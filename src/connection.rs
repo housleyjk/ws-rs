@@ -777,7 +777,7 @@ impl<H> Connection<H>
                                         try!(self.handler.on_message(Message::text(string)));
                                     }
                                     OpCode::Binary => {
-                                        trace!("Constructing text message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), frame);
+                                        trace!("Constructing binary message from fragments: {:?} -> {:?} -> {:?}", first, self.fragments.iter().collect::<Vec<&Frame>>(), frame);
                                         let mut data = Vec::with_capacity(size);
                                         data.extend(first.into_data());
 
