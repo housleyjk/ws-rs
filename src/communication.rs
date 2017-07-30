@@ -73,6 +73,12 @@ impl Sender {
         self.token
     }
 
+    // A connection Id identifying this sender within the WebSocket.
+    #[inline]
+    pub fn connection_id(&self) -> u32 {
+        self.connection_id
+    }
+
     /// Send a message over the connection.
     #[inline]
     pub fn send<M>(&self, msg: M) -> Result<()>
@@ -82,6 +88,18 @@ impl Sender {
             token: self.token,
             signal: Signal::Message(msg.into()),
             connection_id: self.connection_id,
+        }).map_err(Error::from)
+    }
+
+    // Send a message to the endpoint of an other connection identifying by a connection Id.
+    #[inline]
+    pub fn send_to<M>(&self, connection_id: u32, msg: M) -> Result<()>
+        where M: Into<message::Message>
+    {
+        self.channel.send(Command {
+            token: mio::Token(connection_id as usize),
+            signal: Signal::Message(msg.into()),
+            connection_id: connection_id,
         }).map_err(Error::from)
     }
 
