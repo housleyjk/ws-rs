@@ -8,6 +8,7 @@ use mio::Token;
 use message;
 use result::{Result, Error};
 use protocol::CloseCode;
+use std::cmp::PartialEq;
 use io::ALL;
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,12 @@ pub struct Sender {
     token: Token,
     channel: mio::channel::SyncSender<Command>,
     connection_id: u32,
+}
+
+impl PartialEq for Sender {
+    fn eq(&self, other: &Sender) -> bool {
+        self.token == other.token && self.connection_id == other.connection_id
+    }
 }
 
 impl Sender {
