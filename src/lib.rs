@@ -204,7 +204,7 @@ pub struct Settings {
     pub masking_strict: bool,
     /// The WebSocket protocol requires clients to verify the key returned by a server to ensure
     /// that the server and all intermediaries can perform the protocol. Verifying the key will
-    /// consume processing time and other resources with the benifit that we can fail the
+    /// consume processing time and other resources with the benefit that we can fail the
     /// connection early. The default in WS-RS is to accept any key from the server and instead
     /// fail late if a protocol error occurs. Change this setting to enable key verification.
     /// Default: false
@@ -285,7 +285,7 @@ impl<F> WebSocket<F>
     /// If the `addr_spec` yields multiple addresses this will return after the
     /// first successful bind. `local_addr` can be called to determine which
     /// address it ended up binding to.
-    /// After the server is succesfully bound you should start it using `run`.
+    /// After the server is successfully bound you should start it using `run`.
     pub fn bind<A>(mut self, addr_spec: A) -> Result<WebSocket<F>>
         where A: ToSocketAddrs
     {

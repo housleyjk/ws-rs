@@ -414,7 +414,7 @@ impl<F> Handler<F>
                             error!("Websocket shutting down for interrupt.");
                             self.state = State::Inactive;
                         } else {
-                            error!("Websocket received interupt.");
+                            error!("Websocket received interrupt.");
                         }
                         0
                     } else {

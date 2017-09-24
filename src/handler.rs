@@ -253,7 +253,7 @@ pub trait Handler {
     /// A method for creating the initial handshake request for WebSocket clients.
     ///
     /// The default implementation provides conformance with the WebSocket protocol, but this
-    /// method may be overriden. In order to facilitate conformance,
+    /// method may be overridden. In order to facilitate conformance,
     /// implementors should use the `Request::from_url` method and then modify the resulting
     /// request as necessary.
     ///
