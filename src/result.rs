@@ -30,7 +30,7 @@ pub enum Kind {
     Capacity,
     /// Indicates a violation of the WebSocket protocol.
     /// The WebSocket will automatically attempt to send a Protocol (1002) close code, or if
-    /// this error occurs during a handshake, an HTTP 400 reponse will be generated.
+    /// this error occurs during a handshake, an HTTP 400 response will be generated.
     Protocol,
     /// Indicates that the WebSocket received data that should be utf8 encoded but was not.
     /// The WebSocket will automatically attempt to send a Invalid Frame Payload Data (1007) close
@@ -63,7 +63,7 @@ pub enum Kind {
     Custom(Box<StdError + Send + Sync>),
 }
 
-/// A struct indicating the kind of error that has occured and any precise details of that error.
+/// A struct indicating the kind of error that has occurred and any precise details of that error.
 pub struct Error {
     pub kind: Kind,
     pub details: Cow<'static, str>,

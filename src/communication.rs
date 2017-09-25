@@ -188,8 +188,8 @@ impl Sender {
 
     /// Queue the cancellation of a previously scheduled timeout.
     ///
-    /// This method is not guaranteed to prevent the timeout from occuring, because it is
-    /// possible to call this method after a timeout has already occured. It is still necessary to
+    /// This method is not guaranteed to prevent the timeout from occurring, because it is
+    /// possible to call this method after a timeout has already occurred. It is still necessary to
     /// handle spurious timeouts.
     #[inline]
     pub fn cancel(&self, timeout: mio::timer::Timeout) -> Result<()> {
