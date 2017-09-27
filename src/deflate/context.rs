@@ -53,15 +53,15 @@ trait Context {
     }
 }
 
-pub struct Compresser {
+pub struct Compressor {
     // Box the z_stream to ensure it isn't moved. Moving the z_stream
     // causes zlib to fail, because it maintains internal pointers.
     stream: Box<ffi::z_stream>,
 }
 
-impl Compresser {
+impl Compressor {
 
-    pub fn new(window_bits: i8) -> Compresser {
+    pub fn new(window_bits: i8) -> Compressor {
         debug_assert!(window_bits >= 8, "Received too small window size.");
         debug_assert!(window_bits <= 15, "Received too large window size.");
 
@@ -80,7 +80,7 @@ impl Compresser {
             assert!(
                  result == ffi::Z_OK,
                 "Failed to initialize compresser.");
-            Compresser { stream: stream }
+            Compressor { stream: stream }
         }
     }
 
@@ -115,13 +115,13 @@ impl Compresser {
     }
 }
 
-impl Context for Compresser {
+impl Context for Compressor {
     fn stream(&mut self) -> &mut ffi::z_stream {
         self.stream.as_mut()
     }
 }
 
-impl Drop for Compresser {
+impl Drop for Compressor {
     fn drop(&mut self) {
         match unsafe {
             ffi::deflateEnd(self.stream.as_mut())
@@ -134,12 +134,12 @@ impl Drop for Compresser {
     }
 }
 
-pub struct Decompresser {
+pub struct Decompressor {
     stream: Box<ffi::z_stream>,
 }
 
-impl Decompresser {
-    pub fn new(window_bits: i8) -> Decompresser {
+impl Decompressor {
+    pub fn new(window_bits: i8) -> Decompressor {
         debug_assert!(window_bits >= 8, "Received too small window size.");
         debug_assert!(window_bits <= 15, "Received too large window size.");
 
@@ -154,7 +154,7 @@ impl Decompresser {
             assert!(
                  result == ffi::Z_OK,
                 "Failed to initialize decompresser.");
-            Decompresser { stream: stream }
+            Decompressor { stream: stream }
         }
     }
 
@@ -189,13 +189,13 @@ impl Decompresser {
     }
 }
 
-impl Context for Decompresser {
+impl Context for Decompressor {
     fn stream(&mut self) -> &mut ffi::z_stream {
         self.stream.as_mut()
     }
 }
 
-impl Drop for Decompresser {
+impl Drop for Decompressor {
     fn drop(&mut self) {
         match unsafe {
             ffi::inflateEnd(self.stream.as_mut())
@@ -226,12 +226,12 @@ mod test {
             let mut compressed = Vec::with_capacity(data.len());
             let mut decompressed = Vec::with_capacity(data.len());
 
-            let com = Compresser::new(i);
+            let com = Compressor::new(i);
             let mut moved_com = com;
 
             moved_com.compress(&data, &mut compressed).expect("Failed to compress data.");
 
-            let dec = Decompresser::new(i);
+            let dec = Decompressor::new(i);
             let mut moved_dec = dec;
 
             moved_dec.decompress(&compressed, &mut decompressed).expect("Failed to decompress data.");
@@ -252,14 +252,14 @@ mod test {
         let mut decompressed2 = Vec::with_capacity(data2.len());
         let mut decompressed2_ind = Vec::with_capacity(data2.len());
 
-        let mut com = Compresser::new(9);
+        let mut com = Compressor::new(9);
 
         com.compress(&data1, &mut compressed1).unwrap();
         com.compress(&data2, &mut compressed2).unwrap();
         com.reset().unwrap();
         com.compress(&data2, &mut compressed2_ind).unwrap();
 
-        let mut dec = Decompresser::new(9);
+        let mut dec = Decompressor::new(9);
 
         dec.decompress(&compressed1, &mut decompressed1).unwrap();
         dec.decompress(&compressed2, &mut decompressed2).unwrap();
