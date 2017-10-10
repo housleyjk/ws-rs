@@ -21,7 +21,8 @@ pub type Result<T> = StdResult<T, Error>;
 #[derive(Debug)]
 pub enum Kind {
     /// Indicates an internal application error.
-    /// The WebSocket will automatically attempt to send an Error (1011) close code.
+    /// If panic_on_internal is true, which is the default, then the application will panic. 
+    /// Otherwise the WebSocket will automatically attempt to send an Error (1011) close code.
     Internal,
     /// Indicates a state where some size limit has been exceeded, such as an inability to accept
     /// any more new connections.
