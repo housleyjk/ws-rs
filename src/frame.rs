@@ -305,10 +305,14 @@ impl Frame {
             None
         };
 
-        if size < length + header_length {
-            cursor.set_position(initial);
-            return Ok(None)
-        }
+        match length.checked_add(header_length) {
+            Some(l) if size < l => {
+                cursor.set_position(initial);
+                return Ok(None);
+            }
+            Some(_) => (),
+            None => return Ok(None),
+        };
 
         let mut data = Vec::with_capacity(length as usize);
         if length > 0 {
