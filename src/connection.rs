@@ -293,7 +293,11 @@ impl<H> Connection<H>
             Connecting(_, ref mut res) => {
                 match err.kind {
                     #[cfg(feature="ssl")]
-                    Kind::Ssl(_) | Kind::Io(_) => {
+                    Kind::Ssl(_) => {
+                        self.handler.on_error(err);
+                        self.events = Ready::empty();
+                    }
+                    Kind::Io(_) => {
                         self.handler.on_error(err);
                         self.events = Ready::empty();
                     }

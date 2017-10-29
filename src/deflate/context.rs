@@ -62,7 +62,7 @@ pub struct Compressor {
 impl Compressor {
 
     pub fn new(window_bits: i8) -> Compressor {
-        debug_assert!(window_bits >= 8, "Received too small window size.");
+        debug_assert!(window_bits >= 9, "Received too small window size.");
         debug_assert!(window_bits <= 15, "Received too large window size.");
 
         unsafe {

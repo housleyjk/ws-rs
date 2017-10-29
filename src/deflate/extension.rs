@@ -1,5 +1,4 @@
 use std::mem::replace;
-use std::io::{Read, Write};
 
 #[cfg(feature="ssl")]
 use openssl::ssl::SslStream;
@@ -22,7 +21,7 @@ use super::context::{Compressor, Decompressor};
 #[derive(Debug, Clone, Copy)]
 pub struct DeflateSettings {
     /// The max size of the sliding window. If the other endpoint selects a smaller size, that size
-    /// will be used instead. This must be an integer between 8 and 15 inclusive.
+    /// will be used instead. This must be an integer between 9 and 15 inclusive.
     /// Default: 15
     pub max_window_bits: u8,
     /// Indicates whether to ask the other endpoint to reset the sliding window for each message.
@@ -208,7 +207,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                             param_iter.next(); // we already know the name
                             if let Some(window_bits_str) = param_iter.next() {
                                 if let Ok(window_bits) = window_bits_str.trim().parse() {
-                                    if window_bits >= 8 && window_bits <= 15 {
+                                    if window_bits >= 9 && window_bits <= 15 {
                                         if window_bits < self.settings.max_window_bits as i8 {
                                             self.com = Compressor::new(window_bits);
                                             res_ext.push_str("; ");
@@ -232,7 +231,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                             param_iter.next(); // we already know the name
                             if let Some(window_bits_str) = param_iter.next() {
                                 if let Ok(window_bits) = window_bits_str.trim().parse() {
-                                    if window_bits >= 8 && window_bits <= 15 {
+                                    if window_bits >= 9 && window_bits <= 15 {
                                         if window_bits < self.settings.max_window_bits as i8 {
                                             self.dec = Decompressor::new(window_bits);
                                             res_ext.push_str("; ");
@@ -343,7 +342,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                             param_iter.next(); // we already know the name
                             if let Some(window_bits_str) = param_iter.next() {
                                 if let Ok(window_bits) = window_bits_str.trim().parse() {
-                                    if window_bits >= 8 && window_bits <= 15 {
+                                    if window_bits >= 9 && window_bits <= 15 {
                                         if window_bits as u8 != self.settings.max_window_bits {
                                             self.dec = Decompressor::new(window_bits);
                                         }
@@ -371,7 +370,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                             param_iter.next(); // we already know the name
                             if let Some(window_bits_str) = param_iter.next() {
                                 if let Ok(window_bits) = window_bits_str.trim().parse() {
-                                    if window_bits >= 8 && window_bits <= 15 {
+                                    if window_bits >= 9 && window_bits <= 15 {
                                         if window_bits as u8 != self.settings.max_window_bits {
                                             self.com = Compressor::new(window_bits);
                                         }
