@@ -412,34 +412,22 @@ pub struct Response {
 impl Response {
     // TODO: resolve the overlap with Request
 
-    pub fn new<R>(status: u16, reason: R) -> Response
-        where R: Into<String>,
-    {
-        Response {
-            status: status,
-            reason: reason.into(),
-            headers: Vec::new(),
-            body: Vec::new(),
+    /// Construct a generic HTTP response with a body.
+    pub fn new<R>(status: u16, reason: R, body: Vec<u8>) -> Response
+            where R: Into<String>,
+        {
+            Response {
+                status: status,
+                reason: reason.into(),
+                headers: vec![("Content-Length".into(), body.len().to_string().into())],
+                body: body
+            }
         }
-    }
 
     /// Get the response body.
     #[inline]
     pub fn body(&self) -> &[u8] {
         &self.body
-    }
-
-    /// Set the response body.
-    #[inline]
-    pub fn set_body<T: Into<Vec<u8>>>(&mut self, body: T) {
-        self.body = body.into();
-        let len_header = "Content-Length".to_owned();
-        let len = format!("{}", self.body.len()).as_bytes().to_vec();
-        if let Some(header) = self.header_mut(&len_header) {
-            *header = len;
-            return;
-        }
-        self.headers.push((len_header, len));
     }
 
     /// Get the value of the first instance of an HTTP header.
