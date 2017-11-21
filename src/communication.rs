@@ -80,6 +80,12 @@ impl Sender {
         self.token
     }
 
+    /// A connection_id identifying this sender within the WebSocket.
+    #[inline]
+    pub fn connection_id(&self) -> u32 {
+        self.connection_id
+    }
+
     /// Send a message over the connection.
     #[inline]
     pub fn send<M>(&self, msg: M) -> Result<()>
