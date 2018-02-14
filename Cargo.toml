@@ -7,13 +7,13 @@ license = "MIT"
 name = "ws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
-version = "0.7.5"
+version = "0.7.6"
 
 [dependencies]
 byteorder = "1.1"
 bytes = "0.4"
 httparse = "1.2"
-log = "0.3"
+log = "0.4"
 mio = "0.6"
 rand = "0.3"
 sha1 = "0.2"
@@ -34,7 +34,7 @@ version = "0.9"
 
 [dev-dependencies]
 clap = "2.27"
-env_logger = "0.4"
+env_logger = "0.5"
 term = "0.4"
 time = "0.1"
 
