@@ -30,7 +30,7 @@ version = "1.0"
 
 [dependencies.openssl]
 optional = true
-version = "0.9"
+version = "0.10"
 
 [dev-dependencies]
 clap = "2.27"

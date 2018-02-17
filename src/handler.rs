@@ -1,7 +1,7 @@
 use url;
 use log::LogLevel::Error as ErrorLevel;
 #[cfg(feature="ssl")]
-use openssl::ssl::{SslMethod, SslStream, SslConnectorBuilder};
+use openssl::ssl::{SslMethod, SslStream, SslConnector};
 
 use message::Message;
 use frame::Frame;
@@ -282,7 +282,7 @@ pub trait Handler {
         let domain = try!(url.domain().ok_or(Error::new(
             Kind::Protocol,
             format!("Unable to parse domain from {}. Needed for SSL.", url))));
-        let connector = try!(SslConnectorBuilder::new(SslMethod::tls()).map_err(|e| {
+        let connector = try!(SslConnector::builder(SslMethod::tls()).map_err(|e| {
             Error::new(Kind::Internal, format!("Failed to upgrade client to SSL: {}", e))
         })).build();
         connector.connect(domain, stream).map_err(Error::from)

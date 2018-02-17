@@ -7,8 +7,6 @@ use std::mem::replace;
 use mio::tcp::TcpStream;
 #[cfg(feature="ssl")]
 use openssl::ssl::{SslStream, MidHandshakeSslStream, HandshakeError};
-#[cfg(feature="ssl")]
-use openssl::ssl::Error as SslError;
 use bytes::{Buf, BufMut};
 
 use result::{Result, Error, Kind};
@@ -157,21 +155,11 @@ impl io::Read for Stream {
                             Err(HandshakeError::SetupFailure(err)) =>
                                 Err(io::Error::new(io::ErrorKind::Other, err)),
                             Err(HandshakeError::Failure(mid)) |
-                            Err(HandshakeError::Interrupted(mid)) => {
-                                let err = match *mid.error() {
-                                    SslError::WantWrite(_) => {
-                                        negotiating = true;
-                                        Err(io::Error::new(
-                                            io::ErrorKind::WouldBlock,
-                                            "SSL wants writing"))
-                                    },
-                                    SslError::WantRead(_) => Err(io::Error::new(
-                                        io::ErrorKind::WouldBlock,
-                                        "SSL wants reading")),
-                                    SslError::Stream(ref e) =>
-                                        Err(From::from(e.kind())),
-                                    ref err =>
-                                        Err(io::Error::new(io::ErrorKind::Other, format!("{}", err))),
+                            Err(HandshakeError::WouldBlock(mid)) => {
+                                let err = if let Some(err) = mid.error().io_error() {
+                                    Err(io::Error::new(err.kind(), format!("{}", err)))
+                                } else {
+                                    Err(io::Error::new(io::ErrorKind::Other, format!("{}", mid.error())))
                                 };
                                 *tls_stream = TlsStream::Handshake { sock: mid, negotiating: negotiating };
                                 err
@@ -210,21 +198,11 @@ impl io::Write for Stream {
                             Err(HandshakeError::SetupFailure(err)) =>
                                 Err(io::Error::new(io::ErrorKind::Other, err)),
                             Err(HandshakeError::Failure(mid)) |
-                            Err(HandshakeError::Interrupted(mid)) => {
-                                let err = match *mid.error() {
-                                    SslError::WantRead(_) => {
-                                        negotiating = true;
-                                        Err(io::Error::new(
-                                                io::ErrorKind::WouldBlock,
-                                                "SSL wants reading"))
-                                    },
-                                    SslError::WantWrite(_)=> Err(io::Error::new(
-                                        io::ErrorKind::WouldBlock,
-                                        "SSL wants writing")),
-                                    SslError::Stream(ref e) =>
-                                        Err(From::from(e.kind())),
-                                    ref err =>
-                                        Err(io::Error::new(io::ErrorKind::Other, format!("{}", err))),
+                            Err(HandshakeError::WouldBlock(mid)) => {
+                                let err = if let Some(err) = mid.error().io_error() {
+                                    Err(io::Error::new(err.kind(), format!("{}", err)))
+                                } else {
+                                    Err(io::Error::new(io::ErrorKind::Other, format!("{}", mid.error())))
                                 };
                                 *tls_stream = TlsStream::Handshake { sock: mid, negotiating: negotiating };
                                 err
