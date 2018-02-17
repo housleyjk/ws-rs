@@ -38,7 +38,7 @@ use clap::{App, Arg};
 
 fn main() {
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Parse command line arguments
     let matches = App::new("Simple Peer 2 Peer")

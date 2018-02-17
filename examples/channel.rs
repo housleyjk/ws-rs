@@ -23,7 +23,7 @@ use ws::{connect, listen, CloseCode, Message, Sender, Handler, Handshake, Result
 fn main () {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Data to be sent across WebSockets and channels
     let data = vec![1, 2, 3, 4, 5];

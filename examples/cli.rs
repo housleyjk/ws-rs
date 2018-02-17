@@ -30,7 +30,7 @@ use ws::{
 fn main() {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // setup command line arguments
     let matches = App::new("WS Command Line Client")

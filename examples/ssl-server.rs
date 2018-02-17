@@ -50,7 +50,7 @@ impl ws::Handler for Server {
 #[cfg(feature="ssl")]
 fn main () {
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // setup command line arguments
     let matches = clap::App::new("WS-RS SSL Server Configuration")

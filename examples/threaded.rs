@@ -13,7 +13,7 @@ use ws::{connect, listen, CloseCode, Sender, Handler, Message, Result};
 fn main () {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Server WebSocket handler
     struct Server {
