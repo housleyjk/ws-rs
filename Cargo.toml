@@ -16,7 +16,7 @@ httparse = "1.2"
 log = "0.4"
 mio = "0.6"
 rand = "0.4"
-sha1 = "0.2"
+sha1 = "0.6"
 slab = "0.3"
 url = "1.5"
 
