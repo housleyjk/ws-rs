@@ -15,9 +15,6 @@ use mio::tcp::{TcpListener, TcpStream};
 
 use url::Url;
 
-#[cfg(feature="ssl")]
-use openssl::ssl::Error as SslError;
-
 use communication::{Sender, Signal, Command};
 use result::{Result, Error, Kind};
 use connection::Connection;
@@ -196,13 +193,15 @@ impl<F> Handler<F>
         if will_encrypt {
             while let Err(ssl_error) = self.connections[tok].encrypt() {
                 match ssl_error.kind {
-                    Kind::Ssl(SslError::Stream(ref io_error)) => {
-                        if let Some(errno) = io_error.raw_os_error() {
-                            if errno == CONNECTION_REFUSED {
-                                if let Err(reset_error) = self.connections[tok].reset() {
-                                    trace!("Encountered error while trying to reset connection: {:?}", reset_error);
-                                } else {
-                                    continue
+                    Kind::Ssl(ref some_ssl_error) => {
+                        if let Some(io_error) = some_ssl_error.io_error() {
+                            if let Some(errno) = io_error.raw_os_error() {
+                                if errno == CONNECTION_REFUSED {
+                                    if let Err(reset_error) = self.connections[tok].reset() {
+                                        trace!("Encountered error while trying to reset connection: {:?}", reset_error);
+                                    } else {
+                                        continue
+                                    }
                                 }
                             }
                         }

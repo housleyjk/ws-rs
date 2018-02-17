@@ -154,7 +154,7 @@ impl<H> Connection<H>
                         Kind::SslHandshake(handshake_err),
                         details)),
                     HandshakeError::Failure(mid) |
-                    HandshakeError::Interrupted(mid) => Ok(self.socket = Stream::tls(mid)),
+                    HandshakeError::WouldBlock(mid) => Ok(self.socket = Stream::tls(mid)),
                 }
             }
             Err(e) => Err(e),
@@ -204,7 +204,7 @@ impl<H> Connection<H>
                                         Kind::SslHandshake(handshake_err),
                                         details)),
                                     HandshakeError::Failure(mid) |
-                                    HandshakeError::Interrupted(mid) => Ok(self.socket = Stream::tls(mid)),
+                                    HandshakeError::WouldBlock(mid) => Ok(self.socket = Stream::tls(mid)),
                                 }
                             }
                             Err(e) => Err(e),

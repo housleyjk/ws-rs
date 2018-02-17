@@ -15,8 +15,8 @@ bytes = "0.4"
 httparse = "1.2"
 log = "0.4"
 mio = "0.6"
-rand = "0.3"
-sha1 = "0.2"
+rand = "0.4"
+sha1 = "0.6"
 slab = "0.3"
 url = "1.5"
 
@@ -30,10 +30,10 @@ version = "1.0"
 
 [dependencies.openssl]
 optional = true
-version = "0.9"
+version = "0.10"
 
 [dev-dependencies]
-clap = "2.27"
+clap = "2.30"
 env_logger = "0.5"
 term = "0.4"
 time = "0.1"
