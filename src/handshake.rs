@@ -181,6 +181,12 @@ impl Request {
         }
     }
 
+    /// Get the request method.
+    #[inline]
+    pub fn method(&self) -> &str {
+      &self.method
+    }
+
     /// Get the path of the request.
     #[allow(dead_code)]
     #[inline]
@@ -400,10 +406,29 @@ pub struct Response {
     status: u16,
     reason: String,
     headers: Vec<(String, Vec<u8>)>,
+    body: Vec<u8>,
 }
 
 impl Response {
     // TODO: resolve the overlap with Request
+
+    /// Construct a generic HTTP response with a body.
+    pub fn new<R>(status: u16, reason: R, body: Vec<u8>) -> Response
+            where R: Into<String>,
+        {
+            Response {
+                status: status,
+                reason: reason.into(),
+                headers: vec![("Content-Length".into(), body.len().to_string().into())],
+                body: body
+            }
+        }
+
+    /// Get the response body.
+    #[inline]
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
 
     /// Get the value of the first instance of an HTTP header.
     fn header(&self, header: &str) -> Option<&Vec<u8>> {
@@ -545,6 +570,7 @@ impl Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
                 headers: res.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
+                body: Vec::new(),
             }))
         } else {
             Ok(None)
@@ -563,6 +589,7 @@ impl Response {
                 ("Sec-WebSocket-Accept".into(), try!(req.hashed_key()).into()),
                 ("Upgrade".into(), "websocket".into()),
             ],
+            body: Vec::new(),
         };
 
         debug!("Built response from request:\n{}", res);
@@ -580,6 +607,7 @@ impl Response {
             try!(write!(w, "\r\n"));
         }
         try!(write!(w, "\r\n"));
+        try!(w.write(&self.body));
         Ok(())
     }
 }
