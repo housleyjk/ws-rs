@@ -20,7 +20,7 @@ const MESSAGES: u32 = 10;
 static MESSAGE: &'static str = "TEST TEST TEST TEST TEST TEST TEST TEST";
 
 fn main () {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
 

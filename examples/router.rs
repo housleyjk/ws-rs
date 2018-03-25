@@ -125,7 +125,7 @@ impl ws::Handler for Data {
 
 fn main () {
 
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Listen on an address and call the closure for each connection
     if let Err(error) = ws::listen("127.0.0.1:3012", |out| {

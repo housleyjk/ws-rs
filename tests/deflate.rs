@@ -44,7 +44,7 @@ fn round_trip() {
 #[test]
 fn fragment() {
 
-    env_logger::init().unwrap();
+    env_logger::init();
     const MESSAGE: &'static str = "Hello";
 
     let mut name = "Client";

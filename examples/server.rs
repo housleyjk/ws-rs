@@ -9,7 +9,7 @@ use ws::listen;
 fn main () {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Listen on an address and call the closure for each connection
     if let Err(error) = listen("127.0.0.1:3012", |out| {

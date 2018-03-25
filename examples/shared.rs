@@ -10,7 +10,7 @@ use ws::{WebSocket, Sender};
 fn main () {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // A variable to distinguish the two halves
     let mut name = "Client";

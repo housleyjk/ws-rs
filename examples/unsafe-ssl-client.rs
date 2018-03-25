@@ -38,7 +38,7 @@ impl ws::Handler for Client {
 #[cfg(feature="ssl")]
 fn main () {
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     if let Err(error) = ws::connect("wss://localhost:3443/api/websocket", |out| {
 

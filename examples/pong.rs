@@ -14,7 +14,7 @@ const EXPIRE: Token = Token(2);
 fn main () {
 
     // Setup logging
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // Run the WebSocket
     listen("127.0.0.1:3012", |out| {
