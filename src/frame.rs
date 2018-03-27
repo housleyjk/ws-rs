@@ -171,8 +171,8 @@ impl Frame {
     #[inline]
     pub fn remove_mask(&mut self) -> &mut Frame {
         self.mask
-            .and_then(|mask| Some(apply_mask(&mut self.payload, &mask)));
-        self.mask = None;
+            .take()
+            .map(|mask| apply_mask(&mut self.payload, &mask));
         self
     }
 

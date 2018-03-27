@@ -511,12 +511,13 @@ where
                 .unwrap_or("UNKNOWN".into()),
             conn.events()
         );
-        Ok(poll.reregister(
+        poll.reregister(
             conn.socket(),
             conn.token(),
             conn.events(),
             PollOpt::edge() | PollOpt::oneshot(),
-        )?)
+        )?;
+        Ok(())
     }
 
     fn shutdown(&mut self) {

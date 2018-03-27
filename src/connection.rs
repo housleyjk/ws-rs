@@ -128,7 +128,8 @@ where
     }
 
     pub fn as_server(&mut self) -> Result<()> {
-        Ok(self.events.insert(Ready::readable()))
+        self.events.insert(Ready::readable());
+        Ok(())
     }
 
     pub fn as_client(&mut self, url: url::Url, addrs: Vec<SocketAddr>) -> Result<()> {
@@ -155,7 +156,10 @@ where
         };
 
         match ssl_stream {
-            Ok(stream) => Ok(self.socket = Stream::tls_live(stream)),
+            Ok(stream) => {
+                self.socket = Stream::tls_live(stream);
+                Ok(())
+            }
             Err(Error {
                 kind: Kind::SslHandshake(handshake_err),
                 details,
@@ -164,7 +168,8 @@ where
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
                 HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
-                    Ok(self.socket = Stream::tls(mid))
+                    self.socket = Stream::tls(mid);
+                    Ok(())
                 }
             },
             Err(e) => Err(e),
@@ -207,7 +212,10 @@ where
                     if self.socket.is_tls() {
                         let ssl_stream = self.handler.upgrade_ssl_client(sock, url);
                         match ssl_stream {
-                            Ok(stream) => Ok(self.socket = Stream::tls_live(stream)),
+                            Ok(stream) => {
+                                self.socket = Stream::tls_live(stream);
+                                Ok(())
+                            }
                             Err(Error {
                                 kind: Kind::SslHandshake(handshake_err),
                                 details,
@@ -216,13 +224,15 @@ where
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
                                 HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
-                                    Ok(self.socket = Stream::tls(mid))
+                                    self.socket = Stream::tls(mid);
+                                    Ok(())
                                 }
                             },
                             Err(e) => Err(e),
                         }
                     } else {
-                        Ok(self.socket = Stream::tcp(sock))
+                        self.socket = Stream::tcp(sock);
+                        Ok(())
                     }
                 } else {
                     if self.settings.panic_on_new_connection {
@@ -255,7 +265,8 @@ where
 
                 if let Some(ref addr) = self.addresses.pop() {
                     let sock = TcpStream::connect(addr)?;
-                    Ok(self.socket = Stream::tcp(sock))
+                    self.socket = Stream::tcp(sock);
+                    Ok(())
                 } else {
                     if self.settings.panic_on_new_connection {
                         panic!("Unable to connect to server.");
@@ -527,7 +538,8 @@ where
                 })?;
                 debug!("Connection to {} is now open.", self.peer_addr());
                 self.events.insert(Ready::readable());
-                return Ok(self.check_events());
+                self.check_events();
+                return Ok(());
             }
         } else {
             Err(Error::new(
@@ -626,7 +638,8 @@ where
                 self.read_frames()?;
             }
 
-            return Ok(self.check_events());
+            self.check_events();
+            return Ok(());
         }
         Err(Error::new(
             Kind::Internal,
@@ -942,7 +955,8 @@ where
                             // we are are a server that is closing and just wrote out our confirming
                             // close frame, let's disconnect
                             FinishedClose if self.is_server() => {
-                                return Ok(self.events = Ready::empty())
+                                self.events = Ready::empty();
+                                return Ok(());
                             }
                             _ => (),
                         }
@@ -950,7 +964,8 @@ where
                 }
 
                 // Check if there is more to write so that the connection will be rescheduled
-                Ok(self.check_events())
+                self.check_events();
+                Ok(())
             };
 
             if self.socket.is_negotiating() && res.is_ok() {
@@ -1017,7 +1032,8 @@ where
                 self.buffer_frame(frame)?;
             }
         }
-        Ok(self.check_events())
+        self.check_events();
+        Ok(())
     }
 
     #[inline]
@@ -1035,7 +1051,8 @@ where
         if let Some(frame) = self.handler.on_send_frame(Frame::ping(data))? {
             self.buffer_frame(frame)?;
         }
-        Ok(self.check_events())
+        self.check_events();
+        Ok(())
     }
 
     #[inline]
@@ -1053,7 +1070,8 @@ where
         if let Some(frame) = self.handler.on_send_frame(Frame::pong(data))? {
             self.buffer_frame(frame)?;
         }
-        Ok(self.check_events())
+        self.check_events();
+        Ok(())
     }
 
     #[inline]
@@ -1073,7 +1091,8 @@ where
                     reason.borrow(),
                     self.peer_addr()
                 );
-                return Ok(self.check_events());
+                self.check_events();
+                return Ok(());
             }
             // We are initiating a closing handshake.
             Open => self.state = AwaitingClose,
@@ -1097,7 +1116,8 @@ where
 
         trace!("Connection to {} is now closing.", self.peer_addr());
 
-        Ok(self.check_events())
+        self.check_events();
+        Ok(())
     }
 
     fn check_events(&mut self) {

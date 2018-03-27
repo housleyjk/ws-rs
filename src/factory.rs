@@ -129,7 +129,8 @@ mod test {
     struct M;
     impl Handler for M {
         fn on_message(&mut self, _: message::Message) -> Result<()> {
-            Ok(println!("test"))
+            println!("test");
+            Ok(())
         }
 
         fn on_frame(&mut self, f: frame::Frame) -> Result<Option<frame::Frame>> {
