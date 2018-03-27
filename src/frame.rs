@@ -401,7 +401,7 @@ impl Frame {
                 two |= 127;
             }
         }
-        w.write(&[one, two])?;
+        w.write_all(&[one, two])?;
 
         if let Some(length_bytes) = match self.payload.len() {
             len if len < 126 => None,
@@ -414,10 +414,10 @@ impl Frame {
         if self.is_masked() {
             let mask = self.mask.take().unwrap();
             apply_mask(&mut self.payload, &mask);
-            w.write(&mask)?;
+            w.write_all(&mask)?;
         }
 
-        w.write(&self.payload)?;
+        w.write_all(&self.payload)?;
         Ok(())
     }
 }

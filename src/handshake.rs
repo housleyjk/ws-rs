@@ -386,7 +386,7 @@ impl Request {
         write!(w, "{} {} HTTP/1.1\r\n", self.method, self.path)?;
         for &(ref key, ref val) in self.headers.iter() {
             write!(w, "{}: ", key)?;
-            w.write(val)?;
+            w.write_all(val)?;
             write!(w, "\r\n")?;
         }
         write!(w, "\r\n")?;
@@ -627,11 +627,11 @@ impl Response {
         write!(w, "HTTP/1.1 {} {}\r\n", self.status, self.reason)?;
         for &(ref key, ref val) in self.headers.iter() {
             write!(w, "{}: ", key)?;
-            w.write(val)?;
+            w.write_all(val)?;
             write!(w, "\r\n")?;
         }
         write!(w, "\r\n")?;
-        w.write(&self.body)?;
+        w.write_all(&self.body)?;
         Ok(())
     }
 }
