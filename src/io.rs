@@ -565,7 +565,7 @@ where
     #[inline]
     fn check_count(&mut self) {
         trace!("Active connections {:?}", self.connections.len());
-        if self.connections.len() == 0 {
+        if self.connections.is_empty() {
             if !self.state.is_active() {
                 debug!("Shutting down websocket server.");
             } else if self.is_client() {
