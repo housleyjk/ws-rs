@@ -548,7 +548,7 @@ where
             self.schedule(poll, &self.connections[token])
                 .or_else(|err| {
                     // This will be an io error, so disconnect will already be called
-                    self.connections[token].error(Error::from(err));
+                    self.connections[token].error(err);
                     let handler = self.connections.remove(token).unwrap().consume();
                     self.factory.connection_lost(handler);
                     Ok::<(), Error>(())
