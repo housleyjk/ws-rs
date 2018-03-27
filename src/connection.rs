@@ -761,7 +761,7 @@ where
                             let mut data = Cursor::new(frame.into_data());
                             if let 2 = data.read(&mut close_code)? {
                                 let raw_code: u16 =
-                                    (close_code[0] as u16) << 8 | (close_code[1] as u16);
+                                    (u16::from(close_code[0]) << 8) | (u16::from(close_code[1]));
                                 trace!(
                                     "Connection to {} received raw close code: {:?}, {:?}",
                                     self.peer_addr(),

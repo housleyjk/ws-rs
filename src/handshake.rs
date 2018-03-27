@@ -35,7 +35,7 @@ fn encode_base64(data: &[u8]) -> String {
 
     let mut encoded = vec![b'='; (len + 2) / 3 * 4];
     {
-        let mut in_iter = data[..len - mod_len].iter().map(|&c| c as u32);
+        let mut in_iter = data[..len - mod_len].iter().map(|&c| u32::from(c));
         let mut out_iter = encoded.iter_mut();
 
         let enc = |val| BASE64[val as usize];
@@ -53,12 +53,12 @@ fn encode_base64(data: &[u8]) -> String {
 
         match mod_len {
             1 => {
-                let pad = (data[len - 1] as u32) << 16;
+                let pad = (u32::from(data[len - 1])) << 16;
                 write(enc((pad >> 18) & 63));
                 write(enc((pad >> 12) & 63));
             }
             2 => {
-                let pad = (data[len - 2] as u32) << 16 | (data[len - 1] as u32) << 8;
+                let pad = (u32::from(data[len - 2])) << 16 | (u32::from(data[len - 1])) << 8;
                 write(enc((pad >> 18) & 63));
                 write(enc((pad >> 12) & 63));
                 write(enc((pad >> 6) & 63));

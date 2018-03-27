@@ -270,7 +270,7 @@ impl Frame {
 
         let mut header_length = 2;
 
-        let mut length = (second & 0x7F) as u64;
+        let mut length = u64::from(second & 0x7F);
 
         if let Some(length_nbytes) = match length {
             126 => Some(2),
