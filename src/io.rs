@@ -464,8 +464,8 @@ where
         self.state = State::Inactive;
 
         result
-            .and(poll.deregister(&self.timer).map_err(|e| Error::from(e)))
-            .and(poll.deregister(&self.queue_rx).map_err(|e| Error::from(e)))
+            .and(poll.deregister(&self.timer).map_err(Error::from))
+            .and(poll.deregister(&self.queue_rx).map_err(Error::from))
     }
 
     #[inline]
