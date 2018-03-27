@@ -465,7 +465,7 @@ where
             match self.endpoint {
                 Server => {
                     let mut done = false;
-                    if let Some(_) = self.socket.try_write_buf(res)? {
+                    if self.socket.try_write_buf(res)?.is_some() {
                         if res.position() as usize == res.get_ref().len() {
                             done = true
                         }
@@ -475,7 +475,7 @@ where
                     }
                 }
                 Client(_) => {
-                    if let Some(_) = self.socket.try_write_buf(req)? {
+                    if self.socket.try_write_buf(req)?.is_some() {
                         if req.position() as usize == req.get_ref().len() {
                             trace!(
                                 "Finished writing handshake request to {}",
@@ -541,7 +541,7 @@ where
         if let Connecting(ref mut req, ref mut res) = self.state {
             match self.endpoint {
                 Server => {
-                    if let Some(_) = self.socket.try_read_buf(req.get_mut())? {
+                    if self.socket.try_read_buf(req.get_mut())?.is_some() {
                         if let Some(ref request) = Request::parse(req.get_ref())? {
                             trace!("Handshake request received: \n{}", request);
                             let response = self.handler.on_request(request)?;
@@ -553,7 +553,7 @@ where
                     return Ok(());
                 }
                 Client(_) => {
-                    if let Some(_) = self.socket.try_read_buf(res.get_mut())? {
+                    if self.socket.try_read_buf(res.get_mut())?.is_some() {
                         // TODO: see if this can be optimized with drain
                         let end = {
                             let data = res.get_ref();
@@ -997,7 +997,7 @@ where
                 self.buffer_frame(first)?;
 
                 while let Some(chunk) = chunks.next() {
-                    if let Some(_) = chunks.peek() {
+                    if chunks.peek().is_some() {
                         self.buffer_frame(Frame::message(
                             Vec::from(chunk),
                             OpCode::Continue,

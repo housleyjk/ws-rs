@@ -919,7 +919,7 @@ where
                     }
                 }
 
-                if let Some(_) = self.connections.get(token) {
+                if self.connections.get(token).is_some() {
                     if let Err(err) = self.schedule(poll, &self.connections[token]) {
                         self.connections[token].error(err)
                     }
