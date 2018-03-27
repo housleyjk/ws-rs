@@ -161,7 +161,7 @@ impl Request {
     /// Get the unhashed WebSocket key sent in the request.
     pub fn key(&self) -> Result<&Vec<u8>> {
         self.header("sec-websocket-key")
-            .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+            .ok_or_else(|| Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
     /// Get the hashed WebSocket key from this request.
@@ -360,7 +360,7 @@ impl Request {
                     "Host".into(),
                     format!(
                         "{}:{}",
-                        url.host_str().ok_or(Error::new(
+                        url.host_str().ok_or_else(|| Error::new(
                             Kind::Internal,
                             "No host passed for WebSocket connection.",
                         ))?,
@@ -506,7 +506,7 @@ impl Response {
     /// Get the hashed WebSocket key.
     pub fn key(&self) -> Result<&Vec<u8>> {
         self.header("sec-websocket-accept")
-            .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+            .ok_or_else(|| Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
     /// Get the protocol that the server has decided to use.

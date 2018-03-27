@@ -508,7 +508,7 @@ where
             conn.socket()
                 .peer_addr()
                 .map(|addr| addr.to_string())
-                .unwrap_or("UNKNOWN".into()),
+                .unwrap_or_else(|_| "UNKNOWN".into()),
             conn.events()
         );
         poll.reregister(

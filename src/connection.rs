@@ -493,7 +493,7 @@ where
                                 self.socket
                                     .peer_addr()
                                     .map(|addr| addr.to_string())
-                                    .unwrap_or("UNKNOWN".into())
+                                    .unwrap_or_else(|_| "UNKNOWN".into())
                             );
                             self.events.insert(Ready::readable());
                             self.events.remove(Ready::writable());
@@ -521,10 +521,12 @@ where
                 }
             };
 
-            let response = Response::parse(res.get_ref())?.ok_or(Error::new(
-                Kind::Internal,
-                "Failed to parse response after handshake is complete.",
-            ))?;
+            let response = Response::parse(res.get_ref())?.ok_or_else(|| {
+                Error::new(
+                    Kind::Internal,
+                    "Failed to parse response after handshake is complete.",
+                )
+            })?;
 
             if response.status() != 101 {
                 self.events = Ready::empty();
@@ -591,15 +593,19 @@ where
                 self.peer_addr()
             );
 
-            let request = Request::parse(req.get_ref())?.ok_or(Error::new(
-                Kind::Internal,
-                "Failed to parse request after handshake is complete.",
-            ))?;
+            let request = Request::parse(req.get_ref())?.ok_or_else(|| {
+                Error::new(
+                    Kind::Internal,
+                    "Failed to parse request after handshake is complete.",
+                )
+            })?;
 
-            let response = Response::parse(res.get_ref())?.ok_or(Error::new(
-                Kind::Internal,
-                "Failed to parse response after handshake is complete.",
-            ))?;
+            let response = Response::parse(res.get_ref())?.ok_or_else(|| {
+                Error::new(
+                    Kind::Internal,
+                    "Failed to parse response after handshake is complete.",
+                )
+            })?;
 
             trace!("Handshake response received: \n{}", response);
 
