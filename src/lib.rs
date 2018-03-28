@@ -352,7 +352,7 @@ where
 }
 
 /// Utility for constructing a WebSocket from various settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Builder {
     settings: Settings,
 }
@@ -361,9 +361,7 @@ pub struct Builder {
 impl Builder {
     /// Create a new Builder with default settings.
     pub fn new() -> Builder {
-        Builder {
-            settings: Settings::default(),
-        }
+        Builder::default()
     }
 
     /// Build a WebSocket using this builder and a factory.
