@@ -50,8 +50,6 @@ pub enum Kind {
     /// If encountered, retuning from a handler method and waiting for the EventLoop to consume
     /// the queue may relieve the situation.
     Queue(mio::channel::SendError<Command>),
-    /// Indicates a failure to schedule a timeout on the EventLoop.
-    Timer(mio::timer::TimerError),
     /// Indicates a failure to perform SSL encryption.
     #[cfg(feature = "ssl")]
     Ssl(SslError),
@@ -123,7 +121,6 @@ impl StdError for Error {
             #[cfg(feature = "ssl")]
             Kind::SslHandshake(ref err) => err.description(),
             Kind::Queue(_) => "Unable to send signal on event loop",
-            Kind::Timer(_) => "Unable to schedule timeout on event loop",
             Kind::Custom(ref err) => err.description(),
         }
     }
@@ -171,14 +168,6 @@ impl From<mio::channel::SendError<Command>> for Error {
         match err {
             mio::channel::SendError::Io(err) => Error::from(err),
             _ => Error::new(Kind::Queue(err), ""),
-        }
-    }
-}
-
-impl From<mio::timer::TimerError> for Error {
-    fn from(err: mio::timer::TimerError) -> Error {
-        match err {
-            _ => Error::new(Kind::Timer(err), ""),
         }
     }
 }

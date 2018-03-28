@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use url;
 use mio;
 use mio::Token;
+use mio_extras::timer::Timeout;
 
 use message;
 use result::{Error, Result};
@@ -20,7 +21,7 @@ pub enum Signal {
     Connect(url::Url),
     Shutdown,
     Timeout { delay: u64, token: Token },
-    Cancel(mio::timer::Timeout),
+    Cancel(Timeout),
 }
 
 #[derive(Debug, Clone)]
@@ -216,7 +217,7 @@ impl Sender {
     /// possible to call this method after a timeout has already occurred. It is still necessary to
     /// handle spurious timeouts.
     #[inline]
-    pub fn cancel(&self, timeout: mio::timer::Timeout) -> Result<()> {
+    pub fn cancel(&self, timeout: Timeout) -> Result<()> {
         self.channel
             .send(Command {
                 token: self.token,

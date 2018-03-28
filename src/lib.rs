@@ -7,6 +7,7 @@ extern crate byteorder;
 extern crate bytes;
 extern crate httparse;
 extern crate mio;
+extern crate mio_extras;
 #[cfg(feature = "ssl")]
 extern crate openssl;
 extern crate rand;

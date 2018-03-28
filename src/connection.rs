@@ -7,7 +7,7 @@ use std::str::from_utf8;
 
 use url;
 use mio::{Ready, Token};
-use mio::timer::Timeout;
+use mio_extras::timer::Timeout;
 use mio::tcp::TcpStream;
 
 #[cfg(feature = "ssl")]
@@ -430,12 +430,6 @@ where
                         self.disconnect()
                     }
                     Kind::Custom(_) => {
-                        self.handler.on_error(err);
-                    }
-                    Kind::Timer(_) => {
-                        if self.settings.panic_on_timeout {
-                            panic!("Panicking on timer failure -- {}", err);
-                        }
                         self.handler.on_error(err);
                     }
                     Kind::Queue(_) => {

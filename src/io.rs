@@ -7,6 +7,7 @@ use std::io::{Error as IoError, ErrorKind};
 use mio;
 use mio::{Poll, PollOpt, Ready, Token};
 use mio::tcp::{TcpListener, TcpStream};
+use mio_extras;
 
 use url::Url;
 
@@ -87,7 +88,7 @@ where
     state: State,
     queue_tx: mio::channel::SyncSender<Command>,
     queue_rx: mio::channel::Receiver<Command>,
-    timer: mio::timer::Timer<Timeout>,
+    timer: mio_extras::timer::Timer<Timeout>,
     next_connection_id: u32,
 }
 
@@ -97,7 +98,7 @@ where
 {
     pub fn new(factory: F, settings: Settings) -> Handler<F> {
         let (tx, rx) = mio::channel::sync_channel(settings.max_connections * settings.queue_size);
-        let timer = mio::timer::Builder::default()
+        let timer = mio_extras::timer::Builder::default()
             .tick_duration(Duration::from_millis(TIMER_TICK_MILLIS))
             .num_slots(TIMER_WHEEL_SIZE)
             .capacity(TIMER_CAPACITY)
@@ -770,26 +771,16 @@ where
                         delay,
                         token: event,
                     } => {
-                        match self.timer
-                            .set_timeout(
-                                Duration::from_millis(delay),
-                                Timeout {
-                                    connection: ALL,
-                                    event,
-                                },
-                            )
-                            .map_err(Error::from)
-                        {
-                            Ok(timeout) => for conn in self.connections.iter_mut() {
-                                if let Err(err) = conn.new_timeout(event, timeout.clone()) {
-                                    conn.error(err)
-                                }
+                        let timeout = self.timer.set_timeout(
+                            Duration::from_millis(delay),
+                            Timeout {
+                                connection: ALL,
+                                event,
                             },
-                            Err(err) => {
-                                if self.settings.panic_on_timeout {
-                                    panic!("Unable to schedule timeout: {:?}", err);
-                                }
-                                error!("Unable to schedule timeout: {:?}", err);
+                        );
+                        for conn in self.connections.iter_mut() {
+                            if let Err(err) = conn.new_timeout(event, timeout.clone()) {
+                                conn.error(err);
                             }
                         }
                         return;
@@ -885,32 +876,19 @@ where
                         delay,
                         token: event,
                     } => {
-                        match self.timer
-                            .set_timeout(
-                                Duration::from_millis(delay),
-                                Timeout {
-                                    connection: token,
-                                    event,
-                                },
-                            )
-                            .map_err(Error::from)
-                        {
-                            Ok(timeout) => {
-                                if let Some(conn) = self.connections.get_mut(token) {
-                                    if let Err(err) = conn.new_timeout(event, timeout) {
-                                        conn.error(err)
-                                    }
-                                } else {
-                                    trace!("Connection disconnected while pong signal was waiting in the queue.")
-                                }
+                        let timeout = self.timer.set_timeout(
+                            Duration::from_millis(delay),
+                            Timeout {
+                                connection: token,
+                                event,
+                            },
+                        );
+                        if let Some(conn) = self.connections.get_mut(token) {
+                            if let Err(err) = conn.new_timeout(event, timeout) {
+                                conn.error(err)
                             }
-                            Err(err) => {
-                                if let Some(conn) = self.connections.get_mut(token) {
-                                    conn.error(err)
-                                } else {
-                                    trace!("Connection disconnected while pong signal was waiting in the queue.")
-                                }
-                            }
+                        } else {
+                            trace!("Connection disconnected while pong signal was waiting in the queue.")
                         }
                         return;
                     }
