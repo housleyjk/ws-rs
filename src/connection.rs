@@ -119,10 +119,10 @@ where
             fragments: VecDeque::with_capacity(settings.fragments_capacity),
             in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
             out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
-            handler: handler,
+            handler,
             addresses: Vec::new(),
-            settings: settings,
-            connection_id: connection_id,
+            settings,
+            connection_id,
         }
     }
 
@@ -532,8 +532,8 @@ where
                 return Ok(());
             } else {
                 self.handler.on_open(Handshake {
-                    request: request,
-                    response: response,
+                    request,
+                    response,
                     peer_addr: self.socket.peer_addr().ok(),
                     local_addr: self.socket.local_addr().ok(),
                 })?;
@@ -632,8 +632,8 @@ where
 
             self.handler.on_response(&response)?;
             self.handler.on_open(Handshake {
-                request: request,
-                response: response,
+                request,
+                response,
                 peer_addr: self.socket.peer_addr().ok(),
                 local_addr: self.socket.local_addr().ok(),
             })?;

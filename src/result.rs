@@ -76,7 +76,7 @@ impl Error {
         I: Into<Cow<'static, str>>,
     {
         Error {
-            kind: kind,
+            kind,
             details: details.into(),
         }
     }

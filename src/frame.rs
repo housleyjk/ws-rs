@@ -199,7 +199,7 @@ impl Frame {
         );
 
         Frame {
-            finished: finished,
+            finished,
             opcode: code,
             payload: data,
             ..Frame::default()
@@ -238,7 +238,7 @@ impl Frame {
         };
 
         Frame {
-            payload: payload,
+            payload,
             ..Frame::default()
         }
     }
@@ -358,12 +358,12 @@ impl Frame {
         }
 
         let frame = Frame {
-            finished: finished,
-            rsv1: rsv1,
-            rsv2: rsv2,
-            rsv3: rsv3,
-            opcode: opcode,
-            mask: mask,
+            finished,
+            rsv1,
+            rsv2,
+            rsv3,
+            opcode,
+            mask,
             payload: data,
         };
 

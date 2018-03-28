@@ -430,10 +430,10 @@ impl Response {
         R: Into<String>,
     {
         Response {
-            status: status,
+            status,
             reason: reason.into(),
             headers: vec![("Content-Length".into(), body.len().to_string().into())],
-            body: body,
+            body,
         }
     }
 

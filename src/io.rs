@@ -105,12 +105,12 @@ where
         Handler {
             listener: None,
             connections: Slab::with_capacity(settings.max_connections),
-            factory: factory,
-            settings: settings,
+            factory,
+            settings,
             state: State::Inactive,
             queue_tx: tx,
             queue_rx: rx,
-            timer: timer,
+            timer,
             next_connection_id: 0,
         }
     }
@@ -775,7 +775,7 @@ where
                                 Duration::from_millis(delay),
                                 Timeout {
                                     connection: ALL,
-                                    event: event,
+                                    event,
                                 },
                             )
                             .map_err(Error::from)
@@ -890,7 +890,7 @@ where
                                 Duration::from_millis(delay),
                                 Timeout {
                                     connection: token,
-                                    event: event,
+                                    event,
                                 },
                             )
                             .map_err(Error::from)

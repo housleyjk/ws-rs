@@ -68,9 +68,9 @@ impl Sender {
         connection_id: u32,
     ) -> Sender {
         Sender {
-            token: token,
-            channel: channel,
-            connection_id: connection_id,
+            token,
+            channel,
+            connection_id,
         }
     }
 
@@ -204,10 +204,7 @@ impl Sender {
         self.channel
             .send(Command {
                 token: self.token,
-                signal: Signal::Timeout {
-                    delay: ms,
-                    token: token,
-                },
+                signal: Signal::Timeout { delay: ms, token },
                 connection_id: self.connection_id,
             })
             .map_err(Error::from)
