@@ -67,8 +67,7 @@ impl State {
     #[inline]
     pub fn is_closing(&self) -> bool {
         match *self {
-            State::AwaitingClose => true,
-            State::FinishedClose => true,
+            State::AwaitingClose | State::FinishedClose => true,
             _ => false,
         }
     }
