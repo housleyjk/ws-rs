@@ -8,7 +8,7 @@ use rand;
 use url;
 use httparse;
 
-use result::{Result, Error, Kind};
+use result::{Error, Kind, Result};
 
 static WS_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -35,28 +35,30 @@ fn encode_base64(data: &[u8]) -> String {
 
     let mut encoded = vec![b'='; (len + 2) / 3 * 4];
     {
-        let mut in_iter = data[..len - mod_len].iter().map(|&c| c as u32);
+        let mut in_iter = data[..len - mod_len].iter().map(|&c| u32::from(c));
         let mut out_iter = encoded.iter_mut();
 
         let enc = |val| BASE64[val as usize];
         let mut write = |val| *out_iter.next().unwrap() = val;
 
-        while let (Some(one), Some(two), Some(three)) = (in_iter.next(), in_iter.next(), in_iter.next()) {
+        while let (Some(one), Some(two), Some(three)) =
+            (in_iter.next(), in_iter.next(), in_iter.next())
+        {
             let g24 = one << 16 | two << 8 | three;
             write(enc((g24 >> 18) & 63));
             write(enc((g24 >> 12) & 63));
-            write(enc((g24 >> 6 ) & 63));
+            write(enc((g24 >> 6) & 63));
             write(enc(g24 & 63));
         }
 
         match mod_len {
             1 => {
-                let pad = (data[len-1] as u32) << 16;
+                let pad = (u32::from(data[len - 1])) << 16;
                 write(enc((pad >> 18) & 63));
                 write(enc((pad >> 12) & 63));
             }
             2 => {
-                let pad = (data[len-2] as u32) << 16 | (data[len-1] as u32) << 8;
+                let pad = (u32::from(data[len - 2])) << 16 | (u32::from(data[len - 1])) << 8;
                 write(enc((pad >> 18) & 63));
                 write(enc((pad >> 12) & 63));
                 write(enc((pad >> 6) & 63));
@@ -83,7 +85,6 @@ pub struct Handshake {
 }
 
 impl Handshake {
-
     /// Get the IP address of the remote connection.
     ///
     /// This is the preferred method of obtaining the client's IP address.
@@ -98,7 +99,7 @@ impl Handshake {
     /// This method does not ensure that the address is a valid IP address.
     #[allow(dead_code)]
     pub fn remote_addr(&self) -> Result<Option<String>> {
-        Ok(try!(self.request.client_addr()).map(String::from).or_else(|| {
+        Ok(self.request.client_addr()?.map(String::from).or_else(|| {
             if let Some(addr) = self.peer_addr {
                 Some(addr.ip().to_string())
             } else {
@@ -106,9 +107,7 @@ impl Handshake {
             }
         }))
     }
-
 }
-
 
 /// The handshake request.
 #[derive(Debug)]
@@ -119,7 +118,6 @@ pub struct Request {
 }
 
 impl Request {
-
     /// Get the value of the first instance of an HTTP header.
     pub fn header(&self, header: &str) -> Option<&Vec<u8>> {
         self.headers
@@ -154,7 +152,7 @@ impl Request {
     #[allow(dead_code)]
     pub fn origin(&self) -> Result<Option<&str>> {
         if let Some(origin) = self.header("origin") {
-            Ok(Some(try!(from_utf8(origin))))
+            Ok(Some(from_utf8(origin)?))
         } else {
             Ok(None)
         }
@@ -163,12 +161,12 @@ impl Request {
     /// Get the unhashed WebSocket key sent in the request.
     pub fn key(&self) -> Result<&Vec<u8>> {
         self.header("sec-websocket-key")
-            .ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+            .ok_or_else(|| Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
     /// Get the hashed WebSocket key from this request.
     pub fn hashed_key(&self) -> Result<String> {
-        Ok(hash_key(try!(self.key())))
+        Ok(hash_key(self.key()?))
     }
 
     /// Get the WebSocket protocol version from the request (should be 13).
@@ -177,14 +175,17 @@ impl Request {
         if let Some(version) = self.header("sec-websocket-version") {
             from_utf8(version).map_err(Error::from)
         } else {
-            Err(Error::new(Kind::Protocol, "The Sec-WebSocket-Version header is missing."))
+            Err(Error::new(
+                Kind::Protocol,
+                "The Sec-WebSocket-Version header is missing.",
+            ))
         }
     }
 
     /// Get the request method.
     #[inline]
     pub fn method(&self) -> &str {
-      &self.method
+        &self.method
     }
 
     /// Get the path of the request.
@@ -198,7 +199,10 @@ impl Request {
     #[allow(dead_code)]
     pub fn protocols(&self) -> Result<Vec<&str>> {
         if let Some(protos) = self.header("sec-websocket-protocol") {
-            Ok(try!(from_utf8(protos)).split(',').map(|proto| proto.trim()).collect())
+            Ok(from_utf8(protos)?
+                .split(',')
+                .map(|proto| proto.trim())
+                .collect())
         } else {
             Ok(Vec::new())
         }
@@ -211,9 +215,10 @@ impl Request {
         if let Some(protos) = self.header_mut("sec-websocket-protocol") {
             protos.push(b","[0]);
             protos.extend(protocol.as_bytes());
-            return
+            return;
         }
-        self.headers_mut().push(("Sec-WebSocket-Protocol".into(), protocol.into()))
+        self.headers_mut()
+            .push(("Sec-WebSocket-Protocol".into(), protocol.into()))
     }
 
     /// Remove a possible protocol from this request.
@@ -227,7 +232,8 @@ impl Request {
                     .split(',')
                     .filter(|proto| proto.trim() == protocol)
                     .collect::<Vec<&str>>()
-                    .join(",").into();
+                    .join(",")
+                    .into();
             }
             if new_protos.len() < protos.len() {
                 *protos = new_protos
@@ -239,7 +245,7 @@ impl Request {
     #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
         if let Some(exts) = self.header("sec-websocket-extensions") {
-            Ok(try!(from_utf8(exts)).split(',').map(|ext| ext.trim()).collect())
+            Ok(from_utf8(exts)?.split(',').map(|ext| ext.trim()).collect())
         } else {
             Ok(Vec::new())
         }
@@ -254,9 +260,10 @@ impl Request {
         if let Some(exts) = self.header_mut("sec-websocket-extensions") {
             exts.push(b","[0]);
             exts.extend(ext.as_bytes());
-            return
+            return;
         }
-        self.headers_mut().push(("Sec-WebSocket-Extensions".into(), ext.into()))
+        self.headers_mut()
+            .push(("Sec-WebSocket-Extensions".into(), ext.into()))
     }
 
     /// Remove a possible extension from this request.
@@ -271,7 +278,8 @@ impl Request {
                     .split(',')
                     .filter(|e| e.trim().starts_with(ext))
                     .collect::<Vec<&str>>()
-                    .join(",").into();
+                    .join(",")
+                    .into();
             }
             if new_exts.len() < exts.len() {
                 *exts = new_exts
@@ -296,19 +304,19 @@ impl Request {
     #[allow(dead_code)]
     pub fn client_addr(&self) -> Result<Option<&str>> {
         if let Some(x_forward) = self.header("x-forwarded-for") {
-            return Ok(try!(from_utf8(x_forward)).split(',').next())
+            return Ok(from_utf8(x_forward)?.split(',').next());
         }
 
         // We only care about the first forwarded header, so header is ok
         if let Some(forward) = self.header("forwarded") {
-            if let Some(_for) = try!(from_utf8(forward))
+            if let Some(_for) = from_utf8(forward)?
                 .split(';')
                 .find(|f| f.trim().starts_with("for"))
             {
                 if let Some(_for_eq) = _for.trim().split(',').next() {
                     let mut it = _for_eq.split('=');
                     it.next();
-                    return Ok(it.next())
+                    return Ok(it.next());
                 }
             }
         }
@@ -320,12 +328,15 @@ impl Request {
     pub fn parse(buf: &[u8]) -> Result<Option<Request>> {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut req = httparse::Request::new(&mut headers);
-        let parsed = try!(req.parse(buf));
+        let parsed = req.parse(buf)?;
         if !parsed.is_partial() {
             Ok(Some(Request {
                 path: req.path.unwrap().into(),
                 method: req.method.unwrap().into(),
-                headers: req.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
+                headers: req.headers
+                    .iter()
+                    .map(|h| (h.name.into(), h.value.into()))
+                    .collect(),
             }))
         } else {
             Ok(None)
@@ -334,7 +345,6 @@ impl Request {
 
     /// Construct a new WebSocket handshake HTTP request from a url.
     pub fn from_url(url: &url::Url) -> Result<Request> {
-
         let query = if let Some(q) = url.query() {
             format!("?{}", q)
         } else {
@@ -342,10 +352,7 @@ impl Request {
         };
 
         let req = Request {
-            path: format!(
-                "{}{}",
-                url.path(),
-                query),
+            path: format!("{}{}", url.path(), query),
             method: "GET".to_owned(),
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
@@ -353,9 +360,12 @@ impl Request {
                     "Host".into(),
                     format!(
                         "{}:{}",
-                        try!(url.host_str().ok_or(
-                            Error::new(Kind::Internal, "No host passed for WebSocket connection."))),
-                        url.port_or_known_default().unwrap_or(80)).into(),
+                        url.host_str().ok_or_else(|| Error::new(
+                            Kind::Internal,
+                            "No host passed for WebSocket connection.",
+                        ))?,
+                        url.port_or_known_default().unwrap_or(80)
+                    ).into(),
                 ),
                 ("Sec-WebSocket-Version".into(), "13".into()),
                 ("Sec-WebSocket-Key".into(), generate_key().into()),
@@ -370,34 +380,36 @@ impl Request {
 
     /// Write a request out to a buffer
     pub fn format<W>(&self, w: &mut W) -> Result<()>
-        where W: Write,
+    where
+        W: Write,
     {
-        try!(write!(w, "{} {} HTTP/1.1\r\n", self.method, self.path));
-        for &(ref key, ref val) in self.headers.iter() {
-            try!(write!(w, "{}: ", key));
-            try!(w.write(val));
-            try!(write!(w, "\r\n"));
+        write!(w, "{} {} HTTP/1.1\r\n", self.method, self.path)?;
+        for &(ref key, ref val) in &self.headers {
+            write!(w, "{}: ", key)?;
+            w.write_all(val)?;
+            write!(w, "\r\n")?;
         }
-        try!(write!(w, "\r\n"));
+        write!(w, "\r\n")?;
         Ok(())
     }
-
 }
 
 impl fmt::Display for Request {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
-        try!(self.format(&mut s).map_err(|err| {
+        self.format(&mut s).map_err(|err| {
             error!("{:?}", err);
             fmt::Error
-        }));
-        write!(f, "{}", try!(from_utf8(&s).map_err(|err| {
-            error!("Unable to format request as utf8: {:?}", err);
-            fmt::Error
-        })))
+        })?;
+        write!(
+            f,
+            "{}",
+            from_utf8(&s).map_err(|err| {
+                error!("Unable to format request as utf8: {:?}", err);
+                fmt::Error
+            })?
+        )
     }
-
 }
 
 /// The handshake response.
@@ -414,15 +426,16 @@ impl Response {
 
     /// Construct a generic HTTP response with a body.
     pub fn new<R>(status: u16, reason: R, body: Vec<u8>) -> Response
-            where R: Into<String>,
-        {
-            Response {
-                status: status,
-                reason: reason.into(),
-                headers: vec![("Content-Length".into(), body.len().to_string().into())],
-                body: body
-            }
+    where
+        R: Into<String>,
+    {
+        Response {
+            status,
+            reason: reason.into(),
+            headers: vec![("Content-Length".into(), body.len().to_string().into())],
+            body,
         }
+    }
 
     /// Get the response body.
     #[inline]
@@ -469,7 +482,7 @@ impl Response {
     /// Set the HTTP status code.
     #[allow(dead_code)]
     #[inline]
-    pub fn set_status(&mut self, status: u16)  {
+    pub fn set_status(&mut self, status: u16) {
         self.status = status
     }
 
@@ -480,26 +493,27 @@ impl Response {
         &self.reason
     }
 
-
     /// Set the HTTP status reason.
     #[allow(dead_code)]
     #[inline]
     pub fn set_reason<R>(&mut self, reason: R)
-        where R: Into<String>
+    where
+        R: Into<String>,
     {
         self.reason = reason.into()
     }
 
     /// Get the hashed WebSocket key.
     pub fn key(&self) -> Result<&Vec<u8>> {
-        self.header("sec-websocket-accept").ok_or(Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
+        self.header("sec-websocket-accept")
+            .ok_or_else(|| Error::new(Kind::Protocol, "Unable to parse WebSocket key."))
     }
 
     /// Get the protocol that the server has decided to use.
     #[allow(dead_code)]
     pub fn protocol(&self) -> Result<Option<&str>> {
         if let Some(proto) = self.header("sec-websocket-protocol") {
-            Ok(Some(try!(from_utf8(proto))))
+            Ok(Some(from_utf8(proto)?))
         } else {
             Ok(None)
         }
@@ -510,9 +524,10 @@ impl Response {
     pub fn set_protocol(&mut self, protocol: &str) {
         if let Some(proto) = self.header_mut("sec-websocket-protocol") {
             *proto = protocol.into();
-            return
+            return;
         }
-        self.headers_mut().push(("Sec-WebSocket-Protocol".into(), protocol.into()))
+        self.headers_mut()
+            .push(("Sec-WebSocket-Protocol".into(), protocol.into()))
     }
 
     /// Get the extensions that the server has decided to use. If these are unacceptable, it is
@@ -520,7 +535,10 @@ impl Response {
     #[allow(dead_code)]
     pub fn extensions(&self) -> Result<Vec<&str>> {
         if let Some(exts) = self.header("sec-websocket-extensions") {
-            Ok(try!(from_utf8(exts)).split(',').map(|proto| proto.trim()).collect())
+            Ok(from_utf8(exts)?
+                .split(',')
+                .map(|proto| proto.trim())
+                .collect())
         } else {
             Ok(Vec::new())
         }
@@ -533,9 +551,10 @@ impl Response {
         if let Some(exts) = self.header_mut("sec-websocket-extensions") {
             exts.push(b","[0]);
             exts.extend(ext.as_bytes());
-            return
+            return;
         }
-        self.headers_mut().push(("Sec-WebSocket-Extensions".into(), ext.into()))
+        self.headers_mut()
+            .push(("Sec-WebSocket-Extensions".into(), ext.into()))
     }
 
     /// Remove an accepted extension from this response.
@@ -550,7 +569,8 @@ impl Response {
                     .split(',')
                     .filter(|e| e.trim().starts_with(ext))
                     .collect::<Vec<&str>>()
-                    .join(",").into();
+                    .join(",")
+                    .into();
             }
             if new_exts.len() < exts.len() {
                 *exts = new_exts
@@ -564,12 +584,15 @@ impl Response {
         let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
         let mut res = httparse::Response::new(&mut headers);
 
-        let parsed = try!(res.parse(buf));
+        let parsed = res.parse(buf)?;
         if !parsed.is_partial() {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
-                headers: res.headers.iter().map(|h| (h.name.into(), h.value.into())).collect(),
+                headers: res.headers
+                    .iter()
+                    .map(|h| (h.name.into(), h.value.into()))
+                    .collect(),
                 body: Vec::new(),
             }))
         } else {
@@ -586,7 +609,7 @@ impl Response {
             reason: "Switching Protocols".into(),
             headers: vec![
                 ("Connection".into(), "Upgrade".into()),
-                ("Sec-WebSocket-Accept".into(), try!(req.hashed_key()).into()),
+                ("Sec-WebSocket-Accept".into(), req.hashed_key()?.into()),
                 ("Upgrade".into(), "websocket".into()),
             ],
             body: Vec::new(),
@@ -598,34 +621,37 @@ impl Response {
 
     /// Write a response out to a buffer
     pub fn format<W>(&self, w: &mut W) -> Result<()>
-        where W: Write
+    where
+        W: Write,
     {
-        try!(write!(w, "HTTP/1.1 {} {}\r\n", self.status, self.reason));
-        for &(ref key, ref val) in self.headers.iter() {
-            try!(write!(w, "{}: ", key));
-            try!(w.write(val));
-            try!(write!(w, "\r\n"));
+        write!(w, "HTTP/1.1 {} {}\r\n", self.status, self.reason)?;
+        for &(ref key, ref val) in &self.headers {
+            write!(w, "{}: ", key)?;
+            w.write_all(val)?;
+            write!(w, "\r\n")?;
         }
-        try!(write!(w, "\r\n"));
-        try!(w.write(&self.body));
+        write!(w, "\r\n")?;
+        w.write_all(&self.body)?;
         Ok(())
     }
 }
 
 impl fmt::Display for Response {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
-        try!(self.format(&mut s).map_err(|err| {
+        self.format(&mut s).map_err(|err| {
             error!("{:?}", err);
             fmt::Error
-        }));
-        write!(f, "{}", try!(from_utf8(&s).map_err(|err| {
-            error!("Unable to format response as utf8: {:?}", err);
-            fmt::Error
-        })))
+        })?;
+        write!(
+            f,
+            "{}",
+            from_utf8(&s).map_err(|err| {
+                error!("Unable to format response as utf8: {:?}", err);
+                fmt::Error
+            })?
+        )
     }
-
 }
 
 mod test {
@@ -641,10 +667,11 @@ mod test {
         write!(
             &mut buf,
             "GET / HTTP/1.1\r\n\
-            Connection: Upgrade\r\n\
-            Upgrade: websocket\r\n\
-            Sec-WebSocket-Version: 13\r\n\
-            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+             Connection: Upgrade\r\n\
+             Upgrade: websocket\r\n\
+             Sec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
+        ).unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -663,11 +690,12 @@ mod test {
         write!(
             &mut buf,
             "GET / HTTP/1.1\r\n\
-            Connection: Upgrade\r\n\
-            Upgrade: websocket\r\n\
-            X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
-            Sec-WebSocket-Version: 13\r\n\
-            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+             Connection: Upgrade\r\n\
+             Upgrade: websocket\r\n\
+             X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
+             Sec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
+        ).unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -690,7 +718,8 @@ mod test {
             Upgrade: websocket\r\n\
             Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown\r\n\
             Sec-WebSocket-Version: 13\r\n\
-            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
+            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n")
+            .unwrap();
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
         let shake = Handshake {

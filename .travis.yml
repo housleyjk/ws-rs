@@ -7,9 +7,11 @@ matrix:
   allow_failures:
   - rust: beta
   - rust: nightly
-branches:
-  only:
-    - stable
+script:
+    - cargo build
+    - cargo test
+    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install clippy --force && cargo clippy -- -A doc_markdown -A cyclomatic_complexity -A collapsible_if ; fi'
+    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install rustfmt --force &&  cargo fmt --all -- --write-mode=diff ; fi'
 after_success: |
   # pip install --user autobahntestsuite &&
   # /home/travis/.local/bin/wstest -m fuzzingserver -s ./tests/fuzzingserver.json & SPID=$! &&
