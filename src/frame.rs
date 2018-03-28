@@ -52,6 +52,12 @@ impl Frame {
         header_length + payload_len
     }
 
+    /// Return `false`: a frame is never empty since it has a header.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
     /// Test whether the frame is a final frame.
     #[inline]
     pub fn is_final(&self) -> bool {
