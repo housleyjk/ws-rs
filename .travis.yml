@@ -5,23 +5,17 @@ rust:
 - nightly
 matrix:
   allow_failures:
-  - rust: beta
   - rust: nightly
+before_script:
+    - export PATH=$HOME/.local/bin:$PATH
+    - pip install autobahntestsuite --user `whoami`
 script:
-    - cargo build
-    - cargo test
+    - cargo build --all-features
+    - cargo test --all-features
     - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install clippy --force && cargo clippy -- -A doc_markdown -A cyclomatic_complexity -A collapsible_if ; fi'
-    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install rustfmt --force &&  cargo fmt --all -- --write-mode=diff ; fi'
-after_success: |
-  # pip install --user autobahntestsuite &&
-  # /home/travis/.local/bin/wstest -m fuzzingserver -s ./tests/fuzzingserver.json & SPID=$! &&
-  # sleep 10 &&
-  # cargo run --example autobahn-client --release &&
-  # kill -9 ${FPID} &&
-  # cargo run --example autobahn-server --release & SPID=$! &&
-  # sleep 10 &&
-  # /home/travis/.local/bin/wstest -m fuzzingclient -s ./tests/fuzzingclient.json &&
-  # kill -9 ${SPID} &&
+    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install rustfmt-nightly --force &&  cargo fmt --all -- --write-mode=diff ; fi'
+    - ./test_autobahn.sh -c
+    - ./test_autobahn.sh -s
 notifications:
   email: true
 env:
