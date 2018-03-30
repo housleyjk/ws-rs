@@ -32,8 +32,7 @@ fn main() {
     }
 
     // Server thread
-    let server =
-        thread::spawn(move || listen("127.0.0.1:3012", |out| Server { out: out }).unwrap());
+    let server = thread::spawn(move || listen("127.0.0.1:3012", |out| Server { out }).unwrap());
 
     // Give the server a little time to get going
     sleep(Duration::from_millis(10));

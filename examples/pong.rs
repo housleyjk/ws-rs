@@ -21,7 +21,7 @@ fn main() {
 
     // Run the WebSocket
     listen("127.0.0.1:3012", |out| Server {
-        out: out,
+        out,
         ping_timeout: None,
         expire_timeout: None,
     }).unwrap();

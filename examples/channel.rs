@@ -111,7 +111,7 @@ fn main() {
         .spawn(move || {
             connect("ws://127.0.0.1:3012", |out| {
                 Client {
-                    out: out,
+                    out,
                     ind: 0,
                     // we need to clone again because
                     // in theory, there could be many client connections sending off the data
