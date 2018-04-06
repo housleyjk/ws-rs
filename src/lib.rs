@@ -17,16 +17,16 @@ extern crate url;
 #[macro_use]
 extern crate log;
 
-mod result;
+mod communication;
 mod connection;
-mod handler;
 mod factory;
 mod frame;
-mod message;
+mod handler;
 mod handshake;
-mod protocol;
-mod communication;
 mod io;
+mod message;
+mod protocol;
+mod result;
 mod stream;
 
 #[cfg(feature = "permessage-deflate")]
@@ -37,18 +37,18 @@ pub mod util;
 pub use factory::Factory;
 pub use handler::Handler;
 
-pub use result::{Error, Result};
-pub use result::Kind as ErrorKind;
-pub use message::Message;
 pub use communication::Sender;
 pub use frame::Frame;
-pub use protocol::{CloseCode, OpCode};
 pub use handshake::{Handshake, Request, Response};
+pub use message::Message;
+pub use protocol::{CloseCode, OpCode};
+pub use result::Kind as ErrorKind;
+pub use result::{Error, Result};
 
-use std::fmt;
-use std::default::Default;
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
+use std::default::Default;
+use std::fmt;
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use mio::Poll;
 

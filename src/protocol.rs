@@ -1,5 +1,5 @@
-use std::fmt;
 use std::convert::{From, Into};
+use std::fmt;
 
 use self::OpCode::*;
 /// Operation codes as part of rfc6455.

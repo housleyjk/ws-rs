@@ -4,15 +4,15 @@ use std::mem::replace;
 use openssl::ssl::SslStream;
 use url;
 
-use handler::Handler;
-use message::Message;
 use frame::Frame;
-use protocol::{CloseCode, OpCode};
+use handler::Handler;
 use handshake::{Handshake, Request, Response};
+use message::Message;
+use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
-use util::{Timeout, Token};
 #[cfg(feature = "ssl")]
 use util::TcpStream;
+use util::{Timeout, Token};
 
 use super::context::{Compressor, Decompressor};
 
