@@ -10,7 +10,7 @@ use message;
 use result::{Error, Result};
 use protocol::CloseCode;
 use std::cmp::PartialEq;
-use io::ALL;
+use io::{ALL, SYSTEM};
 
 #[derive(Debug, Clone)]
 pub enum Signal {
@@ -207,6 +207,19 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Timeout { delay: ms, token },
                 connection_id: self.connection_id,
+            })
+            .map_err(Error::from)
+    }
+
+    /// Schedule a `token` to be sent to the WebSocket Factory's `on_timeout` method
+    /// after `ms` milliseconds
+    #[inline]
+    pub fn factory_timeout(&self, ms: u64, token: Token) -> Result<()> {
+        self.channel
+            .send(Command {
+                token: SYSTEM,
+                signal: Signal::Timeout { delay: ms, token },
+                connection_id: 0,
             })
             .map_err(Error::from)
     }

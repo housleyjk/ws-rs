@@ -1,5 +1,6 @@
 use handler::Handler;
 use communication::Sender;
+use util::Token;
 
 /// A trait for creating new WebSocket handlers.
 pub trait Factory {
@@ -99,6 +100,13 @@ pub trait Factory {
     /// state that was not internally tracked by the handler.
     #[inline]
     fn connection_lost(&mut self, _: Self::Handler) {}
+
+    /// Called in response to a previous factory_timeout call.
+    ///
+    /// A factory_timeout call can be made when a connection is
+    /// lost in order to schedule another connection attempt.
+    #[inline]
+    fn on_timeout(&mut self, _ws: Sender, _event: Token) {}
 }
 
 impl<F, H> Factory for F

@@ -24,7 +24,7 @@ use super::Settings;
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
 pub const ALL: Token = Token(usize::MAX - 5);
-const SYSTEM: Token = Token(usize::MAX - 6);
+pub const SYSTEM: Token = Token(usize::MAX - 6);
 
 type Conn<F> = Connection<<F as Factory>::Handler>;
 
@@ -570,7 +570,7 @@ where
         if self.connections.is_empty() {
             if !self.state.is_active() {
                 debug!("Shutting down websocket server.");
-            } else if self.is_client() {
+            } else if self.settings.shutdown_unconnected_client && self.is_client() {
                 debug!("Shutting down websocket client.");
                 self.factory.on_shutdown();
                 self.state = State::Inactive;
@@ -720,6 +720,21 @@ where
         match cmd.token() {
             SYSTEM => {
                 // Scaffolding for system events such as internal timeouts
+                match cmd.into_signal() {
+                    Signal::Timeout {
+                        delay,
+                        token: event,
+                    } => {
+                        self.timer.set_timeout(
+                            Duration::from_millis(delay),
+                            Timeout {
+                                connection: SYSTEM,
+                                event,
+                            },
+                        );
+                    }
+                    _ => {}
+                }
             }
             ALL => {
                 let mut dead = Vec::with_capacity(self.connections.len());
@@ -909,7 +924,11 @@ where
 
     fn handle_timeout(&mut self, poll: &mut Poll, Timeout { connection, event }: Timeout) {
         let active = {
-            if let Some(conn) = self.connections.get_mut(connection) {
+            if connection == SYSTEM {
+                let sender = self.sender();
+                self.factory.on_timeout(sender, event);
+                return
+            } else if let Some(conn) = self.connections.get_mut(connection) {
                 if let Err(err) = conn.timeout_triggered(event) {
                     conn.error(err)
                 }
