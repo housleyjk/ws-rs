@@ -13,6 +13,8 @@ use url::Url;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::Error as SslError;
+#[cfg(feature = "native_tls")]
+use native_tls::Error as SslError;
 
 use communication::{Command, Sender, Signal};
 use result::{Error, Kind, Result};
@@ -141,7 +143,7 @@ where
         }
     }
 
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn connect(&mut self, poll: &mut Poll, url: Url) -> Result<()> {
         let settings = self.settings;
 
@@ -209,6 +211,7 @@ where
         if will_encrypt {
             while let Err(ssl_error) = self.connections[tok].encrypt() {
                 match ssl_error.kind {
+                    #[cfg(feature = "ssl")]
                     Kind::Ssl(SslError::Stream(ref io_error)) => {
                         if let Some(errno) = io_error.raw_os_error() {
                             if errno == CONNECTION_REFUSED {
@@ -221,6 +224,17 @@ where
                                     continue;
                                 }
                             }
+                        }
+                    }
+                    #[cfg(feature = "nativetls")]
+                    Kind::Ssl(_) => {
+                        if let Err(reset_error) = self.connections[tok].reset() {
+                            trace!(
+                                "Encountered error while trying to reset connection: {:?}",
+                                reset_error
+                            );
+                        } else {
+                            continue;
                         }
                     }
                     _ => (),
@@ -248,7 +262,7 @@ where
             })
     }
 
-    #[cfg(not(feature = "ssl"))]
+    #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
     pub fn connect(&mut self, poll: &mut Poll, url: Url) -> Result<()> {
         let settings = self.settings;
 
@@ -337,7 +351,7 @@ where
             })
     }
 
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
@@ -392,7 +406,7 @@ where
             })
     }
 
-    #[cfg(not(feature = "ssl"))]
+    #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
     pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;

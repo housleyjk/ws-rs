@@ -12,6 +12,8 @@ use mio::tcp::TcpStream;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
+#[cfg(feature = "nativetls")]
+use native_tls::HandshakeError;
 
 use message::Message;
 use handshake::{Handshake, Request, Response};
@@ -146,7 +148,7 @@ where
         }
     }
 
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn encrypt(&mut self) -> Result<()> {
         let sock = self.socket().try_clone()?;
         let ssl_stream = match self.endpoint {
@@ -159,6 +161,7 @@ where
                 self.socket = Stream::tls_live(stream);
                 Ok(())
             }
+            #[cfg(feature = "ssl")]
             Err(Error {
                 kind: Kind::SslHandshake(handshake_err),
                 details,
@@ -167,6 +170,19 @@ where
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
                 HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                    self.socket = Stream::tls(mid);
+                    Ok(())
+                }
+            },
+            #[cfg(feature = "nativetls")]
+            Err(Error {
+                kind: Kind::SslHandshake(handshake_err),
+                details,
+            }) => match handshake_err {
+                HandshakeError::Failure(_) => {
+                    Err(Error::new(Kind::SslHandshake(handshake_err), details))
+                }
+                HandshakeError::Interrupted(mid) => {
                     self.socket = Stream::tls(mid);
                     Ok(())
                 }
@@ -196,7 +212,7 @@ where
     }
 
     // Resetting may be necessary in order to try all possible addresses for a server
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn reset(&mut self) -> Result<()> {
         // if self.is_client() {
         if let Client(ref url) = self.endpoint {
@@ -215,6 +231,7 @@ where
                                 self.socket = Stream::tls_live(stream);
                                 Ok(())
                             }
+                            #[cfg(feature = "ssl")]
                             Err(Error {
                                 kind: Kind::SslHandshake(handshake_err),
                                 details,
@@ -223,6 +240,19 @@ where
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
                                 HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                                    self.socket = Stream::tls(mid);
+                                    Ok(())
+                                }
+                            },
+                            #[cfg(feature = "nativetls")]
+                            Err(Error {
+                                kind: Kind::SslHandshake(handshake_err),
+                                details,
+                            }) => match handshake_err {
+                                HandshakeError::Failure(_) => {
+                                    Err(Error::new(Kind::SslHandshake(handshake_err), details))
+                                }
+                                HandshakeError::Interrupted(mid) => {
                                     self.socket = Stream::tls(mid);
                                     Ok(())
                                 }
@@ -253,7 +283,7 @@ where
         }
     }
 
-    #[cfg(not(feature = "ssl"))]
+    #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
     pub fn reset(&mut self) -> Result<()> {
         if self.is_client() {
             if let Connecting(ref mut req, ref mut res) = self.state {

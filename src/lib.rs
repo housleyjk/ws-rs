@@ -10,6 +10,8 @@ extern crate mio;
 extern crate mio_extras;
 #[cfg(feature = "ssl")]
 extern crate openssl;
+#[cfg(feature = "nativetls")]
+extern crate native_tls;
 extern crate rand;
 extern crate sha1;
 extern crate slab;

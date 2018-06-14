@@ -10,7 +10,9 @@ use httparse;
 use mio;
 #[cfg(feature = "ssl")]
 use openssl::ssl::{Error as SslError, HandshakeError as SslHandshakeError};
-#[cfg(feature = "ssl")]
+#[cfg(feature = "nativetls")]
+use native_tls::{Error as SslError, HandshakeError as SslHandshakeError};
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 type HandshakeError = SslHandshakeError<mio::tcp::TcpStream>;
 
 use communication::Command;
@@ -51,10 +53,10 @@ pub enum Kind {
     /// the queue may relieve the situation.
     Queue(mio::channel::SendError<Command>),
     /// Indicates a failure to perform SSL encryption.
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     Ssl(SslError),
     /// Indicates a failure to perform SSL encryption.
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     SslHandshake(HandshakeError),
     /// A custom error kind for use by applications. This error kind involves extra overhead
     /// because it will allocate the memory on the heap. The WebSocket ignores such errors by
@@ -116,9 +118,9 @@ impl StdError for Error {
             Kind::Encoding(ref err) => err.description(),
             Kind::Io(ref err) => err.description(),
             Kind::Http(_) => "Unable to parse HTTP",
-            #[cfg(feature = "ssl")]
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Kind::Ssl(ref err) => err.description(),
-            #[cfg(feature = "ssl")]
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Kind::SslHandshake(ref err) => err.description(),
             Kind::Queue(_) => "Unable to send signal on event loop",
             Kind::Custom(ref err) => err.description(),
@@ -129,9 +131,9 @@ impl StdError for Error {
         match self.kind {
             Kind::Encoding(ref err) => Some(err),
             Kind::Io(ref err) => Some(err),
-            #[cfg(feature = "ssl")]
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Kind::Ssl(ref err) => Some(err),
-            #[cfg(feature = "ssl")]
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Kind::SslHandshake(ref err) => err.cause(),
             Kind::Custom(ref err) => Some(err.as_ref()),
             _ => None,
@@ -178,14 +180,14 @@ impl From<Utf8Error> for Error {
     }
 }
 
-#[cfg(feature = "ssl")]
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 impl From<SslError> for Error {
     fn from(err: SslError) -> Error {
         Error::new(Kind::Ssl(err), "")
     }
 }
 
-#[cfg(feature = "ssl")]
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 impl From<HandshakeError> for Error {
     fn from(err: HandshakeError) -> Error {
         Error::new(Kind::SslHandshake(err), "")
