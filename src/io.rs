@@ -20,8 +20,9 @@ use super::Settings;
 use communication::{Command, Sender, Signal};
 use connection::Connection;
 use factory::Factory;
+use slab::Slab;
 use result::{Error, Kind, Result};
-use util::Slab;
+
 
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
@@ -149,8 +150,9 @@ where
 
         let (tok, addresses) = {
             let (tok, entry, connection_id, handler) =
-                if let Some(entry) = self.connections.vacant_entry() {
-                    let tok = entry.index();
+                if self.connections.len() < settings.max_connections {
+                    let entry = self.connections.vacant_entry();
+                    let tok = Token(entry.key());
                     let connection_id = self.next_connection_id;
                     self.next_connection_id = self.next_connection_id.wrapping_add(1);
                     (
@@ -202,20 +204,20 @@ where
 
         let will_encrypt = url.scheme() == "wss";
 
-        if let Err(error) = self.connections[tok].as_client(url, addresses) {
-            let handler = self.connections.remove(tok).unwrap().consume();
+        if let Err(error) = self.connections[tok.into()].as_client(url, addresses) {
+            let handler = self.connections.remove(tok.into()).consume();
             self.factory.connection_lost(handler);
             return Err(error);
         }
 
         if will_encrypt {
-            while let Err(ssl_error) = self.connections[tok].encrypt() {
+            while let Err(ssl_error) = self.connections[tok.into()].encrypt() {
                 match ssl_error.kind {
                     #[cfg(feature = "ssl")]
                     Kind::Ssl(SslError::Stream(ref io_error)) => {
                         if let Some(errno) = io_error.raw_os_error() {
                             if errno == CONNECTION_REFUSED {
-                                if let Err(reset_error) = self.connections[tok].reset() {
+                                if let Err(reset_error) = self.connections[tok.into()].reset() {
                                     trace!(
                                         "Encountered error while trying to reset connection: {:?}",
                                         reset_error
@@ -228,7 +230,7 @@ where
                     }
                     #[cfg(feature = "nativetls")]
                     Kind::Ssl(_) => {
-                        if let Err(reset_error) = self.connections[tok].reset() {
+                        if let Err(reset_error) = self.connections[tok.into()].reset() {
                             trace!(
                                 "Encountered error while trying to reset connection: {:?}",
                                 reset_error
@@ -239,16 +241,16 @@ where
                     }
                     _ => (),
                 }
-                self.connections[tok].error(ssl_error);
+                self.connections[tok.into()].error(ssl_error);
                 // Allow socket to be registered anyway to await hangup
                 break;
             }
         }
 
         poll.register(
-            self.connections[tok].socket(),
-            self.connections[tok].token(),
-            self.connections[tok].events(),
+            self.connections[tok.into()].socket(),
+            self.connections[tok.into()].token(),
+            self.connections[tok.into()].events(),
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from)
             .or_else(|err| {
@@ -256,7 +258,7 @@ where
                     "Encountered error while trying to build WebSocket connection: {}",
                     err
                 );
-                let handler = self.connections.remove(tok).unwrap().consume();
+                let handler = self.connections.remove(tok.into()).consume();
                 self.factory.connection_lost(handler);
                 Err(err)
             })
@@ -268,8 +270,9 @@ where
 
         let (tok, addresses) = {
             let (tok, entry, connection_id, handler) =
-                if let Some(entry) = self.connections.vacant_entry() {
-                    let tok = entry.index();
+                if self.connections.len() < settings.max_connections {
+                    let entry = self.connections.vacant_entry();
+                    let tok = Token(entry.key());
                     let connection_id = self.next_connection_id;
                     self.next_connection_id = self.next_connection_id.wrapping_add(1);
                     (
@@ -323,21 +326,21 @@ where
                 Kind::Protocol,
                 "The ssl feature is not enabled. Please enable it to use wss urls.",
             );
-            let handler = self.connections.remove(tok).unwrap().consume();
+            let handler = self.connections.remove(tok.into()).consume();
             self.factory.connection_lost(handler);
             return Err(error);
         }
 
-        if let Err(error) = self.connections[tok].as_client(url, addresses) {
-            let handler = self.connections.remove(tok).unwrap().consume();
+        if let Err(error) = self.connections[tok.into()].as_client(url, addresses) {
+            let handler = self.connections.remove(tok.into()).consume();
             self.factory.connection_lost(handler);
             return Err(error);
         }
 
         poll.register(
-            self.connections[tok].socket(),
-            self.connections[tok].token(),
-            self.connections[tok].events(),
+            self.connections[tok.into()].socket(),
+            self.connections[tok.into()].token(),
+            self.connections[tok.into()].events(),
             PollOpt::edge() | PollOpt::oneshot(),
         ).map_err(Error::from)
             .or_else(|err| {
@@ -345,7 +348,7 @@ where
                     "Encountered error while trying to build WebSocket connection: {}",
                     err
                 );
-                let handler = self.connections.remove(tok).unwrap().consume();
+                let handler = self.connections.remove(tok.into()).consume();
                 self.factory.connection_lost(handler);
                 Err(err)
             })
@@ -361,8 +364,9 @@ where
         }
 
         let tok = {
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
+            if self.connections.len() < settings.max_connections {
+                let entry = self.connections.vacant_entry();
+                let tok = Token(entry.key());
                 let connection_id = self.next_connection_id;
                 self.next_connection_id = self.next_connection_id.wrapping_add(1);
                 let handler = factory.server_connected(Sender::new(
@@ -380,7 +384,7 @@ where
             }
         };
 
-        let conn = &mut self.connections[tok];
+        let conn = &mut self.connections[tok.into()];
 
         conn.as_server()?;
         if settings.encrypt_server {
@@ -416,8 +420,9 @@ where
         }
 
         let tok = {
-            if let Some(entry) = self.connections.vacant_entry() {
-                let tok = entry.index();
+            if self.connections.len() < settings.max_connections {
+                let entry = self.connections.vacant_entry();
+                let tok = Token(entry.key());
                 let connection_id = self.next_connection_id;
                 self.next_connection_id = self.next_connection_id.wrapping_add(1);
                 let handler = factory.server_connected(Sender::new(
@@ -435,7 +440,7 @@ where
             }
         };
 
-        let conn = &mut self.connections[tok];
+        let conn = &mut self.connections[tok.into()];
 
         conn.as_server()?;
         if settings.encrypt_server {
@@ -537,7 +542,7 @@ where
 
     fn shutdown(&mut self) {
         debug!("Received shutdown signal. WebSocket is attempting to shut down.");
-        for conn in self.connections.iter_mut() {
+        for (_, conn) in self.connections.iter_mut() {
             conn.shutdown();
         }
         self.factory.on_shutdown();
@@ -553,19 +558,19 @@ where
         // established. It's possible that we may go inactive while in a connecting
         // state if the handshake fails.
         if !active {
-            if let Ok(addr) = self.connections[token].socket().peer_addr() {
+            if let Ok(addr) = self.connections[token.into()].socket().peer_addr() {
                 debug!("WebSocket connection to {} disconnected.", addr);
             } else {
                 trace!("WebSocket connection to token={:?} disconnected.", token);
             }
-            let handler = self.connections.remove(token).unwrap().consume();
+            let handler = self.connections.remove(token.into()).consume();
             self.factory.connection_lost(handler);
         } else {
-            self.schedule(poll, &self.connections[token])
+            self.schedule(poll, &self.connections[token.into()])
                 .or_else(|err| {
                     // This will be an io error, so disconnect will already be called
-                    self.connections[token].error(err);
-                    let handler = self.connections.remove(token).unwrap().consume();
+                    self.connections[token.into()].error(err);
+                    let handler = self.connections.remove(token.into()).consume();
                     self.factory.connection_lost(handler);
                     Ok::<(), Error>(())
                 })
@@ -640,27 +645,26 @@ where
             }
             _ => {
                 let active = {
-                    let conn_events = self.connections[token].events();
+                    let conn_events = self.connections[token.into()].events();
 
                     if (events & conn_events).is_readable() {
-                        if let Err(err) = self.connections[token].read() {
+                        if let Err(err) = self.connections[token.into()].read() {
                             trace!("Encountered error while reading: {}", err);
                             if let Kind::Io(ref err) = err.kind {
                                 if let Some(errno) = err.raw_os_error() {
                                     if errno == CONNECTION_REFUSED {
-                                        match self.connections[token].reset() {
+                                        match self.connections[token.into()].reset() {
                                             Ok(_) => {
                                                 poll.register(
-                                                    self.connections[token].socket(),
-                                                    self.connections[token].token(),
-                                                    self.connections[token].events(),
+                                                    self.connections[token.into()].socket(),
+                                                    self.connections[token.into()].token(),
+                                                    self.connections[token.into()].events(),
                                                     PollOpt::edge() | PollOpt::oneshot(),
                                                 ).or_else(|err| {
-                                                        self.connections[token]
+                                                        self.connections[token.into()]
                                                             .error(Error::from(err));
                                                         let handler = self.connections
-                                                            .remove(token)
-                                                            .unwrap()
+                                                            .remove(token.into())
                                                             .consume();
                                                         self.factory.connection_lost(handler);
                                                         Ok::<(), Error>(())
@@ -676,31 +680,30 @@ where
                                 }
                             }
                             // This will trigger disconnect if the connection is open
-                            self.connections[token].error(err)
+                            self.connections[token.into()].error(err)
                         }
                     }
 
-                    let conn_events = self.connections[token].events();
+                    let conn_events = self.connections[token.into()].events();
 
                     if (events & conn_events).is_writable() {
-                        if let Err(err) = self.connections[token].write() {
+                        if let Err(err) = self.connections[token.into()].write() {
                             trace!("Encountered error while writing: {}", err);
                             if let Kind::Io(ref err) = err.kind {
                                 if let Some(errno) = err.raw_os_error() {
                                     if errno == CONNECTION_REFUSED {
-                                        match self.connections[token].reset() {
+                                        match self.connections[token.into()].reset() {
                                             Ok(_) => {
                                                 poll.register(
-                                                    self.connections[token].socket(),
-                                                    self.connections[token].token(),
-                                                    self.connections[token].events(),
+                                                    self.connections[token.into()].socket(),
+                                                    self.connections[token.into()].token(),
+                                                    self.connections[token.into()].events(),
                                                     PollOpt::edge() | PollOpt::oneshot(),
                                                 ).or_else(|err| {
-                                                        self.connections[token]
+                                                        self.connections[token.into()]
                                                             .error(Error::from(err));
                                                         let handler = self.connections
-                                                            .remove(token)
-                                                            .unwrap()
+                                                            .remove(token.into())
                                                             .consume();
                                                         self.factory.connection_lost(handler);
                                                         Ok::<(), Error>(())
@@ -716,13 +719,13 @@ where
                                 }
                             }
                             // This will trigger disconnect if the connection is open
-                            self.connections[token].error(err)
+                            self.connections[token.into()].error(err)
                         }
                     }
 
                     // connection events may have changed
-                    self.connections[token].events().is_readable()
-                        || self.connections[token].events().is_writable()
+                    self.connections[token.into()].events().is_readable()
+                        || self.connections[token.into()].events().is_writable()
                 };
 
                 self.check_active(poll, active, token)
@@ -741,7 +744,7 @@ where
                 match cmd.into_signal() {
                     Signal::Message(msg) => {
                         trace!("Broadcasting message: {:?}", msg);
-                        for conn in self.connections.iter_mut() {
+                        for (_, conn) in self.connections.iter_mut() {
                             if let Err(err) = conn.send_message(msg.clone()) {
                                 dead.push((conn.token(), err))
                             }
@@ -749,7 +752,7 @@ where
                     }
                     Signal::Close(code, reason) => {
                         trace!("Broadcasting close: {:?} - {}", code, reason);
-                        for conn in self.connections.iter_mut() {
+                        for (_, conn) in self.connections.iter_mut() {
                             if let Err(err) = conn.send_close(code, reason.borrow()) {
                                 dead.push((conn.token(), err))
                             }
@@ -757,7 +760,7 @@ where
                     }
                     Signal::Ping(data) => {
                         trace!("Broadcasting ping");
-                        for conn in self.connections.iter_mut() {
+                        for (_, conn) in self.connections.iter_mut() {
                             if let Err(err) = conn.send_ping(data.clone()) {
                                 dead.push((conn.token(), err))
                             }
@@ -765,7 +768,7 @@ where
                     }
                     Signal::Pong(data) => {
                         trace!("Broadcasting pong");
-                        for conn in self.connections.iter_mut() {
+                        for (_, conn) in self.connections.iter_mut() {
                             if let Err(err) = conn.send_pong(data.clone()) {
                                 dead.push((conn.token(), err))
                             }
@@ -792,7 +795,7 @@ where
                                 event,
                             },
                         );
-                        for conn in self.connections.iter_mut() {
+                        for (_, conn) in self.connections.iter_mut() {
                             if let Err(err) = conn.new_timeout(event, timeout.clone()) {
                                 conn.error(err);
                             }
@@ -805,21 +808,21 @@ where
                     }
                 }
 
-                for conn in self.connections.iter() {
+                for (_, conn) in self.connections.iter() {
                     if let Err(err) = self.schedule(poll, conn) {
                         dead.push((conn.token(), err))
                     }
                 }
                 for (token, err) in dead {
                     // note the same connection may be called twice
-                    self.connections[token].error(err)
+                    self.connections[token.into()].error(err)
                 }
             }
             token => {
                 let connection_id = cmd.connection_id();
                 match cmd.into_signal() {
                     Signal::Message(msg) => {
-                        if let Some(conn) = self.connections.get_mut(token) {
+                        if let Some(conn) = self.connections.get_mut(token.into()) {
                             if conn.connection_id() == connection_id {
                                 if let Err(err) = conn.send_message(msg) {
                                     conn.error(err)
@@ -834,7 +837,7 @@ where
                         }
                     }
                     Signal::Close(code, reason) => {
-                        if let Some(conn) = self.connections.get_mut(token) {
+                        if let Some(conn) = self.connections.get_mut(token.into()) {
                             if conn.connection_id() == connection_id {
                                 if let Err(err) = conn.send_close(code, reason) {
                                     conn.error(err)
@@ -847,7 +850,7 @@ where
                         }
                     }
                     Signal::Ping(data) => {
-                        if let Some(conn) = self.connections.get_mut(token) {
+                        if let Some(conn) = self.connections.get_mut(token.into()) {
                             if conn.connection_id() == connection_id {
                                 if let Err(err) = conn.send_ping(data) {
                                     conn.error(err)
@@ -860,7 +863,7 @@ where
                         }
                     }
                     Signal::Pong(data) => {
-                        if let Some(conn) = self.connections.get_mut(token) {
+                        if let Some(conn) = self.connections.get_mut(token.into()) {
                             if conn.connection_id() == connection_id {
                                 if let Err(err) = conn.send_pong(data) {
                                     conn.error(err)
@@ -874,7 +877,7 @@ where
                     }
                     Signal::Connect(url) => {
                         if let Err(err) = self.connect(poll, url.clone()) {
-                            if let Some(conn) = self.connections.get_mut(token) {
+                            if let Some(conn) = self.connections.get_mut(token.into()) {
                                 conn.error(err)
                             } else {
                                 if self.settings.panic_on_new_connection {
@@ -897,7 +900,7 @@ where
                                 event,
                             },
                         );
-                        if let Some(conn) = self.connections.get_mut(token) {
+                        if let Some(conn) = self.connections.get_mut(token.into()) {
                             if let Err(err) = conn.new_timeout(event, timeout) {
                                 conn.error(err)
                             }
@@ -912,9 +915,9 @@ where
                     }
                 }
 
-                if self.connections.get(token).is_some() {
-                    if let Err(err) = self.schedule(poll, &self.connections[token]) {
-                        self.connections[token].error(err)
+                if self.connections.get(token.into()).is_some() {
+                    if let Err(err) = self.schedule(poll, &self.connections[token.into()]) {
+                        self.connections[token.into()].error(err)
                     }
                 }
             }
@@ -923,7 +926,7 @@ where
 
     fn handle_timeout(&mut self, poll: &mut Poll, Timeout { connection, event }: Timeout) {
         let active = {
-            if let Some(conn) = self.connections.get_mut(connection) {
+            if let Some(conn) = self.connections.get_mut(connection.into()) {
                 if let Err(err) = conn.timeout_triggered(event) {
                     conn.error(err)
                 }
