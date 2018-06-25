@@ -1,12 +1,12 @@
+use std::default::Default;
 use std::fmt;
 use std::io::{Cursor, ErrorKind, Read, Write};
-use std::default::Default;
 
-use rand;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use rand;
 
-use result::{Error, Kind, Result};
 use protocol::{CloseCode, OpCode};
+use result::{Error, Kind, Result};
 use stream::TryReadBuf;
 
 fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {

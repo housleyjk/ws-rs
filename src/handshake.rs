@@ -1,12 +1,12 @@
 use std::fmt;
 use std::io::Write;
-use std::str::from_utf8;
 use std::net::SocketAddr;
+use std::str::from_utf8;
 
-use sha1;
-use rand;
-use url;
 use httparse;
+use rand;
+use sha1;
+use url;
 
 use result::{Error, Kind, Result};
 
@@ -656,10 +656,10 @@ impl fmt::Display for Response {
 
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
+    use super::*;
     use std::io::Write;
     use std::net::SocketAddr;
     use std::str::FromStr;
-    use super::*;
 
     #[test]
     fn remote_addr() {

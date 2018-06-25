@@ -1,8 +1,8 @@
 extern crate ws;
 
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::channel;
 
 fn main() {
     let (tx, rx) = channel();
@@ -13,7 +13,10 @@ fn main() {
             tx.send(out).unwrap();
 
             // Dummy message handler
-            move |_| Ok(println!("Message handler called."))
+            move |_| {
+                println!("Message handler called.");
+                Ok(())
+            }
         })
         .unwrap();
 
@@ -26,7 +29,7 @@ fn main() {
     // Wait for 5 seconds only for incoming connections;
     thread::sleep(Duration::from_millis(5000));
 
-    if let Err(_) = rx.try_recv() {
+    if rx.try_recv().is_err() {
         // shutdown the server from the outside
         handle.shutdown().unwrap();
         println!("Shutting down server because no connections were established.");

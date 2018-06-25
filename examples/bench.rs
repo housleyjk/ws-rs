@@ -34,7 +34,8 @@ fn main() {
         fn on_open(&mut self, _: Handshake) -> Result<()> {
             self.out.send(MESSAGE)?;
             self.count += 1;
-            Ok(self.time = time::precise_time_ns())
+            self.time = time::precise_time_ns();
+            Ok(())
         }
 
         fn on_message(&mut self, msg: Message) -> Result<()> {
@@ -59,7 +60,7 @@ fn main() {
             ..Settings::default()
         })
         .build(|out| Connection {
-            out: out,
+            out,
             count: 0,
             time: 0,
             total: 0,

@@ -8,9 +8,9 @@ extern crate ws;
 
 use std::io;
 use std::io::prelude::*;
-use std::thread;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender as TSender;
+use std::sync::mpsc::channel;
+use std::thread;
 
 use clap::{App, Arg};
 use ws::{connect, CloseCode, Error, ErrorKind, Handler, Handshake, Message, Result, Sender};
@@ -76,7 +76,7 @@ fn main() {
                         println!("Closing with code: {:?}, please wait...", code);
                         sender.close(code).unwrap();
                     } else {
-                        display(format!("Unable to parse {} as close code.", args[1]));
+                        display(&format!("Unable to parse {} as close code.", args[1]));
                         // Keep accepting input if the close arguments are invalid
                         continue;
                     }
@@ -94,7 +94,7 @@ fn main() {
                             .close_with_reason(code, reason.trim().to_string())
                             .unwrap();
                     } else {
-                        display(format!("Unable to parse {} as close code.", args[1]));
+                        display(&format!("Unable to parse {} as close code.", args[1]));
                         // Keep accepting input if the close arguments are invalid
                         continue;
                     }
@@ -102,7 +102,7 @@ fn main() {
                 break;
             } else {
                 // Send the message
-                display(format!(">>> {}", input.trim()));
+                display(&format!(">>> {}", input.trim()));
                 sender.send(input.trim()).unwrap();
             }
         }
@@ -112,7 +112,7 @@ fn main() {
     client.join().unwrap();
 }
 
-fn display(string: String) {
+fn display(string: &str) {
     let mut view = term::stdout().unwrap();
     view.carriage_return().unwrap();
     view.delete_line().unwrap();
@@ -147,29 +147,30 @@ impl Handler for Client {
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        Ok(display(format!("<<< {}", msg)))
+        display(&format!("<<< {}", msg));
+        Ok(())
     }
 
     fn on_close(&mut self, code: CloseCode, reason: &str) {
         if reason.is_empty() {
-            display(format!(
+            display(&format!(
                 "<<< Closing<({:?})>\nHit any key to end session.",
                 code
             ));
         } else {
-            display(format!(
+            display(&format!(
                 "<<< Closing<({:?}) {}>\nHit any key to end session.",
                 code, reason
             ));
         }
 
         if let Err(err) = self.thread_out.send(Event::Disconnect) {
-            display(format!("{:?}", err))
+            display(&format!("{:?}", err))
         }
     }
 
     fn on_error(&mut self, err: Error) {
-        display(format!("<<< Error<{:?}>", err))
+        display(&format!("<<< Error<{:?}>", err))
     }
 }
 

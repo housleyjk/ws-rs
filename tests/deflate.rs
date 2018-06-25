@@ -3,8 +3,8 @@ extern crate env_logger;
 extern crate url;
 extern crate ws;
 
-use ws::{Builder, Message, Sender, Settings, WebSocket};
 use ws::deflate::DeflateHandler;
+use ws::{Builder, Message, Sender, Settings, WebSocket};
 
 #[test]
 fn round_trip() {
