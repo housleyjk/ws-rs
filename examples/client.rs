@@ -12,7 +12,7 @@ fn main() {
     // Connect to the url and call the closure
     if let Err(error) = connect("ws://127.0.0.1:3012", |out| {
         // Queue a message to be sent when the WebSocket is open
-        if let Err(_) = out.send("Hello WebSocket") {
+        if out.send("Hello WebSocket").is_err() {
             println!("Websocket couldn't queue an initial message.")
         } else {
             println!("Client sent message 'Hello WebSocket'. ")

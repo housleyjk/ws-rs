@@ -109,7 +109,7 @@ struct Data {
 
 impl ws::Handler for Data {
     fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
-        for msg in self.data.iter() {
+        for msg in &self.data {
             self.ws.send(*msg)?
         }
         Ok(())
