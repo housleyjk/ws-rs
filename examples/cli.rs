@@ -8,9 +8,9 @@ extern crate ws;
 
 use std::io;
 use std::io::prelude::*;
-use std::thread;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender as TSender;
+use std::sync::mpsc::channel;
+use std::thread;
 
 use clap::{App, Arg};
 use ws::{connect, CloseCode, Error, ErrorKind, Handler, Handshake, Message, Result, Sender};

@@ -1,15 +1,15 @@
 use std::io;
 use std::io::ErrorKind::WouldBlock;
-use std::net::SocketAddr;
 #[cfg(feature = "ssl")]
 use std::mem::replace;
+use std::net::SocketAddr;
 
+use bytes::{Buf, BufMut};
 use mio::tcp::TcpStream;
 #[cfg(feature = "ssl")]
-use openssl::ssl::{HandshakeError, MidHandshakeSslStream, SslStream};
-#[cfg(feature = "ssl")]
 use openssl::ssl::Error as SslError;
-use bytes::{Buf, BufMut};
+#[cfg(feature = "ssl")]
+use openssl::ssl::{HandshakeError, MidHandshakeSslStream, SslStream};
 
 use result::{Error, Kind, Result};
 

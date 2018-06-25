@@ -1,28 +1,28 @@
-use std::mem::replace;
 use std::borrow::Borrow;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
-use std::net::SocketAddr;
 use std::collections::VecDeque;
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::mem::replace;
+use std::net::SocketAddr;
 use std::str::from_utf8;
 
-use url;
+use mio::tcp::TcpStream;
 use mio::{Ready, Token};
 use mio_extras::timer::Timeout;
-use mio::tcp::TcpStream;
+use url;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
 
-use message::Message;
-use handshake::{Handshake, Request, Response};
 use frame::Frame;
+use handler::Handler;
+use handshake::{Handshake, Request, Response};
+use message::Message;
 use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
-use handler::Handler;
 use stream::{Stream, TryReadBuf, TryWriteBuf};
 
-use self::State::*;
 use self::Endpoint::*;
+use self::State::*;
 
 use super::Settings;
 

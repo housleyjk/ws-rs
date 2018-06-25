@@ -1,8 +1,8 @@
 extern crate ws;
 
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::channel;
 
 fn main() {
     let (tx, rx) = channel();
