@@ -10,7 +10,6 @@ use mio::tcp::TcpStream;
 use openssl::ssl::Error as SslError;
 #[cfg(feature = "nativetls")]
 use native_tls::{HandshakeError, MidHandshakeTlsStream as MidHandshakeSslStream, TlsStream as SslStream};
-use bytes::{Buf, BufMut};
 
 
 use result::{Error, Kind, Result};
