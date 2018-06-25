@@ -1,5 +1,5 @@
-use handler::Handler;
 use communication::Sender;
+use handler::Handler;
 
 /// A trait for creating new WebSocket handlers.
 pub trait Factory {
@@ -116,13 +116,13 @@ where
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
-    use mio;
     use communication::{Command, Sender};
-    use handshake::{Handshake, Request, Response};
-    use protocol::CloseCode;
     use frame;
-    use message;
     use handler::Handler;
+    use handshake::{Handshake, Request, Response};
+    use message;
+    use mio;
+    use protocol::CloseCode;
     use result::Result;
 
     #[derive(Debug, Eq, PartialEq)]

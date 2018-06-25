@@ -1,10 +1,10 @@
+use std::borrow::Cow;
+use std::convert::{From, Into};
+use std::error::Error as StdError;
 use std::fmt;
 use std::io;
-use std::borrow::Cow;
-use std::str::Utf8Error;
 use std::result::Result as StdResult;
-use std::error::Error as StdError;
-use std::convert::{From, Into};
+use std::str::Utf8Error;
 
 use httparse;
 use mio;

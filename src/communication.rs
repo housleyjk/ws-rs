@@ -1,16 +1,16 @@
-use std::convert::Into;
 use std::borrow::Cow;
+use std::convert::Into;
 
-use url;
 use mio;
 use mio::Token;
 use mio_extras::timer::Timeout;
+use url;
 
-use message;
-use result::{Error, Result};
-use protocol::CloseCode;
-use std::cmp::PartialEq;
 use io::ALL;
+use message;
+use protocol::CloseCode;
+use result::{Error, Result};
+use std::cmp::PartialEq;
 
 #[derive(Debug, Clone)]
 pub enum Signal {

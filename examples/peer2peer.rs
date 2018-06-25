@@ -64,7 +64,10 @@ fn main() {
 
     // Create simple websocket that just prints out messages
     let mut me = ws::WebSocket::new(|_| {
-        move |msg| Ok(info!("Peer {} got message: {}", my_addr, msg))
+        move |msg| {
+            info!("Peer {} got message: {}", my_addr, msg);
+            Ok(())
+        }
     }).unwrap();
 
     // Get a sender for ALL connections to the websocket

@@ -13,16 +13,16 @@ extern crate openssl;
 extern crate ws;
 
 #[cfg(feature = "ssl")]
-use std::rc::Rc;
+use std::fs::File;
 #[cfg(feature = "ssl")]
 use std::io::Read;
 #[cfg(feature = "ssl")]
-use std::fs::File;
+use std::rc::Rc;
 
 #[cfg(feature = "ssl")]
-use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslMethod, SslStream};
-#[cfg(feature = "ssl")]
 use openssl::pkey::PKey;
+#[cfg(feature = "ssl")]
+use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslMethod, SslStream};
 #[cfg(feature = "ssl")]
 use openssl::x509::{X509, X509Ref};
 

@@ -8,9 +8,9 @@ use std::str::from_utf8;
 
 use mio_extras::timer::Timeout;
 
+use ws::util::Token;
 use ws::{listen, CloseCode, Error, ErrorKind, Frame, Handler, Handshake, Message, OpCode, Result,
          Sender};
-use ws::util::Token;
 
 const PING: Token = Token(1);
 const EXPIRE: Token = Token(2);
@@ -21,7 +21,7 @@ fn main() {
 
     // Run the WebSocket
     listen("127.0.0.1:3012", |out| Server {
-        out: out,
+        out,
         ping_timeout: None,
         expire_timeout: None,
     }).unwrap();

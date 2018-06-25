@@ -1,17 +1,17 @@
 use std::io;
 use std::io::ErrorKind::WouldBlock;
-use std::net::SocketAddr;
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
 use std::mem::replace;
+use std::net::SocketAddr;
 
+use bytes::{Buf, BufMut};
 use mio::tcp::TcpStream;
-#[cfg(feature = "ssl")]
-use openssl::ssl::{HandshakeError, MidHandshakeSslStream, SslStream};
 #[cfg(feature = "ssl")]
 use openssl::ssl::Error as SslError;
 #[cfg(feature = "nativetls")]
 use native_tls::{HandshakeError, MidHandshakeTlsStream as MidHandshakeSslStream, TlsStream as SslStream};
 use bytes::{Buf, BufMut};
+
 
 use result::{Error, Kind, Result};
 

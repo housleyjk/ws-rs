@@ -10,11 +10,11 @@ extern crate env_logger;
 /// complex system from simple, composable parts.
 extern crate ws;
 
+use std::sync::mpsc::Sender as ThreadOut;
+use std::sync::mpsc::channel;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender as ThreadOut;
 
 use ws::{connect, listen, CloseCode, Handler, Handshake, Message, Result, Sender};
 
@@ -111,7 +111,7 @@ fn main() {
         .spawn(move || {
             connect("ws://127.0.0.1:3012", |out| {
                 Client {
-                    out: out,
+                    out,
                     ind: 0,
                     // we need to clone again because
                     // in theory, there could be many client connections sending off the data

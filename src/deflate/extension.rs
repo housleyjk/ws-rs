@@ -6,15 +6,15 @@ use openssl::ssl::SslStream;
 use native_tls::TlsStream as SslStream;
 use url;
 
-use handler::Handler;
-use message::Message;
 use frame::Frame;
-use protocol::{CloseCode, OpCode};
+use handler::Handler;
 use handshake::{Handshake, Request, Response};
+use message::Message;
+use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
-use util::{Timeout, Token};
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
 use util::TcpStream;
+use util::{Timeout, Token};
 
 use super::context::{Compressor, Decompressor};
 

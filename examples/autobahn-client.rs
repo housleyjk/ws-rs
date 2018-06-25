@@ -1,14 +1,14 @@
 /// WebSocket client used for testing against the Autobahn Test Suite
 extern crate ws;
 
-use std::rc::Rc;
 use std::cell::Cell;
+use std::rc::Rc;
 use ws::{connect, CloseCode, Message, Result};
 
 #[cfg(feature = "permessage-deflate")]
 use ws::deflate::DeflateHandler;
 
-const AGENT: &'static str = "WS-RS";
+const AGENT: &str = "WS-RS";
 
 #[cfg(not(feature = "permessage-deflate"))]
 fn main() {

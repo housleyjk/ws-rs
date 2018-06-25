@@ -1,12 +1,12 @@
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::borrow::Borrow;
+use std::io::{Error as IoError, ErrorKind};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 use std::usize;
-use std::io::{Error as IoError, ErrorKind};
 
 use mio;
-use mio::{Poll, PollOpt, Ready, Token};
 use mio::tcp::{TcpListener, TcpStream};
+use mio::{Poll, PollOpt, Ready, Token};
 use mio_extras;
 
 use url::Url;
@@ -16,12 +16,12 @@ use openssl::ssl::Error as SslError;
 #[cfg(feature = "native_tls")]
 use native_tls::Error as SslError;
 
+use super::Settings;
 use communication::{Command, Sender, Signal};
-use result::{Error, Kind, Result};
 use connection::Connection;
 use factory::Factory;
+use result::{Error, Kind, Result};
 use util::Slab;
-use super::Settings;
 
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
@@ -944,9 +944,9 @@ mod test {
 
     use url::Url;
 
-    use result::{Error, Kind};
-    use super::*;
     use super::url_to_addrs;
+    use super::*;
+    use result::{Error, Kind};
 
     #[test]
     fn test_url_to_addrs() {
