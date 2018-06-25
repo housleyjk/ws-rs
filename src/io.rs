@@ -19,7 +19,6 @@ use communication::{Command, Sender, Signal};
 use connection::Connection;
 use factory::Factory;
 use slab::Slab;
-use super::Settings;
 use result::{Error, Kind, Result};
 
 
