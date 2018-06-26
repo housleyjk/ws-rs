@@ -1,6 +1,8 @@
 use log::Level::Error as ErrorLevel;
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslConnectorBuilder, SslMethod, SslStream};
+#[cfg(feature = "nativetls")]
+use native_tls::{TlsConnector, TlsStream as SslStream};
 use url;
 
 use frame::Frame;
@@ -10,7 +12,7 @@ use protocol::CloseCode;
 use result::{Error, Kind, Result};
 use util::{Timeout, Token};
 
-#[cfg(feature = "ssl")]
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 use util::TcpStream;
 
 /// The core trait of this library.
@@ -304,12 +306,32 @@ pub trait Handler {
         connector.connect(domain, stream).map_err(Error::from)
     }
 
+    #[inline]
+    #[cfg(feature = "nativetls")]
+    fn upgrade_ssl_client(
+        &mut self,
+        stream: TcpStream,
+        url: &url::Url,
+    ) -> Result<SslStream<TcpStream>> {
+        let domain = url.domain().ok_or(Error::new(
+            Kind::Protocol,
+            format!("Unable to parse domain from {}. Needed for SSL.", url),
+        ))?;
+        let connector = TlsConnector::builder().and_then(|builder| builder.build())
+            .map_err(|e| {
+                Error::new(
+                    Kind::Internal,
+                    format!("Failed to upgrade client to SSL: {}", e),
+                )
+            })?;
+        connector.connect(domain, stream).map_err(Error::from)
+    }
     /// A method for wrapping a server TcpStream with Ssl Authentication machinery
     ///
     /// Override this method to customize how the connection is encrypted. By default
     /// this method is not implemented.
     #[inline]
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     fn upgrade_ssl_server(&mut self, _: TcpStream) -> Result<SslStream<TcpStream>> {
         unimplemented!()
     }

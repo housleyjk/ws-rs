@@ -2,6 +2,8 @@ use std::mem::replace;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::SslStream;
+#[cfg(feature = "nativetls")]
+use native_tls::TlsStream as SslStream;
 use url;
 
 use frame::Frame;
@@ -10,7 +12,7 @@ use handshake::{Handshake, Request, Response};
 use message::Message;
 use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
-#[cfg(feature = "ssl")]
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 use util::TcpStream;
 use util::{Timeout, Token};
 
@@ -546,7 +548,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     }
 
     #[inline]
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     fn upgrade_ssl_client(
         &mut self,
         stream: TcpStream,
@@ -556,7 +558,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     }
 
     #[inline]
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl", feature = "nativetls"))]
     fn upgrade_ssl_server(&mut self, stream: TcpStream) -> Result<SslStream<TcpStream>> {
         self.inner.upgrade_ssl_server(stream)
     }

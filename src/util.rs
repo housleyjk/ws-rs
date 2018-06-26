@@ -4,6 +4,6 @@
 pub use mio::Token;
 /// A handle to a specific timeout.
 pub use mio_extras::timer::Timeout;
-#[cfg(feature = "ssl")]
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
 /// TcpStream underlying the WebSocket
 pub use mio::tcp::TcpStream;

@@ -39,6 +39,10 @@ version = "1.0.18"
 optional = true
 version = "0.9"
 
+[dependencies.native-tls]
+optional = true
+version = "0.1.5"
+
 [dev-dependencies]
 clap = "2.31.2"
 env_logger = "0.5.6"
@@ -52,3 +56,4 @@ permessage-deflate = [
     "libc",
 ]
 ssl = ["openssl"]
+nativetls = ["native-tls"]
