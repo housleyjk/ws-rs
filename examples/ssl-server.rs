@@ -24,7 +24,7 @@ use openssl::pkey::PKey;
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslMethod, SslStream};
 #[cfg(feature = "ssl")]
-use openssl::x509::{X509, X509Ref};
+use openssl::x509::{X509Ref, X509};
 
 #[cfg(feature = "ssl")]
 use ws::util::TcpStream;

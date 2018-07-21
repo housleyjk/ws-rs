@@ -32,7 +32,7 @@ impl ws::Handler for Client {
                 format!("Failed to upgrade client to SSL: {}", e),
             )
         })?;
-        builder.builder_mut().set_verify(SslVerifyMode::empty());
+        builder.set_verify(SslVerifyMode::empty());
 
         let connector = builder.build();
         connector

@@ -136,8 +136,7 @@ fn main() {
 
             println!("Logger sending final log result.");
             final_in.send(log).unwrap();
-        })
-        .unwrap();
+        }).unwrap();
 
     // Wait for the worker threads to finish what they are doing
     let _ = server.join();

@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
+
 extern crate clap;
 extern crate env_logger;
 extern crate term;

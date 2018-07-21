@@ -7,6 +7,10 @@
     unstable_features,
     unused_import_braces
 )]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(collapsible_if, cyclomatic_complexity, write_with_newline)
+)]
 
 extern crate byteorder;
 extern crate bytes;

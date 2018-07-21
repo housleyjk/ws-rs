@@ -380,7 +380,7 @@ impl Request {
         let req = Request {
             path: format!("{}{}", url.path(), query),
             method: "GET".to_owned(),
-            headers: headers,
+            headers,
         };
 
         debug!("Built request from URL:\n{}", req);

@@ -958,15 +958,15 @@ mod test {
         let no_resolve = Url::from_str("ws://bad.elucitrans.com").unwrap();
 
         assert!(url_to_addrs(&ws_url).is_ok());
-        assert!(url_to_addrs(&ws_url).unwrap().len() > 0);
+        assert!(!url_to_addrs(&ws_url).unwrap().is_empty());
         assert!(url_to_addrs(&wss_url).is_ok());
-        assert!(url_to_addrs(&wss_url).unwrap().len() > 0);
+        assert!(!url_to_addrs(&wss_url).unwrap().is_empty());
 
         match url_to_addrs(&bad_url) {
             Ok(_) => panic!("url_to_addrs accepts http urls."),
             Err(Error {
                 kind: Kind::Internal,
-                details: _,
+                ..
             }) => (), // pass
             err => panic!("{:?}", err),
         }
@@ -974,8 +974,7 @@ mod test {
         match url_to_addrs(&no_resolve) {
             Ok(_) => panic!("url_to_addrs creates addresses for non-existent domains."),
             Err(Error {
-                kind: Kind::Io(_),
-                details: _,
+                kind: Kind::Io(_), ..
             }) => (), // pass
             err => panic!("{:?}", err),
         }

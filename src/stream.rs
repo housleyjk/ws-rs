@@ -192,7 +192,7 @@ impl io::Read for Stream {
                             };
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             err
                         }
@@ -201,7 +201,7 @@ impl io::Read for Stream {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             Err(io::Error::new(io::ErrorKind::WouldBlock, "SSL would block"))
                         }
@@ -270,7 +270,7 @@ impl io::Write for Stream {
                             };
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             err
                         }
@@ -279,7 +279,7 @@ impl io::Write for Stream {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             Err(io::Error::new(io::ErrorKind::WouldBlock, "SSL would block"))
                         }

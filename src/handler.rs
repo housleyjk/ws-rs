@@ -382,10 +382,8 @@ mod test {
             }
 
             fn on_message(&mut self, msg: message::Message) -> Result<()> {
-                Ok(assert_eq!(
-                    msg,
-                    message::Message::Text(String::from("testme"))
-                ))
+                assert_eq!(msg, message::Message::Text(String::from("testme")));
+                Ok(())
             }
 
             fn on_close(&mut self, code: CloseCode, _: &str) {
