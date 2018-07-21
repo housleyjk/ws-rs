@@ -13,7 +13,7 @@ script:
     - cargo check --features nativetls
     - cargo test
     - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then rustup component add clippy-preview && cargo clippy -- -D warnings ; fi'
-    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then rustup component add rustfmt-preview && cargo fmt --all -- --write-mode=diff ; fi'
+    - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then rustup component add rustfmt-preview && cargo fmt --all -- --check ; fi'
 after_success: |
   # pip install --user autobahntestsuite &&
   # /home/travis/.local/bin/wstest -m fuzzingserver -s ./tests/fuzzingserver.json & SPID=$! &&
