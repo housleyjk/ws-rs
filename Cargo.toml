@@ -37,7 +37,7 @@ version = "1.0.18"
 
 [dependencies.openssl]
 optional = true
-version = "0.9"
+version = "0.10"
 
 [dependencies.native-tls]
 optional = true
