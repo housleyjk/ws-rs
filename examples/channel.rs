@@ -10,8 +10,8 @@ extern crate env_logger;
 /// complex system from simple, composable parts.
 extern crate ws;
 
-use std::sync::mpsc::Sender as ThreadOut;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as ThreadOut;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -61,8 +61,7 @@ fn main() {
                     log: log_in.clone(),
                 }
             }).unwrap()
-        })
-        .unwrap();
+        }).unwrap();
 
     // Give the server a little time to get going
     sleep(Duration::from_millis(10));
@@ -118,8 +117,7 @@ fn main() {
                     data: client_data.clone(),
                 }
             }).unwrap()
-        })
-        .unwrap();
+        }).unwrap();
 
     // Logger thread
     let logger = thread::Builder::new()

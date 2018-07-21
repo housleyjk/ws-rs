@@ -333,7 +333,8 @@ impl Request {
             Ok(Some(Request {
                 path: req.path.unwrap().into(),
                 method: req.method.unwrap().into(),
-                headers: req.headers
+                headers: req
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -370,7 +371,9 @@ impl Request {
         ];
 
         if url.password().is_some() || url.username() != "" {
-            let basic = encode_base64(format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes());
+            let basic = encode_base64(
+                format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes(),
+            );
             headers.push(("Authorization".into(), format!("Basic {}", basic).into()))
         }
 
@@ -596,7 +599,8 @@ impl Response {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
-                headers: res.headers
+                headers: res
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -725,8 +729,7 @@ mod test {
             Upgrade: websocket\r\n\
             Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown\r\n\
             Sec-WebSocket-Version: 13\r\n\
-            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n")
-            .unwrap();
+            Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n").unwrap();
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
         let shake = Handshake {

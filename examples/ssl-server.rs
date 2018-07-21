@@ -61,20 +61,17 @@ fn main() {
                 .help("Address on which to bind the server.")
                 .required(true)
                 .index(1),
-        )
-        .arg(
+        ).arg(
             clap::Arg::with_name("CERT")
                 .help("Path to the SSL certificate.")
                 .required(true)
                 .index(2),
-        )
-        .arg(
+        ).arg(
             clap::Arg::with_name("KEY")
                 .help("Path to the SSL certificate key.")
                 .required(true)
                 .index(3),
-        )
-        .get_matches();
+        ).get_matches();
 
     let cert = {
         let data = read_file(matches.value_of("CERT").unwrap()).unwrap();
@@ -93,19 +90,17 @@ fn main() {
             &cert,
             std::iter::empty::<X509Ref>(),
         ).unwrap()
-            .build(),
+        .build(),
     );
 
     ws::Builder::new()
         .with_settings(ws::Settings {
             encrypt_server: true,
             ..ws::Settings::default()
-        })
-        .build(|out: ws::Sender| Server {
+        }).build(|out: ws::Sender| Server {
             out: out,
             ssl: acceptor.clone(),
-        })
-        .unwrap()
+        }).unwrap()
         .listen(matches.value_of("ADDR").unwrap())
         .unwrap();
 }

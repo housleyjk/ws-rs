@@ -1,17 +1,22 @@
 //! Lightweight, event-driven WebSockets for Rust.
 #![allow(deprecated)]
-#![deny(missing_copy_implementations, trivial_casts, trivial_numeric_casts, unstable_features,
-        unused_import_braces)]
+#![deny(
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unstable_features,
+    unused_import_braces
+)]
 
 extern crate byteorder;
 extern crate bytes;
 extern crate httparse;
 extern crate mio;
 extern crate mio_extras;
-#[cfg(feature = "ssl")]
-extern crate openssl;
 #[cfg(feature = "nativetls")]
 extern crate native_tls;
+#[cfg(feature = "ssl")]
+extern crate openssl;
 extern crate rand;
 extern crate sha1;
 extern crate slab;

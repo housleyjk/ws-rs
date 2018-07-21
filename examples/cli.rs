@@ -8,8 +8,8 @@ extern crate ws;
 
 use std::io;
 use std::io::prelude::*;
-use std::sync::mpsc::Sender as TSender;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as TSender;
 use std::thread;
 
 use clap::{App, Arg};
@@ -29,8 +29,7 @@ fn main() {
                 .help("The URL of the WebSocket server.")
                 .required(true)
                 .index(1),
-        )
-        .get_matches();
+        ).get_matches();
 
     let url = matches.value_of("URL").unwrap().to_string();
 

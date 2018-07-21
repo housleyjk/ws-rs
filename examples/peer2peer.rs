@@ -51,13 +51,11 @@ fn main() {
                 .long("server")
                 .value_name("SERVER")
                 .help("Set the address to listen for new connections."),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("PEER")
                 .help("A WebSocket URL to attempt to connect to at start.")
                 .multiple(true),
-        )
-        .get_matches();
+        ).get_matches();
 
     // Get address of this peer
     let my_addr = matches.value_of("server").unwrap_or("localhost:3012");

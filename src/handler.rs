@@ -1,8 +1,8 @@
 use log::Level::Error as ErrorLevel;
-#[cfg(feature = "ssl")]
-use openssl::ssl::{SslConnectorBuilder, SslMethod, SslStream};
 #[cfg(feature = "nativetls")]
 use native_tls::{TlsConnector, TlsStream as SslStream};
+#[cfg(feature = "ssl")]
+use openssl::ssl::{SslConnectorBuilder, SslMethod, SslStream};
 use url;
 
 use frame::Frame;
@@ -301,8 +301,7 @@ pub trait Handler {
                     Kind::Internal,
                     format!("Failed to upgrade client to SSL: {}", e),
                 )
-            })?
-            .build();
+            })?.build();
         connector.connect(domain, stream).map_err(Error::from)
     }
 
@@ -317,7 +316,8 @@ pub trait Handler {
             Kind::Protocol,
             format!("Unable to parse domain from {}. Needed for SSL.", url),
         ))?;
-        let connector = TlsConnector::builder().and_then(|builder| builder.build())
+        let connector = TlsConnector::builder()
+            .and_then(|builder| builder.build())
             .map_err(|e| {
                 Error::new(
                     Kind::Internal,

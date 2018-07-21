@@ -17,8 +17,7 @@ fn main() {
                 println!("Message handler called.");
                 Ok(())
             }
-        })
-        .unwrap();
+        }).unwrap();
 
     let handle = socket.broadcaster();
 

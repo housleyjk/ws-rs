@@ -98,8 +98,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Message(msg.into()),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Send a message to the endpoints of all connections.
@@ -119,8 +118,7 @@ impl Sender {
                 token: ALL,
                 signal: Signal::Message(msg.into()),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Send a close code to the other endpoint.
@@ -131,8 +129,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Close(code, "".into()),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Send a close code and provide a descriptive reason for closing.
@@ -146,8 +143,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Close(code, reason.into()),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Send a ping to the other endpoint with the given test data.
@@ -158,8 +154,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Ping(data),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Send a pong to the other endpoint responding with the given test data.
@@ -170,8 +165,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Pong(data),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Queue a new connection on this WebSocket to the specified URL.
@@ -182,8 +176,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Connect(url),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Request that all connections terminate and that the WebSocket stop running.
@@ -194,8 +187,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Shutdown,
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Schedule a `token` to be sent to the WebSocket Handler's `on_timeout` method
@@ -207,8 +199,7 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Timeout { delay: ms, token },
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 
     /// Queue the cancellation of a previously scheduled timeout.
@@ -223,7 +214,6 @@ impl Sender {
                 token: self.token,
                 signal: Signal::Cancel(timeout),
                 connection_id: self.connection_id,
-            })
-            .map_err(Error::from)
+            }).map_err(Error::from)
     }
 }

@@ -49,8 +49,7 @@ fn fragment() {
         .with_settings(Settings {
             fragment_size: 4,
             ..Default::default()
-        })
-        .build(|output: Sender| {
+        }).build(|output: Sender| {
             if name == "Client" {
                 output.send(MESSAGE).unwrap();
             }
@@ -67,8 +66,7 @@ fn fragment() {
             name = "Server";
 
             DeflateHandler::new(handler)
-        })
-        .unwrap();
+        }).unwrap();
 
     let url = url::Url::parse("ws://127.0.0.1:3024").unwrap();
 

@@ -13,8 +13,7 @@ fn shutdown_before_connections() {
         .build(move |_| {
             tx.send(1).unwrap();
             |_| Ok(())
-        })
-        .unwrap();
+        }).unwrap();
 
     let handle = socket.broadcaster();
 

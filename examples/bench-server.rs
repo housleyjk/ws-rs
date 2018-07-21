@@ -8,8 +8,7 @@ fn main() {
         .with_settings(Settings {
             max_connections: 10_000,
             ..Settings::default()
-        })
-        .build(|out: Sender| move |msg| out.send(msg))
+        }).build(|out: Sender| move |msg| out.send(msg))
         .unwrap()
         .listen("127.0.0.1:3012")
         .unwrap();

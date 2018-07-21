@@ -58,14 +58,12 @@ fn main() {
         .with_settings(Settings {
             max_connections: CONNECTIONS,
             ..Settings::default()
-        })
-        .build(|out| Connection {
+        }).build(|out| Connection {
             out,
             count: 0,
             time: 0,
             total: 0,
-        })
-        .unwrap();
+        }).unwrap();
 
     for _ in 0..CONNECTIONS {
         ws.connect(url.clone()).unwrap();

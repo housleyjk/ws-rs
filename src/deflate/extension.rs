@@ -1,9 +1,9 @@
 use std::mem::replace;
 
-#[cfg(feature = "ssl")]
-use openssl::ssl::SslStream;
 #[cfg(feature = "nativetls")]
 use native_tls::TlsStream as SslStream;
+#[cfg(feature = "ssl")]
+use openssl::ssl::SslStream;
 use url;
 
 use frame::Frame;
@@ -160,7 +160,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     fn on_request(&mut self, req: &Request) -> Result<Response> {
         let mut res = self.inner.on_request(req)?;
 
-        'ext: for req_ext in req.extensions()?
+        'ext: for req_ext in req
+            .extensions()?
             .iter()
             .filter(|&&ext| ext.contains("permessage-deflate"))
         {
@@ -282,7 +283,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     }
 
     fn on_response(&mut self, res: &Response) -> Result<()> {
-        if let Some(res_ext) = res.extensions()?
+        if let Some(res_ext) = res
+            .extensions()?
             .iter()
             .find(|&&ext| ext.contains("permessage-deflate"))
         {
@@ -449,7 +451,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
 
                             // it's safe to unwrap because of the above check for empty
                             let opcode = self.fragments.first().unwrap().opcode();
-                            let size = self.fragments
+                            let size = self
+                                .fragments
                                 .iter()
                                 .fold(0, |len, frame| len + frame.payload().len());
                             let mut compressed = Vec::with_capacity(size);
