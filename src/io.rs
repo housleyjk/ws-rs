@@ -11,8 +11,6 @@ use mio_extras;
 
 use url::Url;
 
-#[cfg(feature = "ssl")]
-use openssl::ssl::Error as SslError;
 #[cfg(feature = "native_tls")]
 use native_tls::Error as SslError;
 
@@ -214,16 +212,18 @@ where
             while let Err(ssl_error) = self.connections[tok.into()].encrypt() {
                 match ssl_error.kind {
                     #[cfg(feature = "ssl")]
-                    Kind::Ssl(SslError::Stream(ref io_error)) => {
-                        if let Some(errno) = io_error.raw_os_error() {
-                            if errno == CONNECTION_REFUSED {
-                                if let Err(reset_error) = self.connections[tok.into()].reset() {
-                                    trace!(
-                                        "Encountered error while trying to reset connection: {:?}",
-                                        reset_error
-                                    );
-                                } else {
-                                    continue;
+                    Kind::Ssl(ref inner_ssl_error) => {
+                        if let Some(io_error) = inner_ssl_error.io_error() {
+                            if let Some(errno) = io_error.raw_os_error() {
+                                if errno == CONNECTION_REFUSED {
+                                    if let Err(reset_error) = self.connections[tok.into()].reset() {
+                                        trace!(
+                                            "Encountered error while trying to reset connection: {:?}",
+                                            reset_error
+                                        );
+                                    } else {
+                                        continue;
+                                    }
                                 }
                             }
                         }

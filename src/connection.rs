@@ -10,10 +10,10 @@ use mio::{Ready, Token};
 use mio_extras::timer::Timeout;
 use url;
 
-#[cfg(feature = "ssl")]
-use openssl::ssl::HandshakeError;
 #[cfg(feature = "nativetls")]
 use native_tls::HandshakeError;
+#[cfg(feature = "ssl")]
+use openssl::ssl::HandshakeError;
 
 use frame::Frame;
 use handler::Handler;
@@ -169,7 +169,7 @@ where
                 HandshakeError::SetupFailure(_) => {
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
-                HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                HandshakeError::Failure(mid) | HandshakeError::WouldBlock(mid) => {
                     self.socket = Stream::tls(mid);
                     Ok(())
                 }
@@ -239,7 +239,7 @@ where
                                 HandshakeError::SetupFailure(_) => {
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
-                                HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                                HandshakeError::Failure(mid) | HandshakeError::WouldBlock(mid) => {
                                     self.socket = Stream::tls(mid);
                                     Ok(())
                                 }
