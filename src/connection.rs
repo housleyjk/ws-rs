@@ -578,7 +578,11 @@ where
         if let Connecting(ref mut req, ref mut res) = self.state {
             match self.endpoint {
                 Server => {
-                    if self.socket.try_read_buf(req.get_mut())?.is_some() {
+                    if let Some(read) = self.socket.try_read_buf(req.get_mut())? {
+                        if read == 0 {
+                            self.events = Ready::empty();
+                            return Ok(());
+                        }
                         if let Some(ref request) = Request::parse(req.get_ref())? {
                             trace!("Handshake request received: \n{}", request);
                             let response = self.handler.on_request(request)?;
