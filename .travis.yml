@@ -9,6 +9,8 @@ matrix:
   - rust: nightly
 script:
     - cargo build
+    - cargo check --features ssl
+    - cargo check --features nativetls
     - cargo test
     - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then cargo install clippy --force && cargo clippy -- -A doc_markdown -A cyclomatic_complexity -A collapsible_if ; fi'
     - bash -c 'if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]] ; then rustup component add rustfmt-preview && cargo fmt --all -- --write-mode=diff ; fi'

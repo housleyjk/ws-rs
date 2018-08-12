@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use bytes::{Buf, BufMut};
 use mio::tcp::TcpStream;
 #[cfg(feature = "ssl")]
-use openssl::ssl::Error as SslError;
+use openssl::ssl::{Error as SslError, HandshakeError, MidHandshakeSslStream, SslStream};
 #[cfg(feature = "nativetls")]
 use native_tls::{HandshakeError, MidHandshakeTlsStream as MidHandshakeSslStream, TlsStream as SslStream};
 
