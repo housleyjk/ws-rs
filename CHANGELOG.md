@@ -1,3 +1,17 @@
+<a name="v0.7.8"></a>
+### v0.7.8 (2018-08-15)
+
+
+#### Bug fixes
+
+*   Fix an infinite loop when connections were closed during a handshake
+
+
+#### Features
+*   `Websocket::from_url` will now add an `Authorization` header if necessary
+*   Add support for native-tls via the `nativetls` feature
+
+
 <a name="v0.7.3"></a>
 ### v0.7.3 (2017-06-07)
 
