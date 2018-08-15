@@ -4,12 +4,12 @@
 
 #### Bug fixes
 
-*   Fix an infinite loop when connections were closed during a handshake
+*   Fixed an infinite loop when connections were closed during a handshake
 
 
 #### Features
 *   `Websocket::from_url` will now add an `Authorization` header if necessary
-*   Add support for native-tls via the `nativetls` feature
+*   Added support for native-tls via the `nativetls` feature
 
 
 <a name="v0.7.3"></a>
