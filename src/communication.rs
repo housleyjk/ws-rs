@@ -57,7 +57,8 @@ pub struct Sender {
 
 impl fmt::Debug for Sender {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Sender {{ token: {:?}, channel: _, connection_id: {:?} }}",
+        write!(f,
+            "Sender {{ token: {:?}, channel: mio::channel::SyncSender<Command>, connection_id: {:?} }}",
             self.token, self.connection_id)
     }
 }
