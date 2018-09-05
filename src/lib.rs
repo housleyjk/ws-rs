@@ -133,7 +133,7 @@ pub struct Settings {
     /// connections because this is a hard limit and no new connections beyond
     /// this limit can be made until an old connection is dropped.
     /// Default: 100
-    pub max_connections: 1000,
+    pub max_connections: usize,
     /// The number of events anticipated per connection. The event loop queue size will
     /// be `queue_size` * `max_connections`. In order to avoid an overflow error,
     /// `queue_size` * `max_connections` must be less than or equal to `usize::max_value()`.
@@ -238,8 +238,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
-            max_connections: 100,
-            queue_size: 5,
+            max_connections: 1_000_000,
+            queue_size: 20,
             panic_on_new_connection: false,
             panic_on_shutdown: false,
             fragments_capacity: 10,
