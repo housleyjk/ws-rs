@@ -133,7 +133,7 @@ pub struct Settings {
     /// connections because this is a hard limit and no new connections beyond
     /// this limit can be made until an old connection is dropped.
     /// Default: 100
-    pub max_connections: 1000000,
+    pub max_connections: 1000,
     /// The number of events anticipated per connection. The event loop queue size will
     /// be `queue_size` * `max_connections`. In order to avoid an overflow error,
     /// `queue_size` * `max_connections` must be less than or equal to `usize::max_value()`.
@@ -141,7 +141,7 @@ pub struct Settings {
     /// more events than `queue_size` provided that another connection is using less than
     /// `queue_size`. However, if the queue is maxed out a Queue error will occur.
     /// Default: 5
-    pub queue_size: 1000000,
+    pub queue_size: usize,
     /// Whether to panic when unable to establish a new TCP connection.
     /// Default: false
     pub panic_on_new_connection: bool,
