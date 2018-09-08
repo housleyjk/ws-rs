@@ -238,8 +238,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
-            max_connections: 1_000_000,
-            queue_size: 20,
+            max_connections: 100,
+            queue_size: 5,
             panic_on_new_connection: false,
             panic_on_shutdown: false,
             fragments_capacity: 10,
