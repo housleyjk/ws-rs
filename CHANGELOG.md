@@ -1,3 +1,11 @@
+<a name="v0.7.9"></a>
+### v0.7.9 (2018-10-15)
+
+
+#### Features
+*   Update openssl to 0.10
+*   Implement `Debug` for `Sender`
+
 <a name="v0.7.8"></a>
 ### v0.7.8 (2018-08-15)
 
