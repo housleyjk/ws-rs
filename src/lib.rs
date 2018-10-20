@@ -233,6 +233,10 @@ pub struct Settings {
     ///
     /// Default: false
     pub tcp_nodelay: bool,
+    /// Size of mio's timer each tick in milliseconds.
+    ///
+    /// Default: 100
+    pub timer_tick_millis: u64
 }
 
 impl Default for Settings {
@@ -262,6 +266,7 @@ impl Default for Settings {
             method_strict: false,
             encrypt_server: false,
             tcp_nodelay: false,
+            timer_tick_millis: 100
         }
     }
 }
