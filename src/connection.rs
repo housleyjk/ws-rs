@@ -182,7 +182,7 @@ where
                 HandshakeError::Failure(_) => {
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
-                HandshakeError::Interrupted(mid) => {
+                HandshakeError::WouldBlock(mid) => {
                     self.socket = Stream::tls(mid);
                     Ok(())
                 }
@@ -252,7 +252,7 @@ where
                                 HandshakeError::Failure(_) => {
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
-                                HandshakeError::Interrupted(mid) => {
+                                HandshakeError::WouldBlock(mid) => {
                                     self.socket = Stream::tls(mid);
                                     Ok(())
                                 }

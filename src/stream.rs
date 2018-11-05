@@ -194,7 +194,7 @@ impl io::Read for Stream {
                             err
                         }
                         #[cfg(feature = "nativetls")]
-                        Err(HandshakeError::Interrupted(mid)) => {
+                        Err(HandshakeError::WouldBlock(mid)) => {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
@@ -264,7 +264,7 @@ impl io::Write for Stream {
                             err
                         }
                         #[cfg(feature = "nativetls")]
-                        Err(HandshakeError::Interrupted(mid)) => {
+                        Err(HandshakeError::WouldBlock(mid)) => {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
