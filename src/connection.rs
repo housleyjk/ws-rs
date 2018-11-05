@@ -609,6 +609,9 @@ where
                             end
                         };
                         res.get_mut().truncate(end);
+                    } else {
+                        // NOTE: wait to be polled again; response not ready.
+                        return Ok(());
                     }
                 }
             }
