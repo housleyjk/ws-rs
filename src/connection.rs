@@ -714,7 +714,8 @@ where
     }
 
     fn read_frames(&mut self) -> Result<()> {
-        while let Some(mut frame) = Frame::parse(&mut self.in_buffer)? {
+        let max_size = self.settings.max_fragment_size as u64;
+        while let Some(mut frame) = Frame::parse(&mut self.in_buffer, max_size)? {
             match self.state {
                 // Ignore data received after receiving close frame
                 RespondingClose | FinishedClose => continue,
