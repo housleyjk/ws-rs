@@ -1,4 +1,15 @@
 <a name="v0.7.9"></a>
+### v0.8.0 (2018-10-15)
+
+#### Features
+*   Update rand to 0.6
+*   Upgrade native-tls to 0.2
+*   Add a maximal size for fragments exposed via the `max_fragment_size` setting
+
+#### Bug fixes
+*    Don't try to parse response when the socket not ready
+
+<a name="v0.7.9"></a>
 ### v0.7.9 (2018-10-15)
 
 
