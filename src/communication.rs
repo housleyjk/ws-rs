@@ -70,10 +70,8 @@ impl PartialEq for Sender {
     }
 }
 
-// Fixes #255.
 impl Eq for Sender { }
 
-// Fixes #255.
 impl Hash for Sender {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.connection_id.hash(state);
