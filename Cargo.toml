@@ -57,3 +57,4 @@ permessage-deflate = [
 ]
 ssl = ["openssl"]
 nativetls = ["native-tls"]
+vendored = ["native-tls/vendored"]
