@@ -13,7 +13,7 @@ license = "MIT"
 name = "ws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
-version = "0.7.8"
+version = "0.8.0"
 
 [dependencies]
 byteorder = "1.2.1"
@@ -22,7 +22,7 @@ httparse = "1.2.4"
 log = "0.4.1"
 mio = "0.6.14"
 mio-extras = "2.0"
-rand = "0.4.2"
+rand = "0.6"
 sha1 = "0.6.0"
 slab = "0.4"
 url = "1.7.0"
@@ -37,15 +37,15 @@ version = "1.0.18"
 
 [dependencies.openssl]
 optional = true
-version = "0.9"
+version = "0.10"
 
 [dependencies.native-tls]
 optional = true
-version = "0.2.2"
+version = "0.2"
 
 [dev-dependencies]
 clap = "2.31.2"
-env_logger = "0.5.6"
+env_logger = "0.6"
 term = "0.5.1"
 time = "0.1.39"
 

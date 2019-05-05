@@ -22,9 +22,9 @@ use std::rc::Rc;
 #[cfg(feature = "ssl")]
 use openssl::pkey::PKey;
 #[cfg(feature = "ssl")]
-use openssl::ssl::{SslAcceptor, SslAcceptorBuilder, SslMethod, SslStream};
+use openssl::ssl::{SslAcceptor, SslMethod, SslStream};
 #[cfg(feature = "ssl")]
-use openssl::x509::{X509, X509Ref};
+use openssl::x509::X509;
 
 #[cfg(feature = "ssl")]
 use ws::util::TcpStream;
@@ -86,15 +86,13 @@ fn main() {
         PKey::private_key_from_pem(data.as_ref()).unwrap()
     };
 
-    let acceptor = Rc::new(
-        SslAcceptorBuilder::mozilla_intermediate(
-            SslMethod::tls(),
-            &pkey,
-            &cert,
-            std::iter::empty::<X509Ref>(),
-        ).unwrap()
-            .build(),
-    );
+    let acceptor = Rc::new({
+        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+        builder.set_private_key(&pkey).unwrap();
+        builder.set_certificate(&cert).unwrap();
+
+        builder.build()
+    });
 
     ws::Builder::new()
         .with_settings(ws::Settings {

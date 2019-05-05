@@ -11,6 +11,7 @@ use message;
 use protocol::CloseCode;
 use result::{Error, Result};
 use std::cmp::PartialEq;
+use std::hash::{Hash, Hasher};
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -68,6 +69,16 @@ impl PartialEq for Sender {
         self.token == other.token && self.connection_id == other.connection_id
     }
 }
+
+impl Eq for Sender { }
+
+impl Hash for Sender {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.connection_id.hash(state);
+        self.token.hash(state);
+    }
+}
+
 
 impl Sender {
     #[doc(hidden)]

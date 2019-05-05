@@ -10,10 +10,10 @@ use mio::{Ready, Token};
 use mio_extras::timer::Timeout;
 use url;
 
-#[cfg(feature = "ssl")]
-use openssl::ssl::HandshakeError;
 #[cfg(feature = "nativetls")]
 use native_tls::HandshakeError;
+#[cfg(feature = "ssl")]
+use openssl::ssl::HandshakeError;
 
 use frame::Frame;
 use handler::Handler;
@@ -169,7 +169,7 @@ where
                 HandshakeError::SetupFailure(_) => {
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
-                HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                HandshakeError::Failure(mid) | HandshakeError::WouldBlock(mid) => {
                     self.socket = Stream::tls(mid);
                     Ok(())
                 }
@@ -182,7 +182,7 @@ where
                 HandshakeError::Failure(_) => {
                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                 }
-                HandshakeError::Interrupted(mid) => {
+                HandshakeError::WouldBlock(mid) => {
                     self.socket = Stream::tls(mid);
                     Ok(())
                 }
@@ -239,7 +239,7 @@ where
                                 HandshakeError::SetupFailure(_) => {
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
-                                HandshakeError::Failure(mid) | HandshakeError::Interrupted(mid) => {
+                                HandshakeError::Failure(mid) | HandshakeError::WouldBlock(mid) => {
                                     self.socket = Stream::tls(mid);
                                     Ok(())
                                 }
@@ -252,7 +252,7 @@ where
                                 HandshakeError::Failure(_) => {
                                     Err(Error::new(Kind::SslHandshake(handshake_err), details))
                                 }
-                                HandshakeError::Interrupted(mid) => {
+                                HandshakeError::WouldBlock(mid) => {
                                     self.socket = Stream::tls(mid);
                                     Ok(())
                                 }
@@ -609,6 +609,9 @@ where
                             end
                         };
                         res.get_mut().truncate(end);
+                    } else {
+                        // NOTE: wait to be polled again; response not ready.
+                        return Ok(());
                     }
                 }
             }
@@ -714,7 +717,8 @@ where
     }
 
     fn read_frames(&mut self) -> Result<()> {
-        while let Some(mut frame) = Frame::parse(&mut self.in_buffer)? {
+        let max_size = self.settings.max_fragment_size as u64;
+        while let Some(mut frame) = Frame::parse(&mut self.in_buffer, max_size)? {
             match self.state {
                 // Ignore data received after receiving close frame
                 RespondingClose | FinishedClose => continue,
