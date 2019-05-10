@@ -5,7 +5,7 @@ use std::str::from_utf8;
 
 use httparse;
 use rand;
-use sha1;
+use sha1::{self, Digest};
 use url;
 
 use result::{Error, Kind, Result};
@@ -22,10 +22,10 @@ fn generate_key() -> String {
 pub fn hash_key(key: &[u8]) -> String {
     let mut hasher = sha1::Sha1::new();
 
-    hasher.update(key);
-    hasher.update(WS_GUID.as_bytes());
+    hasher.input(key);
+    hasher.input(WS_GUID.as_bytes());
 
-    encode_base64(&hasher.digest().bytes())
+    encode_base64(&hasher.result())
 }
 
 // This code is based on rustc_serialize base64 STANDARD
