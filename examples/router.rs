@@ -6,7 +6,7 @@ extern crate ws;
 // A WebSocket handler that routes connections to different boxed handlers by resource
 struct Router {
     sender: ws::Sender,
-    inner: Box<ws::Handler>,
+    inner: Box<dyn ws::Handler>,
 }
 
 impl ws::Handler for Router {

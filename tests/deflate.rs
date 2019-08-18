@@ -29,7 +29,8 @@ fn round_trip() {
         name = "Server";
 
         DeflateHandler::new(handler)
-    }).unwrap();
+    })
+    .unwrap();
 
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
 

@@ -8,10 +8,10 @@ use std::str::Utf8Error;
 
 use httparse;
 use mio;
-#[cfg(feature = "ssl")]
-use openssl::ssl::{Error as SslError, HandshakeError as SslHandshakeError};
 #[cfg(feature = "nativetls")]
 use native_tls::{Error as SslError, HandshakeError as SslHandshakeError};
+#[cfg(feature = "ssl")]
+use openssl::ssl::{Error as SslError, HandshakeError as SslHandshakeError};
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
 type HandshakeError = SslHandshakeError<mio::tcp::TcpStream>;
 

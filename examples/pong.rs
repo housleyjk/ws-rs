@@ -9,8 +9,9 @@ use std::str::from_utf8;
 use mio_extras::timer::Timeout;
 
 use ws::util::Token;
-use ws::{listen, CloseCode, Error, ErrorKind, Frame, Handler, Handshake, Message, OpCode, Result,
-         Sender};
+use ws::{
+    listen, CloseCode, Error, ErrorKind, Frame, Handler, Handshake, Message, OpCode, Result, Sender,
+};
 
 const PING: Token = Token(1);
 const EXPIRE: Token = Token(2);
@@ -24,7 +25,8 @@ fn main() {
         out,
         ping_timeout: None,
         expire_timeout: None,
-    }).unwrap();
+    })
+    .unwrap();
 }
 
 // Server WebSocket handler

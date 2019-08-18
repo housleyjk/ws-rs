@@ -18,9 +18,8 @@ use super::Settings;
 use communication::{Command, Sender, Signal};
 use connection::Connection;
 use factory::Factory;
-use slab::Slab;
 use result::{Error, Kind, Result};
-
+use slab::Slab;
 
 const QUEUE: Token = Token(usize::MAX - 3);
 const TIMER: Token = Token(usize::MAX - 4);
@@ -252,16 +251,17 @@ where
             self.connections[tok.into()].token(),
             self.connections[tok.into()].events(),
             PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
-            .or_else(|err| {
-                error!(
-                    "Encountered error while trying to build WebSocket connection: {}",
-                    err
-                );
-                let handler = self.connections.remove(tok.into()).consume();
-                self.factory.connection_lost(handler);
-                Err(err)
-            })
+        )
+        .map_err(Error::from)
+        .or_else(|err| {
+            error!(
+                "Encountered error while trying to build WebSocket connection: {}",
+                err
+            );
+            let handler = self.connections.remove(tok.into()).consume();
+            self.factory.connection_lost(handler);
+            Err(err)
+        })
     }
 
     #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
@@ -342,16 +342,17 @@ where
             self.connections[tok.into()].token(),
             self.connections[tok.into()].events(),
             PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
-            .or_else(|err| {
-                error!(
-                    "Encountered error while trying to build WebSocket connection: {}",
-                    err
-                );
-                let handler = self.connections.remove(tok.into()).consume();
-                self.factory.connection_lost(handler);
-                Err(err)
-            })
+        )
+        .map_err(Error::from)
+        .or_else(|err| {
+            error!(
+                "Encountered error while trying to build WebSocket connection: {}",
+                err
+            );
+            let handler = self.connections.remove(tok.into()).consume();
+            self.factory.connection_lost(handler);
+            Err(err)
+        })
     }
 
     #[cfg(any(feature = "ssl", feature = "nativetls"))]
@@ -396,18 +397,19 @@ where
             conn.token(),
             conn.events(),
             PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
-            .or_else(|err| {
-                error!(
-                    "Encountered error while trying to build WebSocket connection: {}",
-                    err
-                );
-                conn.error(err);
-                if settings.panic_on_new_connection {
-                    panic!("Encountered error while trying to build WebSocket connection.");
-                }
-                Ok(())
-            })
+        )
+        .map_err(Error::from)
+        .or_else(|err| {
+            error!(
+                "Encountered error while trying to build WebSocket connection: {}",
+                err
+            );
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
     }
 
     #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
@@ -455,18 +457,19 @@ where
             conn.token(),
             conn.events(),
             PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
-            .or_else(|err| {
-                error!(
-                    "Encountered error while trying to build WebSocket connection: {}",
-                    err
-                );
-                conn.error(err);
-                if settings.panic_on_new_connection {
-                    panic!("Encountered error while trying to build WebSocket connection.");
-                }
-                Ok(())
-            })
+        )
+        .map_err(Error::from)
+        .or_else(|err| {
+            error!(
+                "Encountered error while trying to build WebSocket connection: {}",
+                err
+            );
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
     }
 
     pub fn run(&mut self, poll: &mut Poll) -> Result<()> {
@@ -605,7 +608,8 @@ where
             }
             ALL => {
                 if events.is_readable() {
-                    match self.listener
+                    match self
+                        .listener
                         .as_ref()
                         .expect("No listener provided for server websocket connections")
                         .accept()
@@ -626,9 +630,11 @@ where
                     }
                 }
             }
-            TIMER => while let Some(t) = self.timer.poll() {
-                self.handle_timeout(poll, t);
-            },
+            TIMER => {
+                while let Some(t) = self.timer.poll() {
+                    self.handle_timeout(poll, t);
+                }
+            }
             QUEUE => {
                 for _ in 0..MESSAGES_PER_TICK {
                     match self.queue_rx.try_recv() {
@@ -660,16 +666,18 @@ where
                                                     self.connections[token.into()].token(),
                                                     self.connections[token.into()].events(),
                                                     PollOpt::edge() | PollOpt::oneshot(),
-                                                ).or_else(|err| {
-                                                        self.connections[token.into()]
-                                                            .error(Error::from(err));
-                                                        let handler = self.connections
-                                                            .remove(token.into())
-                                                            .consume();
-                                                        self.factory.connection_lost(handler);
-                                                        Ok::<(), Error>(())
-                                                    })
-                                                    .unwrap();
+                                                )
+                                                .or_else(|err| {
+                                                    self.connections[token.into()]
+                                                        .error(Error::from(err));
+                                                    let handler = self
+                                                        .connections
+                                                        .remove(token.into())
+                                                        .consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                })
+                                                .unwrap();
                                                 return;
                                             }
                                             Err(err) => {
@@ -699,16 +707,18 @@ where
                                                     self.connections[token.into()].token(),
                                                     self.connections[token.into()].events(),
                                                     PollOpt::edge() | PollOpt::oneshot(),
-                                                ).or_else(|err| {
-                                                        self.connections[token.into()]
-                                                            .error(Error::from(err));
-                                                        let handler = self.connections
-                                                            .remove(token.into())
-                                                            .consume();
-                                                        self.factory.connection_lost(handler);
-                                                        Ok::<(), Error>(())
-                                                    })
-                                                    .unwrap();
+                                                )
+                                                .or_else(|err| {
+                                                    self.connections[token.into()]
+                                                        .error(Error::from(err));
+                                                    let handler = self
+                                                        .connections
+                                                        .remove(token.into())
+                                                        .consume();
+                                                    self.factory.connection_lost(handler);
+                                                    Ok::<(), Error>(())
+                                                })
+                                                .unwrap();
                                                 return;
                                             }
                                             Err(err) => {
@@ -981,5 +991,4 @@ mod test {
             err => panic!("{:?}", err),
         }
     }
-
 }

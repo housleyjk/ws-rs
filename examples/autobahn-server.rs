@@ -10,9 +10,7 @@ use ws::deflate::DeflateHandler;
 fn main() {
     env_logger::init();
 
-    ws::listen("127.0.0.1:3012", |out| {
-        move |msg| out.send(msg)
-    }).unwrap()
+    ws::listen("127.0.0.1:3012", |out| move |msg| out.send(msg)).unwrap()
 }
 
 #[cfg(feature = "permessage-deflate")]
@@ -21,5 +19,6 @@ fn main() {
 
     ws::listen("127.0.0.1:3012", |out| {
         DeflateHandler::new(move |msg| out.send(msg))
-    }).unwrap();
+    })
+    .unwrap();
 }

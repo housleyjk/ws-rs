@@ -10,8 +10,8 @@ extern crate env_logger;
 /// complex system from simple, composable parts.
 extern crate ws;
 
-use std::sync::mpsc::Sender as ThreadOut;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as ThreadOut;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -60,7 +60,8 @@ fn main() {
                     // in theory, there could be many active connections
                     log: log_in.clone(),
                 }
-            }).unwrap()
+            })
+            .unwrap()
         })
         .unwrap();
 
@@ -117,7 +118,8 @@ fn main() {
                     // in theory, there could be many client connections sending off the data
                     data: client_data.clone(),
                 }
-            }).unwrap()
+            })
+            .unwrap()
         })
         .unwrap();
 

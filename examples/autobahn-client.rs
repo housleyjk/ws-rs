@@ -42,7 +42,8 @@ fn main() {
 
         connect(case_url, |out| {
             DeflateHandler::new(move |msg| out.send(msg))
-        }).unwrap();
+        })
+        .unwrap();
 
         case_id += 1
     }

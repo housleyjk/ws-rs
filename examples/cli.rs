@@ -8,8 +8,8 @@ extern crate ws;
 
 use std::io;
 use std::io::prelude::*;
-use std::sync::mpsc::Sender as TSender;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as TSender;
 use std::thread;
 
 use clap::{App, Arg};
@@ -42,7 +42,8 @@ fn main() {
         connect(url, |sender| Client {
             ws_out: sender,
             thread_out: tx.clone(),
-        }).unwrap();
+        })
+        .unwrap();
     });
 
     if let Ok(Event::Connect(sender)) = rx.recv() {

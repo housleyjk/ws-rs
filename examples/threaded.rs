@@ -46,7 +46,8 @@ fn main() {
                 println!("Client got message '{}'. ", msg);
                 out.close(CloseCode::Normal)
             }
-        }).unwrap()
+        })
+        .unwrap()
     });
 
     let _ = server.join();

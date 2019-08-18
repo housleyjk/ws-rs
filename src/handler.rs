@@ -403,7 +403,8 @@ mod test {
             response: res,
             peer_addr: None,
             local_addr: None,
-        }).unwrap();
+        })
+        .unwrap();
         h.on_message(message::Message::Text("testme".to_owned()))
             .unwrap();
         h.on_close(CloseCode::Normal, "");

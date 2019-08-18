@@ -333,7 +333,8 @@ impl Request {
             Ok(Some(Request {
                 path: req.path.unwrap().into(),
                 method: req.method.unwrap().into(),
-                headers: req.headers
+                headers: req
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -362,7 +363,8 @@ impl Request {
                         "No host passed for WebSocket connection.",
                     ))?,
                     url.port_or_known_default().unwrap_or(80)
-                ).into(),
+                )
+                .into(),
             ),
             ("Sec-WebSocket-Version".into(), "13".into()),
             ("Sec-WebSocket-Key".into(), generate_key().into()),
@@ -370,7 +372,9 @@ impl Request {
         ];
 
         if url.password().is_some() || url.username() != "" {
-            let basic = encode_base64(format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes());
+            let basic = encode_base64(
+                format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes(),
+            );
             headers.push(("Authorization".into(), format!("Basic {}", basic).into()))
         }
 
@@ -596,7 +600,8 @@ impl Response {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
-                headers: res.headers
+                headers: res
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -678,7 +683,8 @@ mod test {
              Upgrade: websocket\r\n\
              Sec-WebSocket-Version: 13\r\n\
              Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
-        ).unwrap();
+        )
+        .unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -702,7 +708,8 @@ mod test {
              X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
              Sec-WebSocket-Version: 13\r\n\
              Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
-        ).unwrap();
+        )
+        .unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -726,7 +733,7 @@ mod test {
             Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown\r\n\
             Sec-WebSocket-Version: 13\r\n\
             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n")
-            .unwrap();
+        .unwrap();
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
         let shake = Handshake {

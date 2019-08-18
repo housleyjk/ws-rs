@@ -68,7 +68,8 @@ fn main() {
             info!("Peer {} got message: {}", my_addr, msg);
             Ok(())
         }
-    }).unwrap();
+    })
+    .unwrap();
 
     // Get a sender for ALL connections to the websocket
     let broacaster = me.broadcaster();

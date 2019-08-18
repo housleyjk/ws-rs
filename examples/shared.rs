@@ -42,7 +42,8 @@ fn main() {
 
         // We must return the handler
         handler
-    }).unwrap();
+    })
+    .unwrap();
 
     // Url for the client
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();

@@ -11,8 +11,8 @@ use message;
 use protocol::CloseCode;
 use result::{Error, Result};
 use std::cmp::PartialEq;
-use std::hash::{Hash, Hasher};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone)]
 pub enum Signal {
@@ -70,7 +70,7 @@ impl PartialEq for Sender {
     }
 }
 
-impl Eq for Sender { }
+impl Eq for Sender {}
 
 impl Hash for Sender {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -78,7 +78,6 @@ impl Hash for Sender {
         self.token.hash(state);
     }
 }
-
 
 impl Sender {
     #[doc(hidden)]
