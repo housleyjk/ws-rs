@@ -51,7 +51,7 @@ fn main() {
     env_logger::init();
 
     if let Err(error) = ws::connect("wss://localhost:3443/api/websocket", |out| {
-        if let Err(_) = out.send("Hello WebSocket") {
+        if out.send("Hello WebSocket").is_err() {
             println!("Websocket couldn't queue an initial message.")
         } else {
             println!("Client sent message 'Hello WebSocket'. ")

@@ -1,3 +1,5 @@
+#![allow(invalid_value, clippy::ptr_offset_with_cast, clippy::cast_lossless)]
+
 use std::mem;
 use std::slice;
 
@@ -6,7 +8,7 @@ use super::libc::{c_char, c_int, c_uint};
 
 use result::{Error, Kind, Result};
 
-const ZLIB_VERSION: &'static str = "1.2.8\0";
+const ZLIB_VERSION: &str = "1.2.8\0";
 
 trait Context {
     fn stream(&mut self) -> &mut ffi::z_stream;
@@ -15,7 +17,7 @@ trait Context {
     where
         F: Fn(&mut ffi::z_stream) -> Option<Result<()>>,
     {
-        debug_assert!(output.len() == 0, "Output vector is not empty.");
+        debug_assert!(output.is_empty(), "Output vector is not empty.");
 
         let stream = self.stream();
 
@@ -79,7 +81,7 @@ impl Compressor {
                 mem::size_of::<ffi::z_stream>() as c_int,
             );
             assert!(result == ffi::Z_OK, "Failed to initialize compresser.");
-            Compressor { stream: stream }
+            Compressor { stream }
         }
     }
 
@@ -147,7 +149,7 @@ impl Decompressor {
                 mem::size_of::<ffi::z_stream>() as c_int,
             );
             assert!(result == ffi::Z_OK, "Failed to initialize decompresser.");
-            Decompressor { stream: stream }
+            Decompressor { stream }
         }
     }
 
@@ -196,15 +198,16 @@ impl Drop for Decompressor {
     }
 }
 
+#[cfg(test)]
 mod test {
-    #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
 
+    #[allow(dead_code)]
     fn as_hex(s: &[u8]) {
         for byte in s {
             print!("0x{:x} ", byte);
         }
-        print!("\n");
+        println!();
     }
 
     #[test]

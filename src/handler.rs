@@ -291,10 +291,12 @@ pub trait Handler {
         stream: TcpStream,
         url: &url::Url,
     ) -> Result<SslStream<TcpStream>> {
-        let domain = url.domain().ok_or(Error::new(
-            Kind::Protocol,
-            format!("Unable to parse domain from {}. Needed for SSL.", url),
-        ))?;
+        let domain = url.domain().ok_or_else(|| {
+            Error::new(
+                Kind::Protocol,
+                format!("Unable to parse domain from {}. Needed for SSL.", url),
+            )
+        })?;
         let connector = SslConnector::builder(SslMethod::tls())
             .map_err(|e| {
                 Error::new(
@@ -313,10 +315,12 @@ pub trait Handler {
         stream: TcpStream,
         url: &url::Url,
     ) -> Result<SslStream<TcpStream>> {
-        let domain = url.domain().ok_or(Error::new(
-            Kind::Protocol,
-            format!("Unable to parse domain from {}. Needed for SSL.", url),
-        ))?;
+        let domain = url.domain().ok_or_else(|| {
+            Error::new(
+                Kind::Protocol,
+                format!("Unable to parse domain from {}. Needed for SSL.", url),
+            )
+        })?;
 
         let connector = TlsConnector::new().map_err(|e| {
             Error::new(
@@ -383,10 +387,8 @@ mod test {
             }
 
             fn on_message(&mut self, msg: message::Message) -> Result<()> {
-                Ok(assert_eq!(
-                    msg,
-                    message::Message::Text(String::from("testme"))
-                ))
+                assert_eq!(msg, message::Message::Text(String::from("testme")));
+                Ok(())
             }
 
             fn on_close(&mut self, code: CloseCode, _: &str) {

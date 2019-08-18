@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 use std::borrow::Cow;
 use std::convert::{From, Into};
 use std::error::Error as StdError;

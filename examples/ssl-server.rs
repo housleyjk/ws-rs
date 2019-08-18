@@ -100,7 +100,7 @@ fn main() {
             ..ws::Settings::default()
         })
         .build(|out: ws::Sender| Server {
-            out: out,
+            out,
             ssl: acceptor.clone(),
         })
         .unwrap()

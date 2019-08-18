@@ -9,7 +9,7 @@ use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
 use stream::TryReadBuf;
 
-fn apply_mask(buf: &mut [u8], mask: &[u8; 4]) {
+fn apply_mask(buf: &mut [u8], mask: [u8; 4]) {
     let iter = buf.iter_mut().zip(mask.iter().cycle());
     for (byte, &key) in iter {
         *byte ^= key
@@ -176,9 +176,9 @@ impl Frame {
     #[doc(hidden)]
     #[inline]
     pub fn remove_mask(&mut self) -> &mut Frame {
-        self.mask
-            .take()
-            .map(|mask| apply_mask(&mut self.payload, &mask));
+        if let Some(mask) = self.mask.take() {
+            apply_mask(&mut self.payload, mask);
+        }
         self
     }
 
@@ -429,7 +429,7 @@ impl Frame {
 
         if self.is_masked() {
             let mask = self.mask.take().unwrap();
-            apply_mask(&mut self.payload, &mask);
+            apply_mask(&mut self.payload, mask);
             w.write_all(&mask)?;
         }
 

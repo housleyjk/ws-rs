@@ -16,7 +16,7 @@ use ws::{Builder, CloseCode, Handler, Handshake, Message, Result, Sender, Settin
 
 const CONNECTIONS: usize = 10_000; // simultaneous
 const MESSAGES: u32 = 10;
-static MESSAGE: &'static str = "TEST TEST TEST TEST TEST TEST TEST TEST";
+static MESSAGE: &str = "TEST TEST TEST TEST TEST TEST TEST TEST";
 
 fn main() {
     env_logger::init();

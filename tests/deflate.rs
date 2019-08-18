@@ -8,7 +8,7 @@ use ws::{Builder, Message, Sender, Settings, WebSocket};
 
 #[test]
 fn round_trip() {
-    const MESSAGE: &'static str = "this is the message that will be sent as a message";
+    const MESSAGE: &str = "this is the message that will be sent as a message";
 
     let mut name = "Client";
 
@@ -42,7 +42,7 @@ fn round_trip() {
 #[test]
 fn fragment() {
     env_logger::init();
-    const MESSAGE: &'static str = "Hello";
+    const MESSAGE: &str = "Hello";
 
     let mut name = "Client";
 

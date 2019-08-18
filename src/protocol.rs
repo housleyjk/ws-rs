@@ -23,8 +23,8 @@ pub enum OpCode {
 
 impl OpCode {
     /// Test whether the opcode indicates a control frame.
-    pub fn is_control(&self) -> bool {
-        match *self {
+    pub fn is_control(self) -> bool {
+        match self {
             Text | Binary | Continue => false,
             _ => true,
         }

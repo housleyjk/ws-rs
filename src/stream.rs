@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 use std::io;
 use std::io::ErrorKind::WouldBlock;
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
@@ -198,7 +200,7 @@ impl io::Read for Stream {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             Err(io::Error::new(io::ErrorKind::WouldBlock, "SSL would block"))
                         }
@@ -268,7 +270,7 @@ impl io::Write for Stream {
                             negotiating = true;
                             *tls_stream = TlsStream::Handshake {
                                 sock: mid,
-                                negotiating: negotiating,
+                                negotiating,
                             };
                             Err(io::Error::new(io::ErrorKind::WouldBlock, "SSL would block"))
                         }
@@ -318,10 +320,7 @@ impl TlsStream {
     pub fn is_negotiating(&self) -> bool {
         match *self {
             TlsStream::Live(_) => false,
-            TlsStream::Handshake {
-                sock: _,
-                negotiating,
-            } => negotiating,
+            TlsStream::Handshake { negotiating, .. } => negotiating,
             TlsStream::Upgrading => panic!("Tried to access actively upgrading TlsStream"),
         }
     }
@@ -333,9 +332,12 @@ impl TlsStream {
                 "Attempted to clear negotiating flag on live ssl connection.",
             )),
             TlsStream::Handshake {
-                sock: _,
                 ref mut negotiating,
-            } => Ok(*negotiating = false),
+                ..
+            } => {
+                *negotiating = false;
+                Ok(())
+            }
             TlsStream::Upgrading => panic!("Tried to access actively upgrading TlsStream"),
         }
     }

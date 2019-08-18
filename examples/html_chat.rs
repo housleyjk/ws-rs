@@ -3,7 +3,7 @@ extern crate ws;
 use ws::{listen, Handler, Message, Request, Response, Result, Sender};
 
 // This can be read from a file
-static INDEX_HTML: &'static [u8] = br#"
+static INDEX_HTML: &[u8] = br#"
 <!DOCTYPE html>
 <html>
 	<head>

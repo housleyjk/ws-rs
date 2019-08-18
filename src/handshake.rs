@@ -1,3 +1,5 @@
+#![allow(clippy::write_with_newline)]
+
 use std::fmt;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -10,8 +12,8 @@ use url;
 
 use result::{Error, Kind, Result};
 
-static WS_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+static BASE64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const MAX_HEADERS: usize = 124;
 
 fn generate_key() -> String {
@@ -381,7 +383,7 @@ impl Request {
         let req = Request {
             path: format!("{}{}", url.path(), query),
             method: "GET".to_owned(),
-            headers: headers,
+            headers,
         };
 
         debug!("Built request from URL:\n{}", req);

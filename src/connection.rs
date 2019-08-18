@@ -1,3 +1,5 @@
+#![allow(clippy::cognitive_complexity, clippy::collapsible_if)]
+
 use std::borrow::Borrow;
 use std::collections::VecDeque;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
@@ -553,7 +555,7 @@ where
 
             if response.status() != 101 {
                 self.events = Ready::empty();
-                return Ok(());
+                Ok(())
             } else {
                 self.handler.on_open(Handshake {
                     request,
@@ -564,7 +566,7 @@ where
                 debug!("Connection to {} is now open.", self.peer_addr());
                 self.events.insert(Ready::readable());
                 self.check_events();
-                return Ok(());
+                Ok(())
             }
         } else {
             Err(Error::new(
