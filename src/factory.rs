@@ -1,5 +1,7 @@
-use communication::Sender;
-use handler::Handler;
+use log::debug;
+
+use crate::communication::Sender;
+use crate::handler::Handler;
 
 /// A trait for creating new WebSocket handlers.
 pub trait Factory {
@@ -116,14 +118,14 @@ where
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
-    use communication::{Command, Sender};
-    use frame;
-    use handler::Handler;
-    use handshake::{Handshake, Request, Response};
-    use message;
+    use crate::communication::{Command, Sender};
+    use crate::frame;
+    use crate::handler::Handler;
+    use crate::handshake::{Handshake, Request, Response};
+    use crate::message;
+    use crate::protocol::CloseCode;
+    use crate::result::Result;
     use mio;
-    use protocol::CloseCode;
-    use result::Result;
 
     #[derive(Debug, Eq, PartialEq)]
     struct M;

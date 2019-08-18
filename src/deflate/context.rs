@@ -3,10 +3,12 @@
 use std::mem;
 use std::slice;
 
+use log::{error, trace};
+
 use super::ffi;
 use super::libc::{c_char, c_int, c_uint};
 
-use result::{Error, Kind, Result};
+use crate::result::{Error, Kind, Result};
 
 const ZLIB_VERSION: &str = "1.2.8\0";
 

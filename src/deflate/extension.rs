@@ -2,21 +2,22 @@
 
 use std::mem::replace;
 
+use log::trace;
 #[cfg(feature = "nativetls")]
 use native_tls::TlsStream as SslStream;
 #[cfg(feature = "ssl")]
 use openssl::ssl::SslStream;
 use url;
 
-use frame::Frame;
-use handler::Handler;
-use handshake::{Handshake, Request, Response};
-use message::Message;
-use protocol::{CloseCode, OpCode};
-use result::{Error, Kind, Result};
+use crate::frame::Frame;
+use crate::handler::Handler;
+use crate::handshake::{Handshake, Request, Response};
+use crate::message::Message;
+use crate::protocol::{CloseCode, OpCode};
+use crate::result::{Error, Kind, Result};
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
-use util::TcpStream;
-use util::{Timeout, Token};
+use crate::util::TcpStream;
+use crate::util::{Timeout, Token};
 
 use super::context::{Compressor, Decompressor};
 

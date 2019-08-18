@@ -8,22 +8,6 @@
     unused_import_braces
 )]
 
-extern crate byteorder;
-extern crate bytes;
-extern crate httparse;
-extern crate mio;
-extern crate mio_extras;
-#[cfg(feature = "nativetls")]
-extern crate native_tls;
-#[cfg(feature = "ssl")]
-extern crate openssl;
-extern crate rand;
-extern crate sha1;
-extern crate slab;
-extern crate url;
-#[macro_use]
-extern crate log;
-
 mod communication;
 mod connection;
 mod factory;
@@ -41,23 +25,25 @@ pub mod deflate;
 
 pub mod util;
 
-pub use factory::Factory;
-pub use handler::Handler;
+pub use crate::factory::Factory;
+pub use crate::handler::Handler;
 
-pub use communication::Sender;
-pub use frame::Frame;
-pub use handshake::{Handshake, Request, Response};
-pub use message::Message;
-pub use protocol::{CloseCode, OpCode};
-pub use result::Kind as ErrorKind;
-pub use result::{Error, Result};
+pub use crate::communication::Sender;
+pub use crate::frame::Frame;
+pub use crate::handshake::{Handshake, Request, Response};
+pub use crate::message::Message;
+pub use crate::protocol::{CloseCode, OpCode};
+pub use crate::result::Kind as ErrorKind;
+pub use crate::result::{Error, Result};
 
 use std::borrow::Borrow;
 use std::default::Default;
 use std::fmt;
 use std::net::{SocketAddr, ToSocketAddrs};
 
+use log::{error, info};
 use mio::Poll;
+use url;
 
 /// A utility function for setting up a WebSocket server.
 ///

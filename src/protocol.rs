@@ -32,7 +32,7 @@ impl OpCode {
 }
 
 impl fmt::Display for OpCode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Continue => write!(f, "CONTINUE"),
             Text => write!(f, "TEXT"),

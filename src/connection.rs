@@ -7,23 +7,23 @@ use std::mem::replace;
 use std::net::SocketAddr;
 use std::str::from_utf8;
 
+use log::{debug, error, trace};
 use mio::tcp::TcpStream;
 use mio::{Ready, Token};
 use mio_extras::timer::Timeout;
-use url;
-
 #[cfg(feature = "nativetls")]
 use native_tls::HandshakeError;
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
+use url;
 
-use frame::Frame;
-use handler::Handler;
-use handshake::{Handshake, Request, Response};
-use message::Message;
-use protocol::{CloseCode, OpCode};
-use result::{Error, Kind, Result};
-use stream::{Stream, TryReadBuf, TryWriteBuf};
+use crate::frame::Frame;
+use crate::handler::Handler;
+use crate::handshake::{Handshake, Request, Response};
+use crate::message::Message;
+use crate::protocol::{CloseCode, OpCode};
+use crate::result::{Error, Kind, Result};
+use crate::stream::{Stream, TryReadBuf, TryWriteBuf};
 
 use self::Endpoint::*;
 use self::State::*;

@@ -1,10 +1,6 @@
-extern crate env_logger;
-extern crate time;
-extern crate url;
-/// A simple, but immature, benchmark client for destroying other WebSocket frameworks and proving
-/// WS-RS's performance excellence. ;)
-/// Make sure you allow for enough connections in your OS (e.g. ulimit -Sn 10000).
-extern crate ws;
+//! A simple, but immature, benchmark client for destroying other WebSocket frameworks and proving
+//! WS-RS's performance excellence. ;)
+//! Make sure you allow for enough connections in your OS (e.g. ulimit -Sn 10000).
 
 // Try this against node for some fun
 
@@ -12,6 +8,9 @@ extern crate ws;
 // TODO: num threads, num connections per thread, num concurrent connections per thread, num
 // messages per connection, length of message, text or binary
 
+use env_logger;
+use time;
+use url;
 use ws::{Builder, CloseCode, Handler, Handshake, Message, Result, Sender, Settings};
 
 const CONNECTIONS: usize = 10_000; // simultaneous

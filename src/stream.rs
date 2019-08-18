@@ -7,6 +7,8 @@ use std::mem::replace;
 use std::net::SocketAddr;
 
 use bytes::{Buf, BufMut};
+#[cfg(any(feature = "ssl", feature = "nativetls"))]
+use log::trace;
 use mio::tcp::TcpStream;
 #[cfg(feature = "nativetls")]
 use native_tls::{
@@ -15,7 +17,7 @@ use native_tls::{
 #[cfg(feature = "ssl")]
 use openssl::ssl::{ErrorCode as SslErrorCode, HandshakeError, MidHandshakeSslStream, SslStream};
 
-use result::{Error, Kind, Result};
+use crate::result::{Error, Kind, Result};
 
 fn map_non_block<T>(res: io::Result<T>) -> io::Result<Option<T>> {
     match res {

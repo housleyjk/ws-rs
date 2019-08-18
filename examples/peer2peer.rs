@@ -1,40 +1,38 @@
-extern crate clap;
-extern crate env_logger;
-extern crate url;
-/// An example of a client-server-agnostic WebSocket that takes input from stdin and sends that
-/// input to all other peers.
-///
-/// For example, to create a network like this:
-///
-/// 3013 ---- 3012 ---- 3014
-///   \        |
-///    \       |
-///     \      |
-///      \     |
-///       \    |
-///        \   |
-///         \  |
-///          3015
-///
-/// Run these commands in separate processes
-/// ./peer2peer
-/// ./peer2peer --server localhost:3013 ws://localhost:3012
-/// ./peer2peer --server localhost:3014 ws://localhost:3012
-/// ./peer2peer --server localhost:3015 ws://localhost:3012 ws://localhost:3013
-///
-/// Stdin on 3012 will be sent to all other peers
-/// Stdin on 3013 will be sent to 3012 and 3015
-/// Stdin on 3014 will be sent to 3012 only
-/// Stdin on 3015 will be sent to 3012 and 2013
-extern crate ws;
-#[macro_use]
-extern crate log;
+//! An example of a client-server-agnostic WebSocket that takes input from stdin and sends that
+//! input to all other peers.
+//!
+//! For example, to create a network like this:
+//!
+//! 3013 ---- 3012 ---- 3014
+//!   \        |
+//!    \       |
+//!     \      |
+//!      \     |
+//!       \    |
+//!        \   |
+//!         \  |
+//!          3015
+//!
+//! Run these commands in separate processes
+//! ./peer2peer
+//! ./peer2peer --server localhost:3013 ws://localhost:3012
+//! ./peer2peer --server localhost:3014 ws://localhost:3012
+//! ./peer2peer --server localhost:3015 ws://localhost:3012 ws://localhost:3013
+//!
+//! Stdin on 3012 will be sent to all other peers
+//! Stdin on 3013 will be sent to 3012 and 3015
+//! Stdin on 3014 will be sent to 3012 only
+//! Stdin on 3015 will be sent to 3012 and 2013
 
 use std::io;
 use std::io::prelude::*;
 use std::thread;
 
 use clap::{App, Arg};
+use env_logger;
+use log::info;
+use url;
+use ws;
 
 fn main() {
     // Setup logging

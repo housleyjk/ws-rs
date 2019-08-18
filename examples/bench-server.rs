@@ -1,5 +1,4 @@
-/// WebSocket server used for testing the bench example.
-extern crate ws;
+//! WebSocket server used for testing the bench example.
 
 use ws::{Builder, Sender, Settings};
 

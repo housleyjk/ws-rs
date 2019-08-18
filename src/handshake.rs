@@ -6,11 +6,12 @@ use std::net::SocketAddr;
 use std::str::from_utf8;
 
 use httparse;
+use log::{debug, error};
 use rand;
 use sha1::{self, Digest};
 use url;
 
-use result::{Error, Kind, Result};
+use crate::result::{Error, Kind, Result};
 
 static WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static BASE64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -408,7 +409,7 @@ impl Request {
 }
 
 impl fmt::Display for Request {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
         self.format(&mut s).map_err(|err| {
             error!("{:?}", err);
@@ -651,7 +652,7 @@ impl Response {
 }
 
 impl fmt::Display for Response {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
         self.format(&mut s).map_err(|err| {
             error!("{:?}", err);

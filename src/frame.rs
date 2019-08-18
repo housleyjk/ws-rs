@@ -3,11 +3,12 @@ use std::fmt;
 use std::io::{Cursor, ErrorKind, Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use log::{debug, trace};
 use rand;
 
-use protocol::{CloseCode, OpCode};
-use result::{Error, Kind, Result};
-use stream::TryReadBuf;
+use crate::protocol::{CloseCode, OpCode};
+use crate::result::{Error, Kind, Result};
+use crate::stream::TryReadBuf;
 
 fn apply_mask(buf: &mut [u8], mask: [u8; 4]) {
     let iter = buf.iter_mut().zip(mask.iter().cycle());
@@ -453,7 +454,7 @@ impl Default for Frame {
 }
 
 impl fmt::Display for Frame {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "
@@ -484,7 +485,7 @@ payload: 0x{}
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
-    use protocol::OpCode;
+    use crate::protocol::OpCode;
 
     #[test]
     fn display_frame() {

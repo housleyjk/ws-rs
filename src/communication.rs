@@ -6,10 +6,10 @@ use mio::Token;
 use mio_extras::timer::Timeout;
 use url;
 
-use io::ALL;
-use message;
-use protocol::CloseCode;
-use result::{Error, Result};
+use crate::io::ALL;
+use crate::message;
+use crate::protocol::CloseCode;
+use crate::result::{Error, Result};
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -57,7 +57,7 @@ pub struct Sender {
 }
 
 impl fmt::Debug for Sender {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
             "Sender {{ token: {:?}, channel: mio::channel::SyncSender<Command>, connection_id: {:?} }}",
             self.token, self.connection_id)
