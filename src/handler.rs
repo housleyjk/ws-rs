@@ -43,6 +43,14 @@ pub trait Handler {
         Ok(())
     }
 
+    /// Called on outgoing messages.
+    ///
+    /// Returning `Ok(None)` will cause the connection to forget about a
+    /// particular message, meaning that it will not be sent.
+    fn on_send_message(&mut self, msg: Message) -> Result<Option<Message>> {
+        Ok(Some(msg))
+    }
+
     /// Called any time this endpoint receives a close control frame.
     /// This may be because the other endpoint is initiating a closing handshake,
     /// or it may be the other endpoint confirming the handshake initiated by this endpoint.
