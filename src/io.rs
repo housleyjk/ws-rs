@@ -973,7 +973,7 @@ mod test {
         }
 
         match url_to_addrs(&no_resolve) {
-            Ok(_) => panic!("url_to_addrs creates addresses for non-existent domains."),
+            Ok(_) => panic!("url_to_addrs creates addresses for non-existent domains (this might be a DNS issue; your DNS might have a default IP)."),
             Err(Error {
                 kind: Kind::Io(_),
                 details: _,
