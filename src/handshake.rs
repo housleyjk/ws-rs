@@ -107,6 +107,32 @@ impl Handshake {
             }
         }))
     }
+
+    /// Get a forwarded IP address of the remote connection.
+    ///
+    /// This is the preferred method of obtaining the client's trusted IP address.
+    /// It will attempt to retrieve the forwarded IP address for `trusted` depth
+    /// of reverse-proxies based on request headers, `trusted=0` returns the direct
+    /// address of the peer.
+    ///
+    /// # Note
+    /// This assumes that the peer is a client. If you are implementing a
+    /// WebSocket client and want to obtain the address of the server, use
+    /// `Handshake::peer_addr` instead.
+    ///
+    /// This method does not ensure that the address is a valid IP address.
+    #[allow(dead_code)]
+    fn forwarded_addr(&self, trusted: usize) -> Result<Option<String>> {
+        if trusted == 0 {
+            if let Some(addr) = self.peer_addr {
+                Ok(Some(addr.ip().to_string()))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(self.request.forwarded_addr(trusted)?.map(String::from))
+        }
+    }
 }
 
 /// The handshake request.
@@ -314,6 +340,45 @@ impl Request {
                 .find(|f| f.trim().starts_with("for"))
             {
                 if let Some(_for_eq) = _for.trim().split(',').next() {
+                    let mut it = _for_eq.split('=');
+                    it.next();
+                    return Ok(it.next());
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Get the trusted IP address of the client.
+    ///
+    /// This method will attempt to retrieve a specific forwarded IP address of the requester
+    /// in the following manner:
+    ///
+    /// If the `X-Forwarded-For` header exists, this method will return the `trusted` right most
+    /// address in the list.
+    ///
+    /// If the [Forwarded HTTP Header Field](https://tools.ietf.org/html/rfc7239) exits,
+    /// this method will return the `trusted` right most address indicated by the `for` parameter,
+    /// if it exists.
+    ///
+    /// # Note
+    /// This method does not ensure that the address is a valid IP address.
+    #[allow(dead_code)]
+    fn forwarded_addr(&self, trusted: usize) -> Result<Option<&str>> {
+        if trusted == 0 {
+            return Ok(None);
+        }
+        if let Some(x_forward) = self.header("x-forwarded-for") {
+            return Ok(from_utf8(x_forward)?.rsplit(',').nth(trusted - 1));
+        }
+
+        // We only care about the first forwarded header, so header is ok
+        if let Some(forward) = self.header("forwarded") {
+            if let Some(_for) = from_utf8(forward)?
+                .split(';')
+                .find(|f| f.trim().starts_with("for"))
+            {
+                if let Some(_for_eq) = _for.trim().rsplit(',').nth(trusted - 1) {
                     let mut it = _for_eq.split('=');
                     it.next();
                     return Ok(it.next());
