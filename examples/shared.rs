@@ -50,7 +50,7 @@ fn main() {
     // Queue a WebSocket connection to the url
     ws.connect(url).unwrap();
 
-    // Start listening for incoming conections
+    // Start listening for incoming connections
     ws.listen("127.0.0.1:3012").unwrap();
 
     // The WebSocket has shutdown
