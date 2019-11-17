@@ -86,6 +86,7 @@ pub trait Factory {
     ///         }
     ///     }
     /// }
+    /// ```
     #[inline]
     fn server_connected(&mut self, ws: Sender) -> Self::Handler {
         self.connection_made(ws)
