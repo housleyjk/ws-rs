@@ -1,4 +1,4 @@
-/// An example demonstrating how to send and recieve a custom ping/pong frame.
+/// An example demonstrating how to send and receive a custom ping/pong frame.
 extern crate ws;
 extern crate env_logger;
 extern crate time;
@@ -19,7 +19,7 @@ fn main () {
     // Run the WebSocket
     listen("127.0.0.1:3012", |out| {
         Server {
-            out: out,
+            out,
             ping_timeout: None,
             expire_timeout: None,
         }
@@ -38,7 +38,7 @@ impl Handler for Server {
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
         // schedule a timeout to send a ping every 5 seconds
-        try!(self.out.timeout(5_000, PING));
+        self.out.timeout(5_000, PING)?;
         // schedule a timeout to close the connection if there is no activity for 30 seconds
         self.out.timeout(30_000, EXPIRE)
     }
@@ -71,13 +71,13 @@ impl Handler for Server {
 
     fn on_timeout(&mut self, event: Token) -> Result<()> {
         match event {
-            // PING timeout has occured, send a ping and reschedule
+            // PING timeout has occurred, send a ping and reschedule
             PING => {
-                try!(self.out.ping(time::precise_time_ns().to_string().into()));
+                self.out.ping(time::precise_time_ns().to_string().into())?;
                 self.ping_timeout.take();
                 self.out.timeout(5_000, PING)
             }
-            // EXPIRE timeout has occured, this means that the connection is inactive, let's close
+            // EXPIRE timeout has occurred, this means that the connection is inactive, let's close
             EXPIRE => self.out.close(CloseCode::Away),
             // No other timeouts are possible
             _ => Err(Error::new(ErrorKind::Internal, "Invalid timeout token encountered!")),
@@ -88,13 +88,13 @@ impl Handler for Server {
         // Cancel the old timeout and replace.
         if event == EXPIRE {
             if let Some(t) = self.expire_timeout.take() {
-                try!(self.out.cancel(t))
+                self.out.cancel(t)?
             }
             self.expire_timeout = Some(timeout)
         } else {
             // This ensures there is only one ping timeout at a time
             if let Some(t) = self.ping_timeout.take() {
-                try!(self.out.cancel(t))
+                self.out.cancel(t)?
             }
             self.ping_timeout = Some(timeout)
         }
@@ -106,7 +106,7 @@ impl Handler for Server {
         // If the frame is a pong, print the round-trip time.
         // The pong should contain data from out ping, but it isn't guaranteed to.
         if frame.opcode() == OpCode::Pong {
-            if let Ok(pong) = try!(from_utf8(frame.payload())).parse::<u64>() {
+            if let Ok(pong) = from_utf8(frame.payload())?.parse::<u64>() {
                 let now = time::precise_time_ns();
                 println!("RTT is {:.3}ms.", (now - pong) as f64 / 1_000_000f64);
             } else {
@@ -114,8 +114,8 @@ impl Handler for Server {
             }
         }
 
-        // Some activity has occured, so reset the expiration
-        try!(self.out.timeout(30_000, EXPIRE));
+        // Some activity has occurred, so reset the expiration
+        self.out.timeout(30_000, EXPIRE)?;
 
         // Run default frame validation
         DefaultHandler.on_frame(frame)
@@ -126,4 +126,3 @@ impl Handler for Server {
 struct DefaultHandler;
 
 impl Handler for DefaultHandler {}
-
