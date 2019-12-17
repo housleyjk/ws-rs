@@ -1,8 +1,7 @@
-extern crate env_logger;
-/// Simple WebSocket client with error handling. It is not necessary to setup logging, but doing
-/// so will allow you to see more details about the connection by using the RUST_LOG env variable.
-extern crate ws;
+//! Simple WebSocket client with error handling. It is not necessary to setup logging, but doing
+//! so will allow you to see more details about the connection by using the RUST_LOG env variable.
 
+use env_logger;
 use ws::{connect, CloseCode};
 
 fn main() {

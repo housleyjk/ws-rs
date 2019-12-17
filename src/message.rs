@@ -1,10 +1,10 @@
 use std::convert::{From, Into};
 use std::fmt;
-use std::result::Result as StdResult;
+
 use std::str::from_utf8;
 
-use protocol::OpCode;
-use result::Result;
+use crate::protocol::OpCode;
+use crate::result::Result;
 
 use self::Message::*;
 
@@ -126,7 +126,7 @@ impl From<Vec<u8>> for Message {
 }
 
 impl fmt::Display for Message {
-    fn fmt(&self, f: &mut fmt::Formatter) -> StdResult<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Ok(string) = self.as_text() {
             write!(f, "{}", string)
         } else {
@@ -141,7 +141,7 @@ mod test {
 
     #[test]
     fn display() {
-        let t = Message::text(format!("test"));
+        let t = Message::text("test".to_owned());
         assert_eq!(t.to_string(), "test".to_owned());
 
         let bin = Message::binary(vec![0, 1, 3, 4, 241]);

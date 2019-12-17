@@ -1,18 +1,16 @@
-extern crate clap;
-extern crate env_logger;
-extern crate term;
-/// Run this cli like this:
-/// cargo run --example server
-/// cargo run --example cli -- ws://127.0.0.1:3012
-extern crate ws;
+//! Run this cli like this:
+//! cargo run --example server
+//! cargo run --example cli -- ws://127.0.0.1:3012
 
 use std::io;
 use std::io::prelude::*;
-use std::sync::mpsc::Sender as TSender;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as TSender;
 use std::thread;
 
 use clap::{App, Arg};
+use env_logger;
+use term;
 use ws::{connect, CloseCode, Error, ErrorKind, Handler, Handshake, Message, Result, Sender};
 
 fn main() {
@@ -42,7 +40,8 @@ fn main() {
         connect(url, |sender| Client {
             ws_out: sender,
             thread_out: tx.clone(),
-        }).unwrap();
+        })
+        .unwrap();
     });
 
     if let Ok(Event::Connect(sender)) = rx.recv() {

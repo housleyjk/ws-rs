@@ -1,5 +1,4 @@
-/// WebSocket client used for testing against the Autobahn Test Suite
-extern crate ws;
+//! WebSocket client used for testing against the Autobahn Test Suite
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -42,7 +41,8 @@ fn main() {
 
         connect(case_url, |out| {
             DeflateHandler::new(move |msg| out.send(msg))
-        }).unwrap();
+        })
+        .unwrap();
 
         case_id += 1
     }

@@ -1,14 +1,13 @@
 #![cfg(feature = "permessage-deflate")]
-extern crate env_logger;
-extern crate url;
-extern crate ws;
 
+use env_logger;
+use url;
 use ws::deflate::DeflateHandler;
 use ws::{Builder, Message, Sender, Settings, WebSocket};
 
 #[test]
 fn round_trip() {
-    const MESSAGE: &'static str = "this is the message that will be sent as a message";
+    const MESSAGE: &str = "this is the message that will be sent as a message";
 
     let mut name = "Client";
 
@@ -29,7 +28,8 @@ fn round_trip() {
         name = "Server";
 
         DeflateHandler::new(handler)
-    }).unwrap();
+    })
+    .unwrap();
 
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();
 
@@ -41,7 +41,7 @@ fn round_trip() {
 #[test]
 fn fragment() {
     env_logger::init();
-    const MESSAGE: &'static str = "Hello";
+    const MESSAGE: &str = "Hello";
 
     let mut name = "Client";
 

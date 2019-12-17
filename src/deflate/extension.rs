@@ -1,20 +1,23 @@
+#![allow(clippy::collapsible_if)]
+
 use std::mem::replace;
 
-#[cfg(feature = "ssl")]
-use openssl::ssl::SslStream;
+use log::trace;
 #[cfg(feature = "nativetls")]
 use native_tls::TlsStream as SslStream;
+#[cfg(feature = "ssl")]
+use openssl::ssl::SslStream;
 use url;
 
-use frame::Frame;
-use handler::Handler;
-use handshake::{Handshake, Request, Response};
-use message::Message;
-use protocol::{CloseCode, OpCode};
-use result::{Error, Kind, Result};
+use crate::frame::Frame;
+use crate::handler::Handler;
+use crate::handshake::{Handshake, Request, Response};
+use crate::message::Message;
+use crate::protocol::{CloseCode, OpCode};
+use crate::result::{Error, Kind, Result};
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
-use util::TcpStream;
-use util::{Timeout, Token};
+use crate::util::TcpStream;
+use crate::util::{Timeout, Token};
 
 use super::context::{Compressor, Decompressor};
 
@@ -59,7 +62,7 @@ impl Default for DeflateSettings {
 
 /// Utility for applying the permessage-deflate extension to a handler with particular deflate
 /// settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DeflateBuilder {
     settings: DeflateSettings,
 }
@@ -67,9 +70,7 @@ pub struct DeflateBuilder {
 impl DeflateBuilder {
     /// Create a new DeflateBuilder with the default settings.
     pub fn new() -> DeflateBuilder {
-        DeflateBuilder {
-            settings: DeflateSettings::default(),
-        }
+        Default::default()
     }
 
     /// Configure the DeflateBuilder with the given deflate settings.
@@ -122,7 +123,7 @@ impl<H: Handler> DeflateHandler<H> {
             compress_reset: false,
             decompress_reset: false,
             pass: false,
-            settings: settings,
+            settings,
             inner: handler,
         }
     }
@@ -160,7 +161,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     fn on_request(&mut self, req: &Request) -> Result<Response> {
         let mut res = self.inner.on_request(req)?;
 
-        'ext: for req_ext in req.extensions()?
+        'ext: for req_ext in req
+            .extensions()?
             .iter()
             .filter(|&&ext| ext.contains("permessage-deflate"))
         {
@@ -282,7 +284,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
     }
 
     fn on_response(&mut self, res: &Response) -> Result<()> {
-        if let Some(res_ext) = res.extensions()?
+        if let Some(res_ext) = res
+            .extensions()?
             .iter()
             .find(|&&ext| ext.contains("permessage-deflate"))
         {
@@ -298,7 +301,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                         if name {
                             return Err(Error::new(
                                 Kind::Protocol,
-                                format!("Duplicate extension name permessage-deflate"),
+                                "Duplicate extension name permessage-deflate".to_owned(),
                             ));
                         } else {
                             name = true;
@@ -308,7 +311,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                         if s_takeover {
                             return Err(Error::new(
                                 Kind::Protocol,
-                                format!("Duplicate extension parameter server_no_context_takeover"),
+                                "Duplicate extension parameter server_no_context_takeover"
+                                    .to_owned(),
                             ));
                         } else {
                             s_takeover = true;
@@ -319,7 +323,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                         if c_takeover {
                             return Err(Error::new(
                                 Kind::Protocol,
-                                format!("Duplicate extension parameter client_no_context_takeover"),
+                                "Duplicate extension parameter client_no_context_takeover"
+                                    .to_owned(),
                             ));
                         } else {
                             c_takeover = true;
@@ -328,7 +333,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                             } else {
                                 return Err(Error::new(
                                     Kind::Protocol,
-                                    format!("The client requires context takeover."),
+                                    "The client requires context takeover.".to_owned(),
                                 ));
                             }
                         }
@@ -337,7 +342,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                         if s_max {
                             return Err(Error::new(
                                 Kind::Protocol,
-                                format!("Duplicate extension parameter server_max_window_bits"),
+                                "Duplicate extension parameter server_max_window_bits".to_owned(),
                             ));
                         } else {
                             s_max = true;
@@ -374,7 +379,7 @@ impl<H: Handler> Handler for DeflateHandler<H> {
                         if c_max {
                             return Err(Error::new(
                                 Kind::Protocol,
-                                format!("Duplicate extension parameter client_max_window_bits"),
+                                "Duplicate extension parameter client_max_window_bits".to_owned(),
                             ));
                         } else {
                             c_max = true;
@@ -449,7 +454,8 @@ impl<H: Handler> Handler for DeflateHandler<H> {
 
                             // it's safe to unwrap because of the above check for empty
                             let opcode = self.fragments.first().unwrap().opcode();
-                            let size = self.fragments
+                            let size = self
+                                .fragments
                                 .iter()
                                 .fold(0, |len, frame| len + frame.payload().len());
                             let mut compressed = Vec::with_capacity(size);

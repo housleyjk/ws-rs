@@ -1,16 +1,11 @@
-extern crate clap;
-extern crate env_logger;
-#[cfg(feature = "ssl")]
-extern crate openssl;
-/// WebSocket server to demonstrate ssl encryption within an a websocket server.
-///
-/// The resulting executable takes three arguments:
-///   ADDR - The address to listen for incoming connections (e.g. 127.0.0:3012)
-///   CERT - The path to the cert PEM (e.g. snakeoil.crt)
-///   KEY - The path to the key PEM (e.g. snakeoil.key)
-///
-/// For more details concerning setting up the SSL context, see rust-openssl docs.
-extern crate ws;
+//! WebSocket server to demonstrate ssl encryption within an a websocket server.
+//!
+//! The resulting executable takes three arguments:
+//!   ADDR - The address to listen for incoming connections (e.g. 127.0.0:3012)
+//!   CERT - The path to the cert PEM (e.g. snakeoil.crt)
+//!   KEY - The path to the key PEM (e.g. snakeoil.key)
+//!
+//! For more details concerning setting up the SSL context, see rust-openssl docs.
 
 #[cfg(feature = "ssl")]
 use std::fs::File;
@@ -100,7 +95,7 @@ fn main() {
             ..ws::Settings::default()
         })
         .build(|out: ws::Sender| Server {
-            out: out,
+            out,
             ssl: acceptor.clone(),
         })
         .unwrap()

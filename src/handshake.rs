@@ -1,17 +1,20 @@
+#![allow(clippy::write_with_newline)]
+
 use std::fmt;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::from_utf8;
 
 use httparse;
+use log::{debug, error};
 use rand;
 use sha1::{self, Digest};
 use url;
 
-use result::{Error, Kind, Result};
+use crate::result::{Error, Kind, Result};
 
-static WS_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+static BASE64: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const MAX_HEADERS: usize = 124;
 
 fn generate_key() -> String {
@@ -333,7 +336,8 @@ impl Request {
             Ok(Some(Request {
                 path: req.path.unwrap().into(),
                 method: req.method.unwrap().into(),
-                headers: req.headers
+                headers: req
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -362,7 +366,8 @@ impl Request {
                         "No host passed for WebSocket connection.",
                     ))?,
                     url.port_or_known_default().unwrap_or(80)
-                ).into(),
+                )
+                .into(),
             ),
             ("Sec-WebSocket-Version".into(), "13".into()),
             ("Sec-WebSocket-Key".into(), generate_key().into()),
@@ -370,14 +375,16 @@ impl Request {
         ];
 
         if url.password().is_some() || url.username() != "" {
-            let basic = encode_base64(format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes());
+            let basic = encode_base64(
+                format!("{}:{}", url.username(), url.password().unwrap_or("")).as_bytes(),
+            );
             headers.push(("Authorization".into(), format!("Basic {}", basic).into()))
         }
 
         let req = Request {
             path: format!("{}{}", url.path(), query),
             method: "GET".to_owned(),
-            headers: headers,
+            headers,
         };
 
         debug!("Built request from URL:\n{}", req);
@@ -402,7 +409,7 @@ impl Request {
 }
 
 impl fmt::Display for Request {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
         self.format(&mut s).map_err(|err| {
             error!("{:?}", err);
@@ -596,7 +603,8 @@ impl Response {
             Ok(Some(Response {
                 status: res.code.unwrap(),
                 reason: res.reason.unwrap().into(),
-                headers: res.headers
+                headers: res
+                    .headers
                     .iter()
                     .map(|h| (h.name.into(), h.value.into()))
                     .collect(),
@@ -644,7 +652,7 @@ impl Response {
 }
 
 impl fmt::Display for Response {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = Vec::with_capacity(2048);
         self.format(&mut s).map_err(|err| {
             error!("{:?}", err);
@@ -678,7 +686,8 @@ mod test {
              Upgrade: websocket\r\n\
              Sec-WebSocket-Version: 13\r\n\
              Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
-        ).unwrap();
+        )
+        .unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -702,7 +711,8 @@ mod test {
              X-Forwarded-For: 192.168.1.1, 192.168.1.2, 192.168.1.3\r\n\
              Sec-WebSocket-Version: 13\r\n\
              Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n"
-        ).unwrap();
+        )
+        .unwrap();
 
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
@@ -726,7 +736,7 @@ mod test {
             Forwarded: by=192.168.1.1; for=192.0.2.43, for=\"[2001:db8:cafe::17]\", for=unknown\r\n\
             Sec-WebSocket-Version: 13\r\n\
             Sec-WebSocket-Key: q16eN37NCfVwUChPvBdk4g==\r\n\r\n")
-            .unwrap();
+        .unwrap();
         let req = Request::parse(&buf).unwrap().unwrap();
         let res = Response::from_request(&req).unwrap();
         let shake = Handshake {

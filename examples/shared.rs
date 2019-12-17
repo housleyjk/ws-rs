@@ -1,9 +1,8 @@
-extern crate env_logger;
-extern crate url;
-/// A single-threaded client + server example showing how flexible closure handlers can be for
-/// trivial applications.
-extern crate ws;
+//! A single-threaded client + server example showing how flexible closure handlers can be for
+//! trivial applications.
 
+use env_logger;
+use url;
 use ws::{Sender, WebSocket};
 
 fn main() {
@@ -42,7 +41,8 @@ fn main() {
 
         // We must return the handler
         handler
-    }).unwrap();
+    })
+    .unwrap();
 
     // Url for the client
     let url = url::Url::parse("ws://127.0.0.1:3012").unwrap();

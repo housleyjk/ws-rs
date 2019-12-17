@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 use std::borrow::Cow;
 use std::convert::{From, Into};
 use std::error::Error as StdError;
@@ -8,14 +10,14 @@ use std::str::Utf8Error;
 
 use httparse;
 use mio;
-#[cfg(feature = "ssl")]
-use openssl::ssl::{Error as SslError, HandshakeError as SslHandshakeError};
 #[cfg(feature = "nativetls")]
 use native_tls::{Error as SslError, HandshakeError as SslHandshakeError};
+#[cfg(feature = "ssl")]
+use openssl::ssl::{Error as SslError, HandshakeError as SslHandshakeError};
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
 type HandshakeError = SslHandshakeError<mio::tcp::TcpStream>;
 
-use communication::Command;
+use crate::communication::Command;
 
 pub type Result<T> = StdResult<T, Error>;
 
@@ -90,7 +92,7 @@ impl Error {
 }
 
 impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.details.len() > 0 {
             write!(f, "WS Error <{:?}>: {}", self.kind, self.details)
         } else {
@@ -100,7 +102,7 @@ impl fmt::Debug for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.details.len() > 0 {
             write!(f, "{}: {}", self.description(), self.details)
         } else {

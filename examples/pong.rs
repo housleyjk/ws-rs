@@ -1,16 +1,14 @@
-extern crate env_logger;
-extern crate mio_extras;
-extern crate time;
-/// An example demonstrating how to send and recieve a custom ping/pong frame.
-extern crate ws;
+//! An example demonstrating how to send and recieve a custom ping/pong frame.
 
 use std::str::from_utf8;
 
+use env_logger;
 use mio_extras::timer::Timeout;
-
+use time;
 use ws::util::Token;
-use ws::{listen, CloseCode, Error, ErrorKind, Frame, Handler, Handshake, Message, OpCode, Result,
-         Sender};
+use ws::{
+    listen, CloseCode, Error, ErrorKind, Frame, Handler, Handshake, Message, OpCode, Result, Sender,
+};
 
 const PING: Token = Token(1);
 const EXPIRE: Token = Token(2);
@@ -24,7 +22,8 @@ fn main() {
         out,
         ping_timeout: None,
         expire_timeout: None,
-    }).unwrap();
+    })
+    .unwrap();
 }
 
 // Server WebSocket handler

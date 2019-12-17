@@ -1,3 +1,5 @@
+#![allow(clippy::cognitive_complexity, clippy::collapsible_if)]
+
 use std::borrow::Borrow;
 use std::collections::VecDeque;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
@@ -5,23 +7,23 @@ use std::mem::replace;
 use std::net::SocketAddr;
 use std::str::from_utf8;
 
+use log::{debug, error, trace};
 use mio::tcp::TcpStream;
 use mio::{Ready, Token};
 use mio_extras::timer::Timeout;
-use url;
-
 #[cfg(feature = "nativetls")]
 use native_tls::HandshakeError;
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
+use url;
 
-use frame::Frame;
-use handler::Handler;
-use handshake::{Handshake, Request, Response};
-use message::Message;
-use protocol::{CloseCode, OpCode};
-use result::{Error, Kind, Result};
-use stream::{Stream, TryReadBuf, TryWriteBuf};
+use crate::frame::Frame;
+use crate::handler::Handler;
+use crate::handshake::{Handshake, Request, Response};
+use crate::message::Message;
+use crate::protocol::{CloseCode, OpCode};
+use crate::result::{Error, Kind, Result};
+use crate::stream::{Stream, TryReadBuf, TryWriteBuf};
 
 use self::Endpoint::*;
 use self::State::*;
@@ -553,7 +555,7 @@ where
 
             if response.status() != 101 {
                 self.events = Ready::empty();
-                return Ok(());
+                Ok(())
             } else {
                 self.handler.on_open(Handshake {
                     request,
@@ -564,7 +566,7 @@ where
                 debug!("Connection to {} is now open.", self.peer_addr());
                 self.events.insert(Ready::readable());
                 self.check_events();
-                return Ok(());
+                Ok(())
             }
         } else {
             Err(Error::new(
@@ -598,7 +600,8 @@ where
                         // TODO: see if this can be optimized with drain
                         let end = {
                             let data = res.get_ref();
-                            let end = data.iter()
+                            let end = data
+                                .iter()
                                 .enumerate()
                                 .take_while(|&(ind, _)| !data[..ind].ends_with(b"\r\n\r\n"))
                                 .count();
@@ -757,8 +760,10 @@ where
                             if !self.fragments.is_empty() {
                                 return Err(Error::new(Kind::Protocol, "Received unfragmented text frame while processing fragmented message."));
                             }
-                            let msg = Message::text(String::from_utf8(frame.into_data())
-                                .map_err(|err| err.utf8_error())?);
+                            let msg = Message::text(
+                                String::from_utf8(frame.into_data())
+                                    .map_err(|err| err.utf8_error())?,
+                            );
                             self.handler.on_message(msg)?;
                         }
                         OpCode::Binary => {
@@ -1027,7 +1032,8 @@ where
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
 
-        if let Some(frame) = self.handler
+        if let Some(frame) = self
+            .handler
             .on_send_frame(Frame::message(data, opcode, true))?
         {
             if frame.payload().len() > self.settings.fragment_size {
@@ -1145,7 +1151,8 @@ where
             self.peer_addr()
         );
 
-        if let Some(frame) = self.handler
+        if let Some(frame) = self
+            .handler
             .on_send_frame(Frame::close(code, reason.borrow()))?
         {
             self.buffer_frame(frame)?;

@@ -1,12 +1,13 @@
-extern crate env_logger;
-/// WebSocket server using trait objects to route
-/// to an infinitely extensible number of handlers
-extern crate ws;
+//! WebSocket server using trait objects to route
+//! to an infinitely extensible number of handlers
 
-// A WebSocket handler that routes connections to different boxed handlers by resource
+use env_logger;
+use ws;
+
+/// A WebSocket handler that routes connections to different boxed handlers by resource
 struct Router {
     sender: ws::Sender,
-    inner: Box<ws::Handler>,
+    inner: Box<dyn ws::Handler>,
 }
 
 impl ws::Handler for Router {

@@ -1,21 +1,20 @@
-extern crate env_logger;
-/// An example of using channels to transfer data between three parts of some system.
-///
-/// A WebSocket server echoes data back to a client and tees that data to a logging system.
-/// A WebSocket client sends some data do the server.
-/// A worker thread stores data as a log and sends that data back to the main program when the
-/// WebSocket server has finished receiving data.
-///
-/// This example demonstrates how to use threads, channels, and WebSocket handlers to create a
-/// complex system from simple, composable parts.
-extern crate ws;
+//! An example of using channels to transfer data between three parts of some system.
+//!
+//! A WebSocket server echoes data back to a client and tees that data to a logging system.
+//! A WebSocket client sends some data do the server.
+//! A worker thread stores data as a log and sends that data back to the main program when the
+//! WebSocket server has finished receiving data.
+//!
+//! This example demonstrates how to use threads, channels, and WebSocket handlers to create a
+//! complex system from simple, composable parts.
 
-use std::sync::mpsc::Sender as ThreadOut;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as ThreadOut;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 
+use env_logger;
 use ws::{connect, listen, CloseCode, Handler, Handshake, Message, Result, Sender};
 
 fn main() {
@@ -60,7 +59,8 @@ fn main() {
                     // in theory, there could be many active connections
                     log: log_in.clone(),
                 }
-            }).unwrap()
+            })
+            .unwrap()
         })
         .unwrap();
 
@@ -117,7 +117,8 @@ fn main() {
                     // in theory, there could be many client connections sending off the data
                     data: client_data.clone(),
                 }
-            }).unwrap()
+            })
+            .unwrap()
         })
         .unwrap();
 

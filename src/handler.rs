@@ -1,19 +1,20 @@
 use log::Level::Error as ErrorLevel;
+use log::{debug, error, log_enabled, trace};
 #[cfg(feature = "nativetls")]
 use native_tls::{TlsConnector, TlsStream as SslStream};
 #[cfg(feature = "ssl")]
 use openssl::ssl::{SslConnector, SslMethod, SslStream};
 use url;
 
-use frame::Frame;
-use handshake::{Handshake, Request, Response};
-use message::Message;
-use protocol::CloseCode;
-use result::{Error, Kind, Result};
-use util::{Timeout, Token};
+use crate::frame::Frame;
+use crate::handshake::{Handshake, Request, Response};
+use crate::message::Message;
+use crate::protocol::CloseCode;
+use crate::result::{Error, Kind, Result};
+use crate::util::{Timeout, Token};
 
 #[cfg(any(feature = "ssl", feature = "nativetls"))]
-use util::TcpStream;
+use crate::util::TcpStream;
 
 /// The core trait of this library.
 /// Implementing this trait provides the business logic of the WebSocket application.
@@ -291,10 +292,12 @@ pub trait Handler {
         stream: TcpStream,
         url: &url::Url,
     ) -> Result<SslStream<TcpStream>> {
-        let domain = url.domain().ok_or(Error::new(
-            Kind::Protocol,
-            format!("Unable to parse domain from {}. Needed for SSL.", url),
-        ))?;
+        let domain = url.domain().ok_or_else(|| {
+            Error::new(
+                Kind::Protocol,
+                format!("Unable to parse domain from {}. Needed for SSL.", url),
+            )
+        })?;
         let connector = SslConnector::builder(SslMethod::tls())
             .map_err(|e| {
                 Error::new(
@@ -313,10 +316,12 @@ pub trait Handler {
         stream: TcpStream,
         url: &url::Url,
     ) -> Result<SslStream<TcpStream>> {
-        let domain = url.domain().ok_or(Error::new(
-            Kind::Protocol,
-            format!("Unable to parse domain from {}. Needed for SSL.", url),
-        ))?;
+        let domain = url.domain().ok_or_else(|| {
+            Error::new(
+                Kind::Protocol,
+                format!("Unable to parse domain from {}. Needed for SSL.", url),
+            )
+        })?;
 
         let connector = TlsConnector::new().map_err(|e| {
             Error::new(
@@ -350,12 +355,12 @@ where
 mod test {
     #![allow(unused_imports, unused_variables, dead_code)]
     use super::*;
-    use frame;
-    use handshake::{Handshake, Request, Response};
-    use message;
+    use crate::frame;
+    use crate::handshake::{Handshake, Request, Response};
+    use crate::message;
+    use crate::protocol::CloseCode;
+    use crate::result::Result;
     use mio;
-    use protocol::CloseCode;
-    use result::Result;
     use url;
 
     #[derive(Debug, Eq, PartialEq)]
@@ -383,10 +388,8 @@ mod test {
             }
 
             fn on_message(&mut self, msg: message::Message) -> Result<()> {
-                Ok(assert_eq!(
-                    msg,
-                    message::Message::Text(String::from("testme"))
-                ))
+                assert_eq!(msg, message::Message::Text(String::from("testme")));
+                Ok(())
             }
 
             fn on_close(&mut self, code: CloseCode, _: &str) {
@@ -403,7 +406,8 @@ mod test {
             response: res,
             peer_addr: None,
             local_addr: None,
-        }).unwrap();
+        })
+        .unwrap();
         h.on_message(message::Message::Text("testme".to_owned()))
             .unwrap();
         h.on_close(CloseCode::Normal, "");

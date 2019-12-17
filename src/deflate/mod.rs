@@ -1,7 +1,7 @@
 //! The deflate module provides tools for applying the permessage-deflate extension.
 
-extern crate libc;
-extern crate libz_sys as ffi;
+use libc;
+use libz_sys as ffi;
 
 mod context;
 mod extension;
