@@ -10,7 +10,7 @@ You don't need to use this library to the exclusion of other WebSocket libraries
 
 However, if performance is what you value most and you want a WebSocket library in Rust please consider WS-RS. Here is how it stacks up against some other common frameworks using the example [benchmark tool](https://github.com/housleyjk/ws-rs/tree/stable/examples/bench.rs) to open 10,000 simultaneous connections and send 10 messages. These results are **not** reliable as a serious benchmark:
 
-Library | Time 
+Library | Time (ms) 
 :--- |:---
 WS-RS | 1,709
 libwebsockets | 2,067
