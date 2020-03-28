@@ -97,7 +97,7 @@ impl Handler for Client {
     // We ignore the `Handshake` for now, but you could also use this method to setup
     // Handler state or reject the connection based on the details of the Request
     // or Response, such as by checking cookies or Auth headers.
-    fn on_open(&amp;mut self, _: Handshake) -> Result<()> {
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
         // Now we don't need to call unwrap since `on_open` returns a `Result<()>`.
         // If this call fails, it will only result in this connection disconnecting.
         self.out.send("Hello WebSocket")
@@ -105,7 +105,7 @@ impl Handler for Client {
 
     // `on_message` is roughly equivalent to the Handler closure. It takes a `Message`
     // and returns a `Result<()>`.
-    fn on_message(&amp;mut self, msg: Message) -> Result<()> {
+    fn on_message(&mut self, msg: Message) -> Result<()> {
         // Close the connection when we get a response from the server
         println!("Got message: {}", msg);
         self.out.close(CloseCode::Normal)
@@ -135,12 +135,12 @@ struct Server {
 
 impl Handler for Server {
 
-    fn on_message(&amp;mut self, msg: Message) -> Result<()> {
+    fn on_message(&mut self, msg: Message) -> Result<()> {
         // Echo the message back
         self.out.send(msg)
     }
 
-    fn on_close(&amp;mut self, code: CloseCode, reason: &amp;str) {
+    fn on_close(&mut self, code: CloseCode, reason: &str) {
         // The WebSocket protocol allows for a utf8 reason for the closing state after the
         // close code. WS-RS will attempt to interpret this data as a utf8 description of the
         // reason for closing the connection. I many cases, `reason` will be an empty string.
@@ -176,12 +176,12 @@ struct Server {
 
 impl Handler for Server {
 
-    fn on_open(&amp;mut self, _: Handshake) -> Result<()> {
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
         // We have a new connection, so we increment the connection counter
         Ok(self.count.set(self.count.get() + 1))
     }
 
-    fn on_message(&amp;mut self, msg: Message) -> Result<()> {
+    fn on_message(&mut self, msg: Message) -> Result<()> {
         // Tell the user the current count
         println!("The number of live connections is {}", self.count.get());
 
@@ -189,7 +189,7 @@ impl Handler for Server {
         self.out.send(msg)
     }
 
-    fn on_close(&amp;mut self, code: CloseCode, reason: &amp;str) {
+    fn on_close(&mut self, code: CloseCode, reason: &str) {
         match code {
             CloseCode::Normal => println!("The client is done with the connection."),
             CloseCode::Away   => println!("The client is leaving the site."),
@@ -202,7 +202,7 @@ impl Handler for Server {
         self.count.set(self.count.get() - 1)
     }
 
-    fn on_error(&amp;mut self, err: Error) {
+    fn on_error(&mut self, err: Error) {
         println!("The server encountered an error: {:?}", err);
     }
 

@@ -49,13 +49,13 @@ struct Client {
 }
 
 impl ws::Handler for Client {
-  fn on_open(&amp;mut self, _: ws::Handshake) -&gt; ws::Result&lt;()&gt; {
+  fn on_open(&mut self, _: ws::Handshake) -> ws::Result<()> {
     self.out.send("This is the message.
       It will be compressed by the client and sent to the server, which will decompress it
       and send it back (recompressing it) for the client to then decompress and print.")
   }
 
-  fn on_message(&amp;mut self, msg: ws::Message) -&gt; ws::Result&lt;()&gt; {
+  fn on_message(&mut self, msg: ws::Message) -> ws::Result<()> {
     println!("{}", msg);
     self.out.clode(ws::CloseCode::Normal)
   }
