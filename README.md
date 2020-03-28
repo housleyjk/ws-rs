@@ -17,9 +17,9 @@ Introduction
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Crate](http://meritbadge.herokuapp.com/ws)](https://crates.io/crates/ws)
 
-**[Homepage](https://ws-rs.org)**
+**[Homepage](https://housleyjk.github.io/ws-rs/)**
 
-**[API Documentation](https://ws-rs.org/docs)**
+**[API Documentation](https://docs.rs/ws/0.9.1/ws/)**
 
 This library provides an implementation of WebSockets,
 [RFC6455](https://tools.ietf.org/html/rfc6455) using [MIO](https://github.com/carllerche/mio). It
