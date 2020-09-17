@@ -1194,9 +1194,9 @@ where
             }
 
             // Shift the buffer
-            let mut new = CappedBuffer::new(self.out_buffer.get_ref().capacity(), self.settings.max_out_buffer_capacity);
-            new.write_all(&self.out_buffer.get_ref()[self.out_buffer.position() as usize..])?;
-            self.out_buffer = Cursor::new(new);
+            let prev_pos = self.out_buffer.position() as usize;
+            self.out_buffer.set_position(0);
+            self.out_buffer.get_mut().shift(prev_pos);
         }
         Ok(())
     }
@@ -1215,9 +1215,9 @@ where
                 }
 
                 // Shift the buffer
-                let mut new = CappedBuffer::new(self.in_buffer.get_ref().capacity(), self.settings.max_in_buffer_capacity);
-                new.write_all(&self.in_buffer.get_ref()[self.in_buffer.position() as usize..])?;
-                self.in_buffer = Cursor::new(new);
+                let prev_pos = self.in_buffer.position() as usize;
+                self.in_buffer.set_position(0);
+                self.in_buffer.get_mut().shift(prev_pos);
             }
             Ok(Some(len))
         } else {

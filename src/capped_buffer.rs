@@ -19,9 +19,30 @@ impl CappedBuffer {
         }
     }
 
+    /// Remaining amount of bytes that can be written to the buffer
+    /// before reaching max capacity
     #[inline]
     pub fn remaining(&self) -> usize {
         self.max - self.buf.len()
+    }
+
+    /// Shift the content of the buffer to the left by `shift`,
+    /// effectively forgetting the shifted out bytes.
+    /// New length of the buffer will be adjusted accordingly.
+    pub fn shift(&mut self, shift: usize) {
+        if shift > self.buf.len() {
+            self.buf.clear();
+            return;
+        }
+
+        let src = self.buf[shift..].as_ptr();
+        let dst = self.buf.as_mut_ptr();
+        let new_len = self.buf.len() - shift;
+
+        unsafe {
+            std::ptr::copy(src, dst, new_len);
+            self.buf.set_len(new_len);
+        }
     }
 }
 
@@ -81,6 +102,12 @@ impl BufMut for CappedBuffer {
 
     unsafe fn bytes_mut(&mut self) -> &mut [u8] {
         let remaining = self.remaining();
+
+        // `self.buf.bytes_mut` does an implicit allocation
+        if remaining == 0 {
+            return &mut [];
+        }
+
         let mut bytes = self.buf.bytes_mut();
 
         if bytes.len() > remaining {
@@ -88,5 +115,22 @@ impl BufMut for CappedBuffer {
         }
 
         bytes
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Write;
+    use super::*;
+
+    #[test]
+    fn shift() {
+        let mut buffer = CappedBuffer::new(10, 20);
+
+        buffer.write_all(b"Hello World").unwrap();
+        buffer.shift(6);
+
+        assert_eq!(&*buffer, b"World");
+        assert_eq!(buffer.remaining(), 15);
     }
 }
