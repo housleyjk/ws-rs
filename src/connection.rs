@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::collections::VecDeque;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Write};
 use std::mem::replace;
 use std::net::SocketAddr;
 use std::str::from_utf8;
@@ -427,8 +427,8 @@ where
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Size, reason) {
                             self.handler.on_error(err);
-                            self.disconnect()
                         }
+                        self.disconnect()
                     }
                     Kind::Protocol => {
                         if self.settings.panic_on_protocol {
@@ -1176,7 +1176,6 @@ where
 
         trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
 
-        let pos = self.out_buffer.position();
         frame.format(self.out_buffer.get_mut())?;
         Ok(())
     }
