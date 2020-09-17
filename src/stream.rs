@@ -41,10 +41,6 @@ pub trait TryReadBuf: io::Read {
         let res = map_non_block(self.read(unsafe { buf.bytes_mut() }));
 
         if let Ok(Some(cnt)) = res {
-            if cnt > buf.remaining_mut() {
-                return Err(io::Error::new(io::ErrorKind::InvalidInput, "Exceeded buffer limit"));
-            }
-
             unsafe {
                 buf.advance_mut(cnt);
             }

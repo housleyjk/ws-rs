@@ -606,8 +606,7 @@ where
                             if !data[..end].ends_with(b"\r\n\r\n") {
                                 return Ok(());
                             }
-                            println!("Buffer growing??");
-                            self.in_buffer.get_mut().extend(&data[end..]);
+                            self.in_buffer.get_mut().write_all(&data[end..])?;
                             end
                         };
                         res.get_mut().truncate(end);
@@ -1185,20 +1184,18 @@ where
     }
 
     fn check_buffer_out(&mut self, frame: &Frame) -> Result<()> {
-        if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
-            // extend
-            let mut new = CappedBuffer::new(self.out_buffer.get_ref().capacity(), self.settings.max_out_buffer_capacity);
-            new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize..]);
-            if new.len() == new.capacity() {
-                if self.settings.out_buffer_grow && self.out_buffer.get_ref().remaining() > 0 {
-                    new.reserve(self.settings.out_buffer_capacity)
-                } else {
-                    return Err(Error::new(
-                        Kind::Capacity,
-                        "Maxed out output buffer for connection.",
-                    ));
-                }
+        if self.out_buffer.get_ref().remaining() < frame.len() {
+            // There is no more room to grow, and we can't shift the buffer
+            if self.out_buffer.position() == 0 {
+                return Err(Error::new(
+                    Kind::Capacity,
+                    "Maxed out output buffer for connection.",
+                ));
             }
+
+            // Shift the buffer
+            let mut new = CappedBuffer::new(self.out_buffer.get_ref().capacity(), self.settings.max_out_buffer_capacity);
+            new.write_all(&self.out_buffer.get_ref()[self.out_buffer.position() as usize..])?;
             self.out_buffer = Cursor::new(new);
         }
         Ok(())
@@ -1208,20 +1205,18 @@ where
         trace!("Reading buffer for connection to {}.", self.peer_addr());
         if let Some(len) = self.socket.try_read_buf(self.in_buffer.get_mut())? {
             trace!("Buffered {}.", len);
-            if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
-                // extend
-                let mut new = CappedBuffer::new(self.in_buffer.get_ref().capacity(), self.settings.max_in_buffer_capacity);
-                new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize..]);
-                if new.len() == new.capacity() {
-                    if self.settings.in_buffer_grow && self.in_buffer.get_ref().remaining() > 0 {
-                        new.reserve(self.settings.in_buffer_capacity);
-                    } else {
-                        return Err(Error::new(
-                            Kind::Capacity,
-                            "Maxed out input buffer for connection.",
-                        ));
-                    }
+            if self.in_buffer.get_ref().remaining() == 0 {
+                // There is no more room to grow, and we can't shift the buffer
+                if self.in_buffer.position() == 0 {
+                    return Err(Error::new(
+                        Kind::Capacity,
+                        "Maxed out input buffer for connection.",
+                    ));
                 }
+
+                // Shift the buffer
+                let mut new = CappedBuffer::new(self.in_buffer.get_ref().capacity(), self.settings.max_in_buffer_capacity);
+                new.write_all(&self.in_buffer.get_ref()[self.in_buffer.position() as usize..])?;
                 self.in_buffer = Cursor::new(new);
             }
             Ok(Some(len))

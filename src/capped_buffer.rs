@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::io;
 
 pub struct CappedBuffer {
@@ -45,18 +45,21 @@ impl Deref for CappedBuffer {
     }
 }
 
-impl DerefMut for CappedBuffer {
-    fn deref_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.buf
-    }
-}
-
 impl io::Write for CappedBuffer {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if buf.len() < self.remaining_mut() {
-            self.buf.write(buf)
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
+        if buf.len() > self.remaining() {
+            buf = &buf[..self.remaining()];
+        }
+        self.buf.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        if buf.len() <= self.remaining() {
+            self.buf.extend_from_slice(buf);
+            Ok(())
         } else {
-            Err(io::Error::new(io::ErrorKind::InvalidInput, "Input exceeds buffer capacity"))
+            Err(io::Error::new(io::ErrorKind::InvalidInput, "Exceeded maximum buffer capacity"))
         }
     }
 
@@ -71,10 +74,19 @@ impl BufMut for CappedBuffer {
     }
 
     unsafe fn advance_mut(&mut self, cnt: usize) {
+        assert!(cnt <= self.remaining(), "Exceeded buffer capacity");
+
         self.buf.advance_mut(cnt);
     }
 
     unsafe fn bytes_mut(&mut self) -> &mut [u8] {
-        self.buf.bytes_mut()
+        let remaining = self.remaining();
+        let mut bytes = self.buf.bytes_mut();
+
+        if bytes.len() > remaining {
+            bytes = &mut bytes[..remaining];
+        }
+
+        bytes
     }
 }
