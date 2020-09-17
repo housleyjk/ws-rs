@@ -1186,7 +1186,7 @@ where
             if self.out_buffer.position() == 0 {
                 return Err(Error::new(
                     Kind::Capacity,
-                    "Maxed out output buffer for connection.",
+                    "Reached the limit of the output buffer for the connection.",
                 ));
             }
 
@@ -1207,7 +1207,7 @@ where
                 if self.in_buffer.position() == 0 {
                     return Err(Error::new(
                         Kind::Capacity,
-                        "Maxed out input buffer for connection.",
+                        "Reached the limit of the input buffer for the connection.",
                     ));
                 }
 

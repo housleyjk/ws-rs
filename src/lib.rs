@@ -167,14 +167,14 @@ pub struct Settings {
     /// Default: 2048
     pub in_buffer_capacity: usize,
     /// The maximum size to which the incoming buffer can grow.
-    /// Default: unlimited
+    /// Default: 10,485,760
     pub max_in_buffer_capacity: usize,
     /// The initial size of the outgoing buffer. A larger buffer uses more memory but will allow for
     /// fewer reallocations.
     /// Default: 2048
     pub out_buffer_capacity: usize,
     /// The maximum size to which the outgoing buffer can grow.
-    /// Default: unlimited
+    /// Default: 10,485,760
     pub max_out_buffer_capacity: usize,
     /// Whether to panic when an Internal error is encountered. Internal errors should generally
     /// not occur, so this setting defaults to true as a debug measure, whereas production
@@ -249,9 +249,9 @@ impl Default for Settings {
             fragment_size: u16::max_value() as usize,
             max_fragment_size: usize::max_value(),
             in_buffer_capacity: 2048,
-            max_in_buffer_capacity: usize::max_value(),
+            max_in_buffer_capacity: 10 * 1024 * 1024,
             out_buffer_capacity: 2048,
-            max_out_buffer_capacity: usize::max_value(),
+            max_out_buffer_capacity: 10 * 1024 * 1024,
             panic_on_internal: true,
             panic_on_capacity: false,
             panic_on_protocol: false,

@@ -2,12 +2,16 @@ use bytes::BufMut;
 use std::ops::Deref;
 use std::io;
 
+/// Safe wrapper around Vec<u8> with custom `bytes::BufMut` and `std::io::Write`
+/// implementations that ensure the buffer never exceeds maximum capacity.
 pub struct CappedBuffer {
     buf: Vec<u8>,
     max: usize,
 }
 
 impl CappedBuffer {
+    /// Create a new `CappedBuffer` with initial `capacity`, and a limit
+    /// capacity set to `max`.
     pub fn new(mut capacity: usize, max: usize) -> Self {
         if capacity > max {
             capacity = max;
@@ -39,6 +43,9 @@ impl CappedBuffer {
         let dst = self.buf.as_mut_ptr();
         let new_len = self.buf.len() - shift;
 
+        // This is a simple, potentially overlapping memcpy within
+        // the buffer, shifting `new_len` bytes at offset `shift` (`src`)
+        // to the beginning of the buffer (`dst`)
         unsafe {
             std::ptr::copy(src, dst, new_len);
             self.buf.set_len(new_len);
@@ -132,5 +139,49 @@ mod test {
 
         assert_eq!(&*buffer, b"World");
         assert_eq!(buffer.remaining(), 15);
+    }
+
+    #[test]
+    fn shift_zero() {
+        let mut buffer = CappedBuffer::new(10, 20);
+
+        buffer.write_all(b"Hello World").unwrap();
+        buffer.shift(0);
+
+        assert_eq!(&*buffer, b"Hello World");
+        assert_eq!(buffer.remaining(), 9);
+    }
+
+    #[test]
+    fn shift_all() {
+        let mut buffer = CappedBuffer::new(10, 20);
+
+        buffer.write_all(b"Hello World").unwrap();
+        buffer.shift(11);
+
+        assert_eq!(&*buffer, b"");
+        assert_eq!(buffer.remaining(), 20);
+    }
+
+    #[test]
+    fn shift_capacity() {
+        let mut buffer = CappedBuffer::new(10, 20);
+
+        buffer.write_all(b"Hello World").unwrap();
+        buffer.shift(20);
+
+        assert_eq!(&*buffer, b"");
+        assert_eq!(buffer.remaining(), 20);
+    }
+
+    #[test]
+    fn shift_over_capacity() {
+        let mut buffer = CappedBuffer::new(10, 20);
+
+        buffer.write_all(b"Hello World").unwrap();
+        buffer.shift(50);
+
+        assert_eq!(&*buffer, b"");
+        assert_eq!(buffer.remaining(), 20);
     }
 }
