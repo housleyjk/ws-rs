@@ -19,6 +19,7 @@ extern crate url;
 #[macro_use]
 extern crate log;
 
+mod capped_buffer;
 mod communication;
 mod connection;
 mod factory;
@@ -169,6 +170,9 @@ pub struct Settings {
     /// false, a Capacity error will be triggered instead.
     /// Default: true
     pub in_buffer_grow: bool,
+    /// The maximum size of the incoming buffer, if `in_buffer_grow` is enabled.
+    /// Default: unlimited
+    pub max_in_buffer_capacity: usize,
     /// The size of the outgoing buffer. A larger buffer uses more memory but will allow for fewer
     /// reallocations.
     /// Default: 2048
@@ -177,6 +181,9 @@ pub struct Settings {
     /// false, a Capacity error will be triggered instead.
     /// Default: true
     pub out_buffer_grow: bool,
+    /// The maximum size of the outgoing buffer, if `out_buffer_grow` is enabled.
+    /// Default: unlimited
+    pub max_out_buffer_capacity: usize,
     /// Whether to panic when an Internal error is encountered. Internal errors should generally
     /// not occur, so this setting defaults to true as a debug measure, whereas production
     /// applications should consider setting it to false.
@@ -251,8 +258,10 @@ impl Default for Settings {
             max_fragment_size: usize::max_value(),
             in_buffer_capacity: 2048,
             in_buffer_grow: true,
+            max_in_buffer_capacity: usize::max_value(),
             out_buffer_capacity: 2048,
             out_buffer_grow: true,
+            max_out_buffer_capacity: usize::max_value(),
             panic_on_internal: true,
             panic_on_capacity: false,
             panic_on_protocol: false,

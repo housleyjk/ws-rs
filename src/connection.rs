@@ -15,6 +15,7 @@ use native_tls::HandshakeError;
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
 
+use capped_buffer::CappedBuffer;
 use frame::Frame;
 use handler::Handler;
 use handshake::{Handshake, Request, Response};
@@ -87,8 +88,8 @@ where
 
     fragments: VecDeque<Frame>,
 
-    in_buffer: Cursor<Vec<u8>>,
-    out_buffer: Cursor<Vec<u8>>,
+    in_buffer: Cursor<CappedBuffer>,
+    out_buffer: Cursor<CappedBuffer>,
 
     handler: H,
 
@@ -119,8 +120,8 @@ where
             endpoint: Endpoint::Server,
             events: Ready::empty(),
             fragments: VecDeque::with_capacity(settings.fragments_capacity),
-            in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
-            out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
+            in_buffer: Cursor::new(CappedBuffer::new(settings.in_buffer_capacity, settings.max_in_buffer_capacity)),
+            out_buffer: Cursor::new(CappedBuffer::new(settings.out_buffer_capacity, settings.max_out_buffer_capacity)),
             handler,
             addresses: Vec::new(),
             settings,
@@ -605,6 +606,7 @@ where
                             if !data[..end].ends_with(b"\r\n\r\n") {
                                 return Ok(());
                             }
+                            println!("Buffer growing??");
                             self.in_buffer.get_mut().extend(&data[end..]);
                             end
                         };
@@ -1177,7 +1179,7 @@ where
 
         let pos = self.out_buffer.position();
         self.out_buffer.seek(SeekFrom::End(0))?;
-        frame.format(&mut self.out_buffer)?;
+        frame.format(self.out_buffer.get_mut())?; // TODO: make sure nothing breaks
         self.out_buffer.seek(SeekFrom::Start(pos))?;
         Ok(())
     }
@@ -1185,10 +1187,10 @@ where
     fn check_buffer_out(&mut self, frame: &Frame) -> Result<()> {
         if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
             // extend
-            let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
+            let mut new = CappedBuffer::new(self.out_buffer.get_ref().capacity(), self.settings.max_out_buffer_capacity);
             new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize..]);
             if new.len() == new.capacity() {
-                if self.settings.out_buffer_grow {
+                if self.settings.out_buffer_grow && self.out_buffer.get_ref().remaining() > 0 {
                     new.reserve(self.settings.out_buffer_capacity)
                 } else {
                     return Err(Error::new(
@@ -1208,10 +1210,10 @@ where
             trace!("Buffered {}.", len);
             if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
                 // extend
-                let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
+                let mut new = CappedBuffer::new(self.in_buffer.get_ref().capacity(), self.settings.max_in_buffer_capacity);
                 new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize..]);
                 if new.len() == new.capacity() {
-                    if self.settings.in_buffer_grow {
+                    if self.settings.in_buffer_grow && self.in_buffer.get_ref().remaining() > 0 {
                         new.reserve(self.settings.in_buffer_capacity);
                     } else {
                         return Err(Error::new(
