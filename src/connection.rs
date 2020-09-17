@@ -1177,9 +1177,7 @@ where
         trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
 
         let pos = self.out_buffer.position();
-        self.out_buffer.seek(SeekFrom::End(0))?;
-        frame.format(self.out_buffer.get_mut())?; // TODO: make sure nothing breaks
-        self.out_buffer.seek(SeekFrom::Start(pos))?;
+        frame.format(self.out_buffer.get_mut())?;
         Ok(())
     }
 

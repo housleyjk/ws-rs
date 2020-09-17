@@ -30,7 +30,7 @@ impl CappedBuffer {
     /// effectively forgetting the shifted out bytes.
     /// New length of the buffer will be adjusted accordingly.
     pub fn shift(&mut self, shift: usize) {
-        if shift > self.buf.len() {
+        if shift >= self.buf.len() {
             self.buf.clear();
             return;
         }
