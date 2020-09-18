@@ -34,22 +34,8 @@ impl CappedBuffer {
     /// effectively forgetting the shifted out bytes.
     /// New length of the buffer will be adjusted accordingly.
     pub fn shift(&mut self, shift: usize) {
-        if shift >= self.buf.len() {
-            self.buf.clear();
-            return;
-        }
-
-        let src = self.buf[shift..].as_ptr();
-        let dst = self.buf.as_mut_ptr();
-        let new_len = self.buf.len() - shift;
-
-        // This is a simple, potentially overlapping memcpy within
-        // the buffer, shifting `new_len` bytes at offset `shift` (`src`)
-        // to the beginning of the buffer (`dst`)
-        unsafe {
-            std::ptr::copy(src, dst, new_len);
-            self.buf.set_len(new_len);
-        }
+        let index = std::cmp::min(shift, self.buf.len());
+        self.buf.drain(..index);
     }
 }
 
