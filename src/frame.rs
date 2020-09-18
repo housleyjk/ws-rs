@@ -5,6 +5,7 @@ use std::io::{Cursor, ErrorKind, Read, Write};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand;
 
+use capped_buffer::CappedBuffer;
 use protocol::{CloseCode, OpCode};
 use result::{Error, Kind, Result};
 use stream::TryReadBuf;
@@ -244,7 +245,7 @@ impl Frame {
     }
 
     /// Parse the input stream into a frame.
-    pub fn parse(cursor: &mut Cursor<Vec<u8>>, max_payload_length: u64) -> Result<Option<Frame>> {
+    pub fn parse(cursor: &mut Cursor<CappedBuffer>, max_payload_length: u64) -> Result<Option<Frame>> {
         let size = cursor.get_ref().len() as u64 - cursor.position();
         let initial = cursor.position();
         trace!("Position in buffer {}", initial);
