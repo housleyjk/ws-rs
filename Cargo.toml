@@ -1,6 +1,6 @@
 [package]
 authors = ["Jason Housley <HousleyJK@gmail.com>"]
-description = "Lightweight, event-driven WebSockets for Rust."
+description = "(fork) Lightweight, event-driven WebSockets for Rust."
 documentation = "https://ws-rs.org/docs"
 keywords = [
     "websocket",
@@ -10,7 +10,7 @@ keywords = [
     "web",
 ]
 license = "MIT"
-name = "ws"
+name = "qws"
 readme = "README.md"
 repository = "https://github.com/housleyjk/ws-rs"
 version = "0.9.1"

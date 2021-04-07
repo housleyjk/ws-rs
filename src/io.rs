@@ -31,7 +31,6 @@ type Conn<F> = Connection<<F as Factory>::Handler>;
 
 const MAX_EVENTS: usize = 1024;
 const MESSAGES_PER_TICK: usize = 256;
-const TIMER_TICK_MILLIS: u64 = 100;
 const TIMER_WHEEL_SIZE: usize = 1024;
 const TIMER_CAPACITY: usize = 65_536;
 
@@ -100,7 +99,7 @@ where
     pub fn new(factory: F, settings: Settings) -> Handler<F> {
         let (tx, rx) = mio::channel::sync_channel(settings.max_connections * settings.queue_size);
         let timer = mio_extras::timer::Builder::default()
-            .tick_duration(Duration::from_millis(TIMER_TICK_MILLIS))
+            .tick_duration(Duration::from_millis(settings.timer_tick_millis))
             .num_slots(TIMER_WHEEL_SIZE)
             .capacity(TIMER_CAPACITY)
             .build();
