@@ -17,9 +17,9 @@ Introduction
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Crate](http://meritbadge.herokuapp.com/ws)](https://crates.io/crates/ws)
 
-**[Homepage](https://ws-rs.org)**
+**[Homepage](https://github.com/housleyjk/ws-rs/)**
 
-**[API Documentation](https://ws-rs.org/docs)**
+**[API Documentation](https://docs.rs/ws/latest/ws/index.html)**
 
 This library provides an implementation of WebSockets,
 [RFC6455](https://tools.ietf.org/html/rfc6455) using [MIO](https://github.com/carllerche/mio). It
@@ -33,21 +33,15 @@ around the WebSocket protocol.
 Getting Started
 ---------------
 
-For detailed installation and usage instructions, check out the [guide](https://ws-rs.org/guide).
+Check out the [examples](https://github.com/housleyjk/ws-rs/blob/master/examples/server.rs).
+
 
 Features
 --------
 
 WS-RS provides a complete implementation of the WebSocket specification. There is also support for
-[ssl](https://ws-rs.org/guide/ssl) and
-[permessage-deflate](https://ws-rs.org/guide/deflate).
-
-Testing
--------
-
-WS-RS is thoroughly tested and passes the [Autobahn Test Suite](https://crossbar.io/autobahn/) for
-WebSockets, including the tests for `permessage-deflate`. Visit
-[ws-rs.org](https://ws-rs.org/testing/autobahn/results) to view the results of the latest test run.
+[ssl](https://github.com/housleyjk/ws-rs/blob/master/examples/ssl-server.rs) and
+[permessage-deflate](https://github.com/housleyjk/ws-rs/blob/master/examples/autobahn-server.rs).
 
 Contributing
 ------------
