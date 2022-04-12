@@ -1,5 +1,6 @@
 use std::mem;
 use std::slice;
+use std::mem::MaybeUninit;
 
 use super::ffi;
 use super::libc::{c_char, c_int, c_uint};
@@ -67,7 +68,7 @@ impl Compressor {
         debug_assert!(window_bits <= 15, "Received too large window size.");
 
         unsafe {
-            let mut stream: Box<ffi::z_stream> = Box::new(mem::zeroed());
+            let mut stream: Box<ffi::z_stream> = Box::new(MaybeUninit::uninit().assume_init());
             let result = ffi::deflateInit2_(
                 stream.as_mut(),
                 9,
@@ -139,7 +140,7 @@ impl Decompressor {
         debug_assert!(window_bits <= 15, "Received too large window size.");
 
         unsafe {
-            let mut stream: Box<ffi::z_stream> = Box::new(mem::zeroed());
+            let mut stream: Box<ffi::z_stream> = Box::new(MaybeUninit::uninit().assume_init());
             let result = ffi::inflateInit2_(
                 stream.as_mut(),
                 -window_bits as c_int,
