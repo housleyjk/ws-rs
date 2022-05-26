@@ -889,8 +889,10 @@ where
                         return;
                     }
                     Signal::Shutdown => {
-                        let handler = self.connections.remove(token.into()).consume();
-                        self.factory.connection_lost(handler);
+                        if self.connections.get(token.into()).is_some() {
+                            let handler = self.connections.remove(token.into()).consume();
+                            self.factory.connection_lost(handler);
+                        }
                     },
                     Signal::Timeout {
                         delay,
