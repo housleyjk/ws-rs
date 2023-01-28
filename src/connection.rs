@@ -104,14 +104,14 @@ where
 {
     pub fn new(
         tok: Token,
-        sock: TcpStream,
+        sock: Stream,
         handler: H,
         settings: Settings,
         connection_id: u32,
     ) -> Connection<H> {
         Connection {
             token: tok,
-            socket: Stream::tcp(sock),
+            socket: sock,
             state: Connecting(
                 Cursor::new(Vec::with_capacity(2048)),
                 Cursor::new(Vec::with_capacity(2048)),
@@ -150,7 +150,8 @@ where
 
     #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn encrypt(&mut self) -> Result<()> {
-        let sock = self.socket().try_clone()?;
+        let Stream::Tcp(sock) = self.socket() else { unreachable!() };
+        let sock = sock.try_clone()?;
         let ssl_stream = match self.endpoint {
             Server => self.handler.upgrade_ssl_server(sock),
             Client(ref url) => self.handler.upgrade_ssl_client(sock, url),
@@ -195,8 +196,8 @@ where
         self.token
     }
 
-    pub fn socket(&self) -> &TcpStream {
-        self.socket.evented()
+    pub fn socket(&self) -> &Stream {
+        &self.socket
     }
 
     pub fn connection_id(&self) -> u32 {

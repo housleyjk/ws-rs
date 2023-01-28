@@ -4,4 +4,5 @@ todo.txt
 /tests/reports
 .project
 .cache
-
+.idea
+.vscode

@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::net::SocketAddr;
 use std::str::from_utf8;
 
 use httparse;
@@ -9,6 +8,7 @@ use sha1::{self, Digest};
 use url;
 
 use result::{Error, Kind, Result};
+use crate::io::Address;
 
 static WS_GUID: &'static str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static BASE64: &'static [u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -79,9 +79,9 @@ pub struct Handshake {
     pub response: Response,
     /// The socket address of the other endpoint. This address may
     /// be an intermediary such as a proxy server.
-    pub peer_addr: Option<SocketAddr>,
+    pub peer_addr: Option<Address>,
     /// The socket address of this endpoint.
-    pub local_addr: Option<SocketAddr>,
+    pub local_addr: Option<Address>,
 }
 
 impl Handshake {
@@ -100,7 +100,7 @@ impl Handshake {
     #[allow(dead_code)]
     pub fn remote_addr(&self) -> Result<Option<String>> {
         Ok(self.request.client_addr()?.map(String::from).or_else(|| {
-            if let Some(addr) = self.peer_addr {
+            if let Some(Address::TcpAddress(addr)) = self.peer_addr {
                 Some(addr.ip().to_string())
             } else {
                 None
@@ -685,7 +685,7 @@ mod test {
         let shake = Handshake {
             request: req,
             response: res,
-            peer_addr: Some(SocketAddr::from_str("127.0.0.1:8888").unwrap()),
+            peer_addr: Some(Address::TcpAddress(SocketAddr::from_str("127.0.0.1:8888").unwrap())),
             local_addr: None,
         };
         assert_eq!(shake.remote_addr().unwrap().unwrap(), "127.0.0.1");

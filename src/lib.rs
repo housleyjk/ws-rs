@@ -51,6 +51,7 @@ use std::borrow::Borrow;
 use std::default::Default;
 use std::fmt;
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::Path;
 
 use mio::Poll;
 
@@ -81,6 +82,17 @@ where
 {
     let ws = WebSocket::new(factory)?;
     ws.listen(addr)?;
+    Ok(())
+}
+
+pub fn listen_unix<P, F, H>(addr: &P, factory: F) -> Result<()>
+where
+    P: AsRef<Path> + ?Sized,
+    F: FnMut(Sender) -> H,
+    H: Handler,
+{
+    let ws = WebSocket::new(factory)?;
+    ws.listen_unix(addr)?;
     Ok(())
 }
 
@@ -313,6 +325,24 @@ where
         Err(last_error)
     }
 
+    pub fn bind_unix<P: AsRef<Path> + ?Sized>(mut self, addr_spec: &P) -> Result<WebSocket<F>>
+    {
+        let mut last_error = Error::new(ErrorKind::Internal, "No address given");
+
+        
+        if let Err(e) = self.handler.listen_unix(&mut self.poll, &addr_spec) {
+            error!("Unable to listen on {}", addr_spec.as_ref().as_os_str().to_str().unwrap());
+            last_error = e;
+        } else {
+            // let actual_addr = self.handler.local_addr().unwrap_or(addr_spec);
+            info!("Listening for new connections on {}.", addr_spec.as_ref().as_os_str().to_str().unwrap());
+            return Ok(self);
+        }
+        
+
+        Err(last_error)
+    }
+
     /// Consume the WebSocket and listen for new connections on the specified address.
     ///
     /// # Safety
@@ -323,6 +353,11 @@ where
         A: ToSocketAddrs,
     {
         self.bind(addr_spec).and_then(|server| server.run())
+    }
+
+    pub fn listen_unix<P: AsRef<Path> + ?Sized>(self, addr_spec: &P) -> Result<WebSocket<F>>
+    {
+        self.bind_unix(addr_spec).and_then(|server| server.run())
     }
 
     /// Queue an outgoing connection on this WebSocket. This method may be called multiple times,

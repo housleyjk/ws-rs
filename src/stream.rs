@@ -4,8 +4,9 @@ use std::io::ErrorKind::WouldBlock;
 use std::mem::replace;
 use std::net::SocketAddr;
 
+use crate::io::Address;
 use bytes::{Buf, BufMut};
-use mio::tcp::TcpStream;
+use mio::{tcp::TcpStream, deprecated::UnixStream};
 #[cfg(feature = "nativetls")]
 use native_tls::{
     HandshakeError, MidHandshakeTlsStream as MidHandshakeSslStream, TlsStream as SslStream,
@@ -71,6 +72,7 @@ impl<T: io::Write> TryWriteBuf for T {}
 use self::Stream::*;
 pub enum Stream {
     Tcp(TcpStream),
+    Unix(UnixStream),
     #[cfg(any(feature = "ssl", feature = "nativetls"))]
     Tls(TlsStream),
 }
@@ -96,22 +98,18 @@ impl Stream {
     #[cfg(any(feature = "ssl", feature = "nativetls"))]
     pub fn is_tls(&self) -> bool {
         match *self {
-            Tcp(_) => false,
+            Tcp(_) | Unix(_) => false,
             Tls(_) => true,
         }
     }
 
-    pub fn evented(&self) -> &TcpStream {
-        match *self {
-            Tcp(ref sock) => sock,
-            #[cfg(any(feature = "ssl", feature = "nativetls"))]
-            Tls(ref inner) => inner.evented(),
-        }
+    pub fn evented(&self) -> &Stream {
+        self
     }
 
     pub fn is_negotiating(&self) -> bool {
         match *self {
-            Tcp(_) => false,
+            Tcp(_) | Unix(_) => false,
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Tls(ref inner) => inner.is_negotiating(),
         }
@@ -119,7 +117,7 @@ impl Stream {
 
     pub fn clear_negotiating(&mut self) -> Result<()> {
         match *self {
-            Tcp(_) => Err(Error::new(
+            Tcp(_) | Unix(_) => Err(Error::new(
                 Kind::Internal,
                 "Attempted to clear negotiating flag on non ssl connection.",
             )),
@@ -128,19 +126,21 @@ impl Stream {
         }
     }
 
-    pub fn peer_addr(&self) -> io::Result<SocketAddr> {
+    pub fn peer_addr(&self) -> io::Result<Address> {
         match *self {
-            Tcp(ref sock) => sock.peer_addr(),
+            Tcp(ref tcp) => Ok(Address::TcpAddress(tcp.peer_addr().unwrap())),
+            Unix(_) => Ok(Address::UnixAddress(None)),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
-            Tls(ref inner) => inner.peer_addr(),
+            Tls(ref inner) => Ok(Address::TcpAddress(inner.peer_addr().unwrap())),
         }
     }
 
-    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+    pub fn local_addr(&self) -> io::Result<Address> {
         match *self {
-            Tcp(ref sock) => sock.local_addr(),
+            Tcp(ref tcp) => Ok(Address::TcpAddress(tcp.local_addr().unwrap())),
+            Unix(_) => Ok(Address::UnixAddress(None)),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
-            Tls(ref inner) => inner.local_addr(),
+            Tls(ref inner) => Ok(Address::TcpAddress(inner.local_addr().unwrap())),
         }
     }
 }
@@ -149,6 +149,7 @@ impl io::Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match *self {
             Tcp(ref mut sock) => sock.read(buf),
+            Unix(ref mut sock) => sock.read(buf),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Tls(TlsStream::Live(ref mut sock)) => sock.read(buf),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
@@ -217,6 +218,7 @@ impl io::Write for Stream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match *self {
             Tcp(ref mut sock) => sock.write(buf),
+            Unix(ref mut sock) => sock.write(buf),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Tls(TlsStream::Live(ref mut sock)) => sock.write(buf),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
@@ -285,6 +287,7 @@ impl io::Write for Stream {
     fn flush(&mut self) -> io::Result<()> {
         match *self {
             Tcp(ref mut sock) => sock.flush(),
+            Unix(ref mut sock) => sock.flush(),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
             Tls(TlsStream::Live(ref mut sock)) => sock.flush(),
             #[cfg(any(feature = "ssl", feature = "nativetls"))]
