@@ -1,10 +1,13 @@
 use std::borrow::Borrow;
+use std::fmt::{Display, Debug};
 use std::io::{Error as IoError, ErrorKind};
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::Path;
 use std::time::Duration;
 use std::usize;
 
 use mio;
+use mio::deprecated::UnixListener;
 use mio::tcp::{TcpListener, TcpStream};
 use mio::{Poll, PollOpt, Ready, Token};
 use mio_extras;
@@ -20,6 +23,7 @@ use connection::Connection;
 use factory::Factory;
 use slab::Slab;
 use result::{Error, Kind, Result};
+use stream::Stream;
 
 
 const QUEUE: Token = Token(usize::MAX - 3);
@@ -78,11 +82,82 @@ pub struct Timeout {
     event: Token,
 }
 
+enum Listener {
+    TcpListenner(TcpListener),
+    UnixListener(mio::deprecated::UnixListener),
+}
+
+impl Listener {
+
+    fn accept(&self) -> Result<(MyStream, Address)> {
+        match self {
+            Listener::TcpListenner(tcp) => {
+                let native = tcp.accept()?;
+                Ok((MyStream::TcpStream(native.0), Address::TcpAddress(native.1)))
+            },
+            Listener::UnixListener(unix) => {
+                let native = unix.accept()?;
+                Ok((MyStream::UnixStream(native), Address::UnixAddress(None)))
+            }
+        }
+    }
+
+    fn local_addr(&self) -> Result<Address> {
+        match self {
+            Listener::TcpListenner(tcp) => {
+                let native = tcp.local_addr()?;
+                Ok(Address::TcpAddress(native))
+            },
+            Listener::UnixListener(unix) => {
+                Ok(Address::UnixAddress(None))
+            }
+        }
+    }
+
+}
+
+enum MyStream {
+    TcpStream(mio::net::TcpStream),
+    UnixStream(mio::deprecated::unix::UnixStream),
+}
+
+pub enum Address {
+    TcpAddress(std::net::SocketAddr),
+    UnixAddress(Option<std::os::unix::net::SocketAddr>),
+}
+
+impl Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Address::TcpAddress(tcp) => {
+                std::fmt::Display::fmt(&tcp, f)
+            }
+            Address::UnixAddress(_) => {
+                info!("Get unix domian socket address no implemented yet.");
+                Ok(())
+            },
+        }
+    }
+}
+
+impl Debug for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Address::TcpAddress(tcp) => {
+                std::fmt::Display::fmt(tcp, f)
+            },
+            Address::UnixAddress(_) => {
+                info!("Get unix domian socket address no implemented yet.");
+                Ok(())
+            },
+        }
+    }
+}
 pub struct Handler<F>
 where
     F: Factory,
 {
-    listener: Option<TcpListener>,
+    listener: Option<Listener>,
     connections: Slab<Conn<F>>,
     factory: F,
     settings: Settings,
@@ -127,17 +202,36 @@ where
             "Attempted to listen for connections from two addresses on the same websocket."
         );
 
-        let tcp = TcpListener::bind(addr)?;
+        let tcp = Listener::TcpListenner(TcpListener::bind(addr)?);
+        let Listener::TcpListenner(tcp) = tcp else {panic!()};
         // TODO: consider net2 in order to set reuse_addr
         poll.register(&tcp, ALL, Ready::readable(), PollOpt::level())?;
-        self.listener = Some(tcp);
+        self.listener = Some(Listener::TcpListenner(tcp));
+        Ok(self)
+    }
+
+    pub fn listen_unix<P: AsRef<Path> + ?Sized>(&mut self, poll: &mut Poll, addr: &P) -> Result<&mut Handler<F>> {
+        debug_assert!(
+            self.listener.is_none(),
+            "Attempted to listen for connections from two addresses on the same websocket."
+        );
+
+        let unix = Listener::UnixListener(UnixListener::bind(addr)?);
+        if let Listener::UnixListener(unix) = unix {
+            // TODO: consider net2 in order to set reuse_addr
+            poll.register(&unix, ALL, Ready::readable(), PollOpt::level())?;
+            self.listener = Some(Listener::UnixListener(unix));
+        }
         Ok(self)
     }
 
     pub fn local_addr(&self) -> ::std::io::Result<SocketAddr> {
         if let Some(ref listener) = self.listener {
-            listener.local_addr()
-        } else {
+            let addr = listener.local_addr().unwrap();
+            let Address::TcpAddress(addr) = addr else {panic!()};
+            Ok(addr)
+        }
+        else {
             Err(IoError::new(ErrorKind::NotFound, "Not a listening socket"))
         }
     }
@@ -185,7 +279,7 @@ where
                             sock.set_nodelay(true)?
                         }
                         addresses.push(addr); // Replace the first addr in case ssl fails and we fallback
-                        entry.insert(Connection::new(tok, sock, handler, settings, connection_id));
+                        entry.insert(Connection::new(tok, Stream::Tcp(sock), handler, settings, connection_id));
                         break;
                     }
                 } else {
@@ -247,12 +341,8 @@ where
             }
         }
 
-        poll.register(
-            self.connections[tok.into()].socket(),
-            self.connections[tok.into()].token(),
-            self.connections[tok.into()].events(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
+        let result = self.dispatch_by_type(self.connections[tok.into()].socket(), tok, poll);
+        result.map_err(Error::from)
             .or_else(|err| {
                 error!(
                     "Encountered error while trying to build WebSocket connection: {}",
@@ -306,7 +396,7 @@ where
                         if settings.tcp_nodelay {
                             sock.set_nodelay(true)?
                         }
-                        entry.insert(Connection::new(tok, sock, handler, settings, connection_id));
+                        entry.insert(Connection::new(tok, Stream::Tcp(sock), handler, settings, connection_id));
                         break;
                     }
                 } else {
@@ -337,12 +427,8 @@ where
             return Err(error);
         }
 
-        poll.register(
-            self.connections[tok.into()].socket(),
-            self.connections[tok.into()].token(),
-            self.connections[tok.into()].events(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
+        let result = self.dispatch_by_type(&self.connections[tok.into()].socket(), tok, poll);
+        result.map_err(Error::from)
             .or_else(|err| {
                 error!(
                     "Encountered error while trying to build WebSocket connection: {}",
@@ -355,12 +441,14 @@ where
     }
 
     #[cfg(any(feature = "ssl", feature = "nativetls"))]
-    pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, poll: &mut Poll, sock: Stream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         if settings.tcp_nodelay {
-            sock.set_nodelay(true)?
+            if let Stream::Tcp(ref sock) = sock {
+                sock.set_nodelay(true)?
+            }
         }
 
         let tok = {
@@ -391,12 +479,10 @@ where
             conn.encrypt()?
         }
 
-        poll.register(
-            conn.socket(),
-            conn.token(),
-            conn.events(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
+        let conn = &self.connections[tok.into()];
+        let result = self.dispatch_by_type(conn.socket(), tok, poll);
+        let conn = &mut self.connections[tok.into()];
+        result.map_err(Error::from)
             .or_else(|err| {
                 error!(
                     "Encountered error while trying to build WebSocket connection: {}",
@@ -411,12 +497,14 @@ where
     }
 
     #[cfg(not(any(feature = "ssl", feature = "nativetls")))]
-    pub fn accept(&mut self, poll: &mut Poll, sock: TcpStream) -> Result<()> {
+    pub fn accept(&mut self, poll: &mut Poll, sock: Stream) -> Result<()> {
         let factory = &mut self.factory;
         let settings = self.settings;
 
         if settings.tcp_nodelay {
-            sock.set_nodelay(true)?
+            if let Stream::Tcp(ref sock) = sock {
+                sock.set_nodelay(true)?
+            }
         }
 
         let tok = {
@@ -449,24 +537,21 @@ where
                 "The ssl feature is not enabled. Please enable it to use wss urls.",
             ));
         }
-
-        poll.register(
-            conn.socket(),
-            conn.token(),
-            conn.events(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        ).map_err(Error::from)
-            .or_else(|err| {
-                error!(
-                    "Encountered error while trying to build WebSocket connection: {}",
-                    err
-                );
-                conn.error(err);
-                if settings.panic_on_new_connection {
-                    panic!("Encountered error while trying to build WebSocket connection.");
-                }
-                Ok(())
-            })
+        
+        let conn = &self.connections[tok.into()];
+        let result = self.dispatch_by_type(conn.socket(), tok, poll);
+        let conn = &mut self.connections[tok.into()];
+        result.map_err(Error::from).or_else(|err| {
+            error!(
+                "Encountered error while trying to build WebSocket connection: {}",
+                err
+            );
+            conn.error(err);
+            if settings.panic_on_new_connection {
+                panic!("Encountered error while trying to build WebSocket connection.");
+            }
+            Ok(())
+        })
     }
 
     pub fn run(&mut self, poll: &mut Poll) -> Result<()> {
@@ -531,12 +616,34 @@ where
                 .unwrap_or_else(|_| "UNKNOWN".into()),
             conn.events()
         );
-        poll.reregister(
-            conn.socket(),
-            conn.token(),
-            conn.events(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        )?;
+        match conn.socket() {
+            Stream::Tcp(tcp) => {
+                poll.reregister(
+                    tcp,
+                    conn.token(),
+                    conn.events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )?;
+            },
+            Stream::Unix(unix) => {
+                poll.reregister(
+                    unix,
+                    conn.token(),
+                    conn.events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )?;
+            },
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
+            Stream::Tls(tls) => {
+                poll.reregister(
+                    tls.evented(),
+                    conn.token(),
+                    conn.events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )?;
+            },
+        };
+        
         Ok(())
     }
 
@@ -605,24 +712,37 @@ where
             }
             ALL => {
                 if events.is_readable() {
-                    match self.listener
-                        .as_ref()
-                        .expect("No listener provided for server websocket connections")
-                        .accept()
+                    let accept_result = self.listener
+                    .as_ref()
+                    .expect("No listener provided for server websocket connections")
+                    .accept();
+                    match accept_result
                     {
-                        Ok((sock, addr)) => {
+                        Ok((MyStream::TcpStream(sock), Address::TcpAddress(addr))) => {
                             info!("Accepted a new tcp connection from {}.", addr);
-                            if let Err(err) = self.accept(poll, sock) {
+                            if let Err(err) = self.accept(poll, Stream::Tcp(sock)) {
                                 error!("Unable to build WebSocket connection {:?}", err);
                                 if self.settings.panic_on_new_connection {
                                     panic!("Unable to build WebSocket connection {:?}", err);
                                 }
                             }
-                        }
+                        },
+                        Ok((MyStream::UnixStream(sock), Address::UnixAddress(_))) => {
+                            info!("Accepted a new connection from unix domain socket.");
+                            if let Err(err) = self.accept(poll, Stream::Unix(sock)) {
+                                error!("Unable to build WebSocket connection {:?}", err);
+                                if self.settings.panic_on_new_connection {
+                                    panic!("Unable to build WebSocket connection {:?}", err);
+                                }
+                            }
+                        },
                         Err(err) => error!(
                             "Encountered an error {:?} while accepting tcp connection.",
                             err
                         ),
+                        _ => {
+                            unreachable!();
+                        }
                     }
                 }
             }
@@ -655,12 +775,8 @@ where
                                     if errno == CONNECTION_REFUSED {
                                         match self.connections[token.into()].reset() {
                                             Ok(_) => {
-                                                poll.register(
-                                                    self.connections[token.into()].socket(),
-                                                    self.connections[token.into()].token(),
-                                                    self.connections[token.into()].events(),
-                                                    PollOpt::edge() | PollOpt::oneshot(),
-                                                ).or_else(|err| {
+                                                self.dispatch_by_type(&self.connections[token.into()].socket(), token, poll)
+                                                    .or_else(|err| {
                                                         self.connections[token.into()]
                                                             .error(Error::from(err));
                                                         let handler = self.connections
@@ -694,12 +810,8 @@ where
                                     if errno == CONNECTION_REFUSED {
                                         match self.connections[token.into()].reset() {
                                             Ok(_) => {
-                                                poll.register(
-                                                    self.connections[token.into()].socket(),
-                                                    self.connections[token.into()].token(),
-                                                    self.connections[token.into()].events(),
-                                                    PollOpt::edge() | PollOpt::oneshot(),
-                                                ).or_else(|err| {
+                                                self.dispatch_by_type(&self.connections[token.into()].socket(), token, poll)
+                                                    .or_else(|err| {
                                                         self.connections[token.into()]
                                                             .error(Error::from(err));
                                                         let handler = self.connections
@@ -939,6 +1051,39 @@ where
         };
         self.check_active(poll, active, connection);
     }
+
+    fn dispatch_by_type(&self, stream: &Stream, tok: Token, poll: &Poll) -> std::io::Result<()> {
+        let result;
+        match stream {
+            Stream::Tcp(ref tcp) => {
+                result = poll.register(
+                    tcp,
+                    self.connections[tok.into()].token(),
+                    self.connections[tok.into()].events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )
+            },
+            Stream::Unix(ref unix) => {
+                result = poll.register(
+                    unix,
+                    self.connections[tok.into()].token(),
+                    self.connections[tok.into()].events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )
+            },
+            #[cfg(any(feature = "ssl", feature = "nativetls"))]
+            Stream::Tls(ref tls) => {
+                result = poll.register(
+                    tls.evented(),
+                    self.connections[tok.into()].token(),
+                    self.connections[tok.into()].events(),
+                    PollOpt::edge() | PollOpt::oneshot(),
+                )
+            },
+        }
+        result
+    }
+
 }
 
 mod test {
