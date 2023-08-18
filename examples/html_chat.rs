@@ -53,7 +53,7 @@ impl Handler for Server {
         }
     }
 
-    // Handle messages recieved in the websocket (in this case, only on /ws)
+    // Handle messages received in the websocket (in this case, only on /ws)
     fn on_message(&mut self, msg: Message) -> Result<()> {
         // Broadcast to all connections
         self.out.broadcast(msg)
