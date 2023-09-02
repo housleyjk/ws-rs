@@ -19,6 +19,7 @@ extern crate url;
 #[macro_use]
 extern crate log;
 
+mod capped_buffer;
 mod communication;
 mod connection;
 mod factory;
@@ -161,22 +162,20 @@ pub struct Settings {
     /// The maximum length of acceptable incoming frames. Messages longer than this will be rejected.
     /// Default: unlimited
     pub max_fragment_size: usize,
-    /// The size of the incoming buffer. A larger buffer uses more memory but will allow for fewer
-    /// reallocations.
+    /// The initial size of the incoming buffer. A larger buffer uses more memory but will allow for
+    /// fewer reallocations.
     /// Default: 2048
     pub in_buffer_capacity: usize,
-    /// Whether to reallocate the incoming buffer when `in_buffer_capacity` is reached. If this is
-    /// false, a Capacity error will be triggered instead.
-    /// Default: true
-    pub in_buffer_grow: bool,
-    /// The size of the outgoing buffer. A larger buffer uses more memory but will allow for fewer
-    /// reallocations.
+    /// The maximum size to which the incoming buffer can grow.
+    /// Default: 10,485,760
+    pub max_in_buffer_capacity: usize,
+    /// The initial size of the outgoing buffer. A larger buffer uses more memory but will allow for
+    /// fewer reallocations.
     /// Default: 2048
     pub out_buffer_capacity: usize,
-    /// Whether to reallocate the incoming buffer when `out_buffer_capacity` is reached. If this is
-    /// false, a Capacity error will be triggered instead.
-    /// Default: true
-    pub out_buffer_grow: bool,
+    /// The maximum size to which the outgoing buffer can grow.
+    /// Default: 10,485,760
+    pub max_out_buffer_capacity: usize,
     /// Whether to panic when an Internal error is encountered. Internal errors should generally
     /// not occur, so this setting defaults to true as a debug measure, whereas production
     /// applications should consider setting it to false.
@@ -250,9 +249,9 @@ impl Default for Settings {
             fragment_size: u16::max_value() as usize,
             max_fragment_size: usize::max_value(),
             in_buffer_capacity: 2048,
-            in_buffer_grow: true,
+            max_in_buffer_capacity: 10 * 1024 * 1024,
             out_buffer_capacity: 2048,
-            out_buffer_grow: true,
+            max_out_buffer_capacity: 10 * 1024 * 1024,
             panic_on_internal: true,
             panic_on_capacity: false,
             panic_on_protocol: false,

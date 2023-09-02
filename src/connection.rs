@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::collections::VecDeque;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Write};
 use std::mem::replace;
 use std::net::SocketAddr;
 use std::str::from_utf8;
@@ -15,6 +15,7 @@ use native_tls::HandshakeError;
 #[cfg(feature = "ssl")]
 use openssl::ssl::HandshakeError;
 
+use capped_buffer::CappedBuffer;
 use frame::Frame;
 use handler::Handler;
 use handshake::{Handshake, Request, Response};
@@ -87,8 +88,8 @@ where
 
     fragments: VecDeque<Frame>,
 
-    in_buffer: Cursor<Vec<u8>>,
-    out_buffer: Cursor<Vec<u8>>,
+    in_buffer: Cursor<CappedBuffer>,
+    out_buffer: Cursor<CappedBuffer>,
 
     handler: H,
 
@@ -119,8 +120,8 @@ where
             endpoint: Endpoint::Server,
             events: Ready::empty(),
             fragments: VecDeque::with_capacity(settings.fragments_capacity),
-            in_buffer: Cursor::new(Vec::with_capacity(settings.in_buffer_capacity)),
-            out_buffer: Cursor::new(Vec::with_capacity(settings.out_buffer_capacity)),
+            in_buffer: Cursor::new(CappedBuffer::new(settings.in_buffer_capacity, settings.max_in_buffer_capacity)),
+            out_buffer: Cursor::new(CappedBuffer::new(settings.out_buffer_capacity, settings.max_out_buffer_capacity)),
             handler,
             addresses: Vec::new(),
             settings,
@@ -426,8 +427,8 @@ where
                         self.handler.on_error(err);
                         if let Err(err) = self.send_close(CloseCode::Size, reason) {
                             self.handler.on_error(err);
-                            self.disconnect()
                         }
+                        self.disconnect()
                     }
                     Kind::Protocol => {
                         if self.settings.panic_on_protocol {
@@ -605,7 +606,7 @@ where
                             if !data[..end].ends_with(b"\r\n\r\n") {
                                 return Ok(());
                             }
-                            self.in_buffer.get_mut().extend(&data[end..]);
+                            self.in_buffer.get_mut().write_all(&data[end..])?;
                             end
                         };
                         res.get_mut().truncate(end);
@@ -1175,29 +1176,24 @@ where
 
         trace!("Buffering frame to {}:\n{}", self.peer_addr(), frame);
 
-        let pos = self.out_buffer.position();
-        self.out_buffer.seek(SeekFrom::End(0))?;
-        frame.format(&mut self.out_buffer)?;
-        self.out_buffer.seek(SeekFrom::Start(pos))?;
+        frame.format(self.out_buffer.get_mut())?;
         Ok(())
     }
 
     fn check_buffer_out(&mut self, frame: &Frame) -> Result<()> {
-        if self.out_buffer.get_ref().capacity() <= self.out_buffer.get_ref().len() + frame.len() {
-            // extend
-            let mut new = Vec::with_capacity(self.out_buffer.get_ref().capacity());
-            new.extend(&self.out_buffer.get_ref()[self.out_buffer.position() as usize..]);
-            if new.len() == new.capacity() {
-                if self.settings.out_buffer_grow {
-                    new.reserve(self.settings.out_buffer_capacity)
-                } else {
-                    return Err(Error::new(
-                        Kind::Capacity,
-                        "Maxed out output buffer for connection.",
-                    ));
-                }
+        if self.out_buffer.get_ref().remaining() < frame.len() {
+            // There is no more room to grow, and we can't shift the buffer
+            if self.out_buffer.position() == 0 {
+                return Err(Error::new(
+                    Kind::Capacity,
+                    "Reached the limit of the output buffer for the connection.",
+                ));
             }
-            self.out_buffer = Cursor::new(new);
+
+            // Shift the buffer
+            let prev_pos = self.out_buffer.position() as usize;
+            self.out_buffer.set_position(0);
+            self.out_buffer.get_mut().shift(prev_pos);
         }
         Ok(())
     }
@@ -1206,21 +1202,19 @@ where
         trace!("Reading buffer for connection to {}.", self.peer_addr());
         if let Some(len) = self.socket.try_read_buf(self.in_buffer.get_mut())? {
             trace!("Buffered {}.", len);
-            if self.in_buffer.get_ref().len() == self.in_buffer.get_ref().capacity() {
-                // extend
-                let mut new = Vec::with_capacity(self.in_buffer.get_ref().capacity());
-                new.extend(&self.in_buffer.get_ref()[self.in_buffer.position() as usize..]);
-                if new.len() == new.capacity() {
-                    if self.settings.in_buffer_grow {
-                        new.reserve(self.settings.in_buffer_capacity);
-                    } else {
-                        return Err(Error::new(
-                            Kind::Capacity,
-                            "Maxed out input buffer for connection.",
-                        ));
-                    }
+            if self.in_buffer.get_ref().remaining() == 0 {
+                // There is no more room to grow, and we can't shift the buffer
+                if self.in_buffer.position() == 0 {
+                    return Err(Error::new(
+                        Kind::Capacity,
+                        "Reached the limit of the input buffer for the connection.",
+                    ));
                 }
-                self.in_buffer = Cursor::new(new);
+
+                // Shift the buffer
+                let prev_pos = self.in_buffer.position() as usize;
+                self.in_buffer.set_position(0);
+                self.in_buffer.get_mut().shift(prev_pos);
             }
             Ok(Some(len))
         } else {
