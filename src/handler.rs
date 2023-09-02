@@ -340,7 +340,7 @@ pub trait Handler {
 
 impl<F> Handler for F
 where
-    F: Fn(Message) -> Result<()>,
+    F: FnMut(Message) -> Result<()>,
 {
     fn on_message(&mut self, msg: Message) -> Result<()> {
         self(msg)
@@ -413,6 +413,21 @@ mod test {
     fn closure_handler() {
         let mut close = |msg| {
             assert_eq!(msg, message::Message::Binary(vec![1, 2, 3]));
+            Ok(())
+        };
+
+        close
+            .on_message(message::Message::Binary(vec![1, 2, 3]))
+            .unwrap();
+    }
+
+    #[test]
+    fn mut_closure_handler() {
+        let mut counter = std::rc::Rc::<u32>::new(0);
+        let mut close = move |msg| {
+            assert_eq!(msg, message::Message::Binary(vec![1, 2, 3]));
+            let c = *counter;
+            *std::rc::Rc::get_mut(&mut counter).unwrap() = c + 1;
             Ok(())
         };
 
