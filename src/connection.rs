@@ -1023,6 +1023,16 @@ where
             return Ok(());
         }
 
+        // Pass message to `on_send_message` handler method,
+        // where it may be modified or dropped.
+        let msg = match try!(self.handler.on_send_message(msg)) {
+            Some(msg) => msg,
+            None => {
+                trace!("Dropped message by `on_send_message`");
+                return Ok(());
+            },
+        };
+
         let opcode = msg.opcode();
         trace!("Message opcode {:?}", opcode);
         let data = msg.into_data();
