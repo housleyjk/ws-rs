@@ -143,6 +143,22 @@ impl Sender {
             .map_err(Error::from)
     }
 
+    /// Send a unicast message 
+    /// 
+    /// send message to specific connection_id and token 
+    pub fn unicast<M>(&self, msg: M, peer_token :Token, peer_connection_id : u32 ) -> Result<()> where
+        M: Into<message::Message>,
+    {
+        self.channel
+            .send(Command {
+                token: peer_token,
+                signal: Signal::Message(msg.into()),
+                connection_id: peer_connection_id,
+            })
+            .map_err(Error::from)
+    }    
+
+
     /// Send a close code to the other endpoint.
     #[inline]
     pub fn close(&self, code: CloseCode) -> Result<()> {
